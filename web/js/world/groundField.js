@@ -59,8 +59,10 @@ const HABITAT_COVER = [];
 HABITAT_COVER[HABITAT.OCEAN] = [0, 0, 0, 0];
 HABITAT_COVER[HABITAT.BEACH] = [0.3, 0.6, 0.05, 0];
 HABITAT_COVER[HABITAT.MEADOW] = [1, 0.9, 1, 0.03];
-HABITAT_COVER[HABITAT.WOODLAND] = [0.62, 0.42, 0.16, 0.42];
-HABITAT_COVER[HABITAT.CONIFER] = [0.45, 0.3, 0.05, 0.3];
+// Woodland and conifer floors keep short (ankle-high) grass so foraging blackbirds and
+// robins read clearly; long flowing grass is for open meadow interiors.
+HABITAT_COVER[HABITAT.WOODLAND] = [0.62, 0.12, 0.16, 0.42];
+HABITAT_COVER[HABITAT.CONIFER] = [0.45, 0.08, 0.05, 0.3];
 HABITAT_COVER[HABITAT.MARSH] = [0.85, 0.85, 0.22, 0];
 HABITAT_COVER[HABITAT.RIVER] = [0.85, 0.62, 0.3, 0.35];
 HABITAT_COVER[HABITAT.ALPINE] = [0.8, 0.32, 0.4, 0.04];
@@ -94,8 +96,9 @@ export function vegetatedness(r, g, b, region) {
  * @param {number} canopy   tree cover overhead, 0..1
  * @param {number[]|Uint8Array} out  receives [grass, height, flowers, ferns] as bytes at offset o
  * @param {number} [o]
+ * @param {number} [mow]  0..1: kept-short ground (around the cabin and other buildings)
  */
-export function groundCover(habitat, region, r, g, b, ny, h, canopy, out, o = 0) {
+export function groundCover(habitat, region, r, g, b, ny, h, canopy, out, o = 0, mow = 0) {
   const base = HABITAT_COVER[habitat] || HABITAT_COVER[HABITAT.MEADOW];
   let grass = base[0], tall = base[1], flower = base[2], fern = base[3];
   if (region === REGION.NONE) grass = tall = flower = fern = 0;
@@ -110,9 +113,12 @@ export function groundCover(habitat, region, r, g, b, ny, h, canopy, out, o = 0)
   fern *= living * dry * smooth(0.62, 0.8, ny);
   tall *= 0.55 + 0.45 * dry;
 
+  // Trail verges: the grass shortens towards the trodden earth (birds on a path's
+  // edge stay visible), not just thins.
+  tall *= 0.3 + 0.7 * smooth(0.55, 0.95, living);
   // Shade: shorter, sparser grass and few flowers under dense trees; ferns like it.
   grass *= 1 - 0.55 * canopy;
-  tall *= 1 - 0.45 * canopy;
+  tall *= 1 - 0.7 * canopy;
   flower *= 1 - 0.75 * canopy;
   // (Fern hollows and thickets are fern country even in the open.)
   if (habitat !== HABITAT.SHRUB) fern *= 0.4 + 0.6 * Math.min(1, canopy * 1.6);
@@ -133,6 +139,12 @@ export function groundCover(habitat, region, r, g, b, ny, h, canopy, out, o = 0)
   // Where ferns crowd in, the grass between them is thinner and shorter.
   grass *= 1 - 0.35 * fern;
   tall *= 1 - 0.45 * fern;
+  // Mown ground around buildings: short turf, a few flowers, no ferns.
+  if (mow > 0) {
+    tall *= 1 - 0.85 * mow;
+    flower *= 1 - 0.5 * mow;
+    fern *= 1 - mow;
+  }
 
   out[o] = toByte(grass);
   out[o + 1] = toByte(tall);
@@ -188,8 +200,10 @@ export function allocGroundPlanes(res = GROUND_RES) {
  * @param {{at(chunk:object, ix:number, iz:number):number}} canopy  see createCanopyCache
  * @param {number} ox @param {number} oz  world position of texel (0, 0)
  * @param {ReturnType<typeof allocGroundPlanes>} planes
+ * @param {number} [res]
+ * @param {((x:number, z:number) => number)|null} [mowAt]  kept-short ground, 0..1 (see mowField)
  */
-export function fillGroundRows(store, canopy, ox, oz, planes, row0, row1, res = GROUND_RES) {
+export function fillGroundRows(store, canopy, ox, oz, planes, row0, row1, res = GROUND_RES, mowAt = null) {
   const { height, color, cover, aux } = planes;
   for (let r = row0; r < row1; r++) {
     const z = oz + r * GROUND_TEXEL;
@@ -217,7 +231,7 @@ export function fillGroundRows(store, canopy, ox, oz, planes, row0, row1, res = 
       color[o] = cr; color[o + 1] = cg; color[o + 2] = cb; color[o + 3] = region;
       const nx = chunk.normals[v * 3] / 127, ny = chunk.normals[v * 3 + 1] / 127, nz = chunk.normals[v * 3 + 2] / 127;
       const cv = canopy.at(chunk, ix, iz);
-      groundCover(habitat, region, cr, cg, cb, ny, height[t], cv, cover, o);
+      groundCover(habitat, region, cr, cg, cb, ny, height[t], cv, cover, o, mowAt ? mowAt(x, z) : 0);
       aux[o] = toSigned(nx); aux[o + 1] = toSigned(nz); aux[o + 2] = toByte(cv); aux[o + 3] = habitat;
     }
   }
@@ -284,8 +298,18 @@ export function ringLayout(cfg, camX, camZ, out = []) {
     const spacing = cfg.base * (1 << k);
     const r = out[k] || (out[k] = { k: 0, spacing: 0, n: 0, i0: 0, j0: 0 });
     r.k = k; r.spacing = spacing; r.n = cfg.n;
-    r.i0 = Math.round(camX / spacing) - cfg.n / 2;
-    r.j0 = Math.round(camZ / spacing) - cfg.n / 2;
+    if (k === 0) {
+      r.i0 = Math.round(camX / spacing) - cfg.n / 2;
+      r.j0 = Math.round(camZ / spacing) - cfg.n / 2;
+    } else {
+      // Each coarser ring is centred on the finer ring's square (not on the camera), so
+      // the hole is exactly its central n/2 × n/2 points: with g = 4 the four central
+      // patches lie wholly inside it and are skipped instead of culled per plant. The
+      // offset from the camera stays under half a coarse cell per level.
+      const f = out[k - 1];
+      r.i0 = Math.ceil(f.i0 / 2) - cfg.n / 4;
+      r.j0 = Math.ceil(f.j0 / 2) - cfg.n / 4;
+    }
   }
   return out;
 }
@@ -333,9 +357,130 @@ export function ringPatches(cfg, layout, k, out = []) {
       const i = r.i0 + pi * p, j = r.j0 + pj * p;
       const o = out[q] || (out[q] = { i: 0, j: 0, inside: false });
       o.i = i; o.j = j;
-      o.inside = !!hole && i * m >= hole[0] && j * m >= hole[1] && (i + p) * m <= hole[2] && (j + p) * m <= hole[3];
+      // Its points are i .. i + p − 1: all of them inside the hole?
+      o.inside = !!hole && i * m >= hole[0] && j * m >= hole[1] && (i + p - 1) * m < hole[2] && (j + p - 1) * m < hole[3];
     }
   }
   return out;
 }
 const HOLE = [0, 0, 0, 0];
+
+// --- kept-short ground and gaps around birds -------------------------------------------
+
+/** POI kinds with a building or camp whose surroundings are kept short. */
+const MOWN_KINDS = new Set(['cabin', 'ranger_station', 'watchtower', 'shop', 'research_site', 'abandoned_station', 'hidden_cabin', 'camp', 'hide']);
+
+/**
+ * A mowAt(x, z) function for fillGroundRows from the POIs (state.pois values): 1 within
+ * `inner` metres of a building, fading to 0 by `inner + 12`.
+ * @param {Iterable<{kind:string, pos:{x:number, z:number}, radius?:number}>} pois
+ */
+export function mowField(pois) {
+  const spots = [];
+  for (const p of pois || []) {
+    if (!p || !MOWN_KINDS.has(p.kind) || !p.pos) continue;
+    const inner = Math.max(14, Math.min(30, (p.radius || 0) * 1.5));
+    spots.push(p.pos.x, p.pos.z, inner);
+  }
+  if (!spots.length) return null;
+  return (x, z) => {
+    let m = 0;
+    for (let i = 0; i < spots.length; i += 3) {
+      const d = Math.hypot(x - spots[i], z - spots[i + 1]);
+      const v = 1 - smooth(spots[i + 2], spots[i + 2] + 12, d);
+      if (v > m) m = v;
+    }
+    return m;
+  };
+}
+
+/** Most gaps the ground-cover shaders take (uniform array size). */
+export const MAX_GAPS = 12;
+/** Gaps are only made for things this close to the camera (m). */
+export const GAP_RANGE = 70;
+/** A bird counts as on the ground within this height of the terrain (m). */
+export const GROUND_BIRD_EPS = 0.35;
+
+/** Height above a ground bird's feet that must stay in sight (its body), m. */
+export const SIGHT_BODY = 0.1;
+/** y written for a gap without a sight line (the player's feet). */
+export const NO_SIGHT = -1e4;
+
+/**
+ * Gaps the grass parts around: ground-level birds (nearest first), ground nests and the
+ * player's feet. Writes vec4s (x, z, radius scale, height kept) into `out`, and into
+ * `outY` the height the camera must see over the plants (bird body; NO_SIGHT for the
+ * feet), and returns the count. No allocations.
+ * @param {Float32Array} out  MAX_GAPS × 4
+ * @param {{x:number, z:number}} cam
+ * @param {Iterable<{pos:{x:number,y:number,z:number}, act:number}>} birds
+ * @param {(act:number) => boolean} airborne
+ * @param {(x:number, z:number) => number} heightAt
+ * @param {Iterable<{x:number, y:number, z:number}>} [nests]
+ * @param {{x:number, y:number, z:number}|null} [feet]
+ * @param {Float32Array} [outY]  MAX_GAPS sight heights
+ */
+export function collectGaps(out, cam, birds, airborne, heightAt, nests, feet, outY = Y_SCRATCH) {
+  let n = 0;
+  const scratch = SCRATCH;
+  const r2 = GAP_RANGE * GAP_RANGE;
+  // Keep the nearest candidates (one slot stays for the feet).
+  const cap = MAX_GAPS - (feet ? 1 : 0);
+  const consider = (x, y, z, scale, keep) => {
+    const dx = x - cam.x, dz = z - cam.z, d2 = dx * dx + dz * dz;
+    if (!(d2 <= r2)) return;
+    const g = heightAt(x, z);
+    if (!(Math.abs(y - g) <= GROUND_BIRD_EPS)) return;
+    let slot = n;
+    if (n >= cap) { // replace the farthest if this one is nearer
+      let far = 0;
+      for (let i = 1; i < n; i++) if (scratch[i] > scratch[far]) far = i;
+      if (scratch[far] <= d2) return;
+      slot = far;
+    } else n++;
+    scratch[slot] = d2;
+    out[slot * 4] = x; out[slot * 4 + 1] = z; out[slot * 4 + 2] = scale; out[slot * 4 + 3] = keep;
+    outY[slot] = y + SIGHT_BODY;
+  };
+  if (birds) for (const b of birds) { const p = b?.pos; if (p && !airborne(b.act)) consider(p.x, p.y, p.z, 1, 0.17); }
+  if (nests) for (const ne of nests) if (ne && Number.isFinite(ne.x)) consider(ne.x, ne.y, ne.z, 1.3, 0.2);
+  if (feet && Number.isFinite(feet.x)) {
+    out[n * 4] = feet.x; out[n * 4 + 1] = feet.z; out[n * 4 + 2] = 0.9; out[n * 4 + 3] = 0.55;
+    outY[n] = NO_SIGHT;
+    n++;
+  }
+  return n;
+}
+const Y_SCRATCH = new Float32Array(MAX_GAPS);
+const SCRATCH = new Float32Array(MAX_GAPS);
+
+/**
+ * Height factor a gap leaves at distance d (mirrors the shader): `keep` within
+ * 0.5·scale m, back to 1 by 1.2·scale m.
+ */
+export function gapHeight(d, scale, keep) {
+  return keep + (1 - keep) * smooth(0.5 * scale, 1.2 * scale, d);
+}
+
+/**
+ * The tallest a plant part may stand at p so it does not hide a gap's sight point from the
+ * camera (mirrors the shader's cone): Infinity outside the cone.
+ * @param {{x:number, y:number, z:number}} cam
+ * @param {number} px @param {number} pz @param {number} gy  plant root and its ground height
+ * @param {number} bx @param {number} bz @param {number} by  the sight point
+ */
+export function sightCap(cam, px, pz, gy, bx, bz, by) {
+  const cx = bx - cam.x, cz = bz - cam.z;
+  const D = Math.hypot(cx, cz);
+  if (D <= 1) return Infinity;
+  const dx = cx / D, dz = cz / D;
+  const rx = px - cam.x, rz = pz - cam.z;
+  const t = (rx * dx + rz * dz) / D;
+  if (!(t > 0 && t < 1.08)) return Infinity;
+  const lat = Math.abs(rx * dz - rz * dx);
+  const w = 0.12 + 0.38 * t;
+  if (lat >= w) return Infinity;
+  const allow = Math.max(0, cam.y + (by - cam.y) * Math.min(t, 1) - 0.05 - gy);
+  const soft = smooth(w * 0.6, w, lat);
+  return soft >= 1 ? Infinity : allow + (1e4 - allow) * soft;
+}

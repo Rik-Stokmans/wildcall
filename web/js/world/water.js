@@ -113,10 +113,13 @@ void main() {
 
   float lit = 0.18 + 0.82 * uLight;
   // Body colour: clear and slightly green-blue in the shallows, rich teal when deep.
+  // (Murk per metre of path: ponds are only a metre or so deep, and at 0.26 a small
+  // pond seen from its bank stayed mostly see-through to the grey-brown bed and read
+  // pale blue-grey; now it reads as clear at the very edge, rich teal a step in.)
   float path = depth / max(V.y, 0.07);
-  float murk = 1.0 - exp(-path * 0.26);
-  vec3 body = mix(uShallow, uDeep, smoothstep(0.15, 2.4, depth)) * lit;
-  float alpha = mix(0.04, 0.93, murk);
+  float murk = 1.0 - exp(-path * 0.6);
+  vec3 body = mix(uShallow, uDeep, smoothstep(0.1, 1.9, depth)) * lit;
+  float alpha = mix(0.05, 0.95, murk);
 
   // Reflection: the far bank (dark, green-blue) just above the horizon, then the sky.
   float ndv = clamp(dot(n, V), 0.0, 1.0);
@@ -125,8 +128,13 @@ void main() {
   vec3 R = reflect(-V, n);
   // (Most water is seen from a bank, framed by trees and hills: the low reflection is
   // their dark, cool green rather than the pale horizon haze.)
-  vec3 bank = mix(uSky, vec3(0.035, 0.09, 0.065), 0.72);
-  vec3 sky = mix(bank, mix(uSky, uSkyHigh, smoothstep(0.2, 0.6, R.y)), smoothstep(0.06, 0.34, R.y));
+  // Shallow water (ponds, streams) lies in hollows ringed by trees and banks, which
+  // fill much more of its reflected view than at a lake or the sea: from a high bank a
+  // pond mirrors the surrounding green, not the pale sky.
+  float enclosed = 1.0 - smoothstep(1.5, 6.0, depth);
+  vec3 bank = mix(uSky, vec3(0.03, 0.08, 0.055), 0.72 + 0.12 * enclosed);
+  float bankTop = mix(0.34, 0.62, enclosed);
+  vec3 sky = mix(bank, mix(uSky, uSkyHigh, smoothstep(0.2, 0.6, R.y)), smoothstep(bankTop * 0.2, bankTop, R.y));
   sky *= 0.25 + 0.75 * uLight;
   vec3 col = mix(body, sky, fres);
   alpha = mix(alpha, 1.0, fres);
@@ -146,6 +154,8 @@ void main() {
   float breakup = wNoise(p * 1.6 + vec2(t * 0.21, -t * 0.17)) * 0.6 + wNoise(p * 4.3 - vec2(t * 0.3, t * 0.12)) * 0.4;
   float lap = 0.5 + 0.5 * sin(t * 0.9 + wNoise(p * 0.35) * 6.2831853);
   float shore = (1.0 - smoothstep(0.05, 0.3 + 0.35 * lap, edge)) * (1.0 - smoothstep(0.25, 0.5, depth));
+  // Steep banks (a pond's sides) get no foam: there it would only be a thin bright line.
+  shore *= 1.0 - smoothstep(0.3, 0.7, slope);
   float ring = 0.0;
   for (int i = 0; i < ${ROCKS}; i++) {
     vec4 r = uRocks[i];
@@ -193,8 +203,8 @@ export function createWater(scene) {
     uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
     uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
     uSunCol: { value: new THREE.Color(1, 0.95, 0.85) },
-    uDeep: { value: new THREE.Color(0x123f4c) },
-    uShallow: { value: new THREE.Color(0x3a7f6c) },
+    uDeep: { value: new THREE.Color(0x0b3442) },
+    uShallow: { value: new THREE.Color(0x1f5f5c) },
     uFoam: { value: new THREE.Color(0xf2f6ee) },
     uSky: { value: new THREE.Color(0xb9d3dc) },
     uSkyHigh: { value: new THREE.Color(0x6f9fc8) },

@@ -260,3 +260,14 @@ test('shadow centre snaps to whole texels in light space', () => {
   assert.equal(shadowConfig('low').enabled, false);
   assert.ok(shadowConfig('high').mapSize > shadowConfig('medium').mapSize);
 });
+
+test('dawn mist is pearl / pale gold, never olive-brown', () => {
+  for (const hour of [5.6, 6.0, 6.4, 7.0, 19.4]) {
+    const sky = skyColors({ hour, season: 1, cloud: 0, rain: 0, mist: 1 });
+    if (sky.daylight < 0.05) continue;
+    const m = atmosphereParams({ sky, mist: 1, fogFar: 400 }).mist;
+    assert.ok(!(m[1] > m[0] * 1.02 && m[2] < m[1] * 0.95), `olive at ${hour}: ${m}`);
+    assert.ok(m[2] >= m[1] * 0.72 && m[2] >= m[0] * 0.65, `not brown at ${hour}: ${m}`);
+    assert.ok(Math.max(...m) - Math.min(...m) < 0.25, `soft, low saturation at ${hour}: ${m}`);
+  }
+});

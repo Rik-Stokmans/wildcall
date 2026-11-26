@@ -47,6 +47,8 @@ const SNOW_NEEDLE = { rim: hex(0x2a5443), tip: hex(0xf2f6fa), under: hex(0x16372
 const SHRUB_LEAF = { low: hex(0x2b5a30), high: hex(0x5d8f44) };
 const REED = { low: hex(0x55713a), tip: hex(0xb1ac6c), head: hex(0x5b3d27) };
 const ROCK = { low: hex(0x6e6a63), high: hex(0xb3aea2) };
+const ROCK_SNOW = hex(0xf3f6fa);
+const ROCK_SNOW_SHADE = hex(0xd6e0ea);
 const GRASS = { low: hex(0x44692d), tip: hex(0x93b259) };
 const FERN = { low: hex(0x2d6a30), tip: hex(0x78b452) };
 const STEM = hex(0x4c7737);
@@ -294,7 +296,7 @@ function reeds(detail) {
   return b.build();
 }
 
-function rock(detail) {
+function rock(detail, snowy = false) {
   const b = new MeshBuilder();
   b.season = 0;
   b.tint = 1;
@@ -306,7 +308,11 @@ function rock(detail) {
     let c = mix(ROCK.low, ROCK.high, clamp01(up * 0.55 + 0.45));
     if (up < -0.1) c = scale(c, 0.85);
     const moss = clamp01((up - 0.25 + (n - 0.5) * 0.5) * 2.2);
-    if (moss > 0) c = mix(c, mix(MOSS, MOSS_LIGHT, n), moss * 0.85);
+    // Frostveil: the cushion on top is a cap of snow, bright and unshaded, not moss.
+    if (moss > 0) {
+      if (snowy) return mix(scale(c, tone), mix(ROCK_SNOW_SHADE, ROCK_SNOW, n), Math.min(1, moss * 1.25));
+      c = mix(c, mix(MOSS, MOSS_LIGHT, n), moss * 0.85);
+    }
     return scale(c, tone);
   }, { lump: 0.13, seed: 1601, floor: -0.15 });
   return b.build();
@@ -545,12 +551,14 @@ const cache = new Map();
  * @returns {{position:Float32Array, normal:Float32Array, color:Float32Array, veg:Float32Array,
  *   index:Uint16Array|Uint32Array, vertexCount:number, triangleCount:number, minY:number, maxY:number, radius:number}}
  */
-export function buildVegModel(kind, detail) {
+export function buildVegModel(kind, detail, snowy = false) {
   const build = BUILDERS[kind];
   if (!build) throw new Error(`vegetation: unknown kind ${kind}`);
   const d = Math.max(2 - VEG_INFO[kind].maxLod, Math.min(2, detail | 0));
-  const key = kind * 4 + d;
+  // Only rocks have a snowy (Frostveil) variant.
+  const snow = snowy && kind === VEG.ROCK;
+  const key = kind * 4 + d + (snow ? 1000 : 0);
   let model = cache.get(key);
-  if (!model) cache.set(key, (model = build(d)));
+  if (!model) cache.set(key, (model = snow ? rock(d, true) : build(d)));
   return model;
 }

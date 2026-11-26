@@ -30,6 +30,7 @@ export function statCategory(obj) {
     if (m[1] === 'shrub') return `shrubs.${m[2]}`;
     return `trees.${DETAIL_NAMES[+m[3]] || m[3]}.${m[2]}`;
   }
+  if (n.startsWith('tree-shadow:')) return n.includes('shrub/') ? 'shadowcasters.shrubs' : 'shadowcasters.trees';
   if (n.startsWith('veg:')) return 'vegetation.' + n.slice(4);
   if (n.startsWith('ground:')) {
     const [, layer, ring] = n.split(':');

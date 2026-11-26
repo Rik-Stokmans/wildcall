@@ -62,12 +62,15 @@ function litter(g, R, n, r0, r1, cols, { len = 0.07, y = 0.012 } = {}) {
 const swayH = (h, k = 1) => (p) => Math.max(0, Math.min(1, p.y / h)) * k;
 
 /** A cluster of tiny spheres around `c` (a blackberry, a raspberry-like cloudberry). */
+// Performance pass (world/rendering): the drupelets are octahedra (8 triangles, not
+// 20) — at 1–2 cm nobody can tell, and a fruiting bramble carries ~180 drupes, so this
+// took a bramble's crop from ~22k to ~11k triangles. The random sequence is unchanged.
 function drupe(g, c, r, col, R, n = 5, sway = 0.6) {
   g.sphere(c, r * 0.8, col, { detail: 0, sway });
   for (let i = 0; i < n; i++) {
     const a = R() * TAU, y = (R() - 0.3) * 0.9;
     const k = Math.sqrt(1 - Math.min(0.9, y * y));
-    g.sphere(V(c.x + Math.cos(a) * k * r * 0.6, c.y + y * r * 0.6, c.z + Math.sin(a) * k * r * 0.6), r * 0.5, mulc(col, 0.9 + R() * 0.25), { detail: 0, sway });
+    g.sphere(V(c.x + Math.cos(a) * k * r * 0.6, c.y + y * r * 0.6, c.z + Math.sin(a) * k * r * 0.6), r * 0.5, mulc(col, 0.9 + R() * 0.25), { detail: -1, sway });
   }
 }
 

@@ -132,11 +132,14 @@ export function vegVisibleAtLod(kind, lod) {
  *   decor     fraction of ground decoration kept
  *   shadows   vegetation casts / terrain receives shadows
  *   buildMs   per-frame time budget for meshing, in milliseconds
+ *   vegDetail finest model detail of chunk vegetation (rocks, reeds…; 2 = near), default 2
+ *   decorFade small chunk decoration (flowers, tufts, ferns, mushrooms) shrinks away
+ *             between these distances (m) and is not drawn beyond
  */
 export const QUALITY = Object.freeze({
-  low: Object.freeze({ radius: 5, inflight: 4, decor: 0.45, shadows: false, buildMs: 2.5 }),
-  medium: Object.freeze({ radius: 7, inflight: 6, decor: 0.8, shadows: true, buildMs: 3 }),
-  high: Object.freeze({ radius: 10, inflight: 8, decor: 1, shadows: true, buildMs: 4 }),
+  low: Object.freeze({ radius: 5, inflight: 4, decor: 0.45, shadows: false, buildMs: 2.5, decorFade: Object.freeze([30, 42]), vegDetail: 1 }),
+  medium: Object.freeze({ radius: 7, inflight: 6, decor: 0.8, shadows: true, buildMs: 3, decorFade: Object.freeze([45, 65]) }),
+  high: Object.freeze({ radius: 10, inflight: 8, decor: 1, shadows: true, buildMs: 4, decorFade: Object.freeze([70, 95]) }),
 });
 
 /** Resolves a settings.quality string to its settings, defaulting to medium. */
@@ -155,20 +158,23 @@ export const LOD1_RING = 4;
  * Grass reaches ~0.9·(n/2)·base·2^(rings−1) metres.
  */
 export const GROUND_QUALITY = Object.freeze({
+  // g = 4: each ring is 16 patches, so patches off screen are frustum-culled and the
+  // four central ones (the finer ring's hole) are skipped. (Optional `boost` scales the
+  // chance a lattice point holds a plant, for a coarser lattice at the same density.)
   low: Object.freeze({
-    grass: Object.freeze({ base: 0.25, n: 64, rings: 3, g: 2, blades: 2, segs: 2 }),     // ~29 m, 12k tufts
-    flowers: Object.freeze({ base: 0.5, n: 48, rings: 2, g: 2 }),
-    ferns: Object.freeze({ base: 1.0, n: 32, rings: 1, g: 2 }),
+    grass: Object.freeze({ base: 0.25, n: 64, rings: 3, g: 4, blades: 2, segs: 2 }),     // ~29 m, 12k tufts
+    flowers: Object.freeze({ base: 0.5, n: 48, rings: 2, g: 4 }),
+    ferns: Object.freeze({ base: 1.0, n: 32, rings: 1, g: 4, segs: 3 }),
   }),
   medium: Object.freeze({
-    grass: Object.freeze({ base: 0.125, n: 80, rings: 5, g: 2, blades: 3, segs: 3 }),   // ~74 m, 32k tufts
-    flowers: Object.freeze({ base: 0.35, n: 64, rings: 2, g: 2 }),
-    ferns: Object.freeze({ base: 0.8, n: 48, rings: 2, g: 2 }),
+    grass: Object.freeze({ base: 0.125, n: 80, rings: 5, g: 4, blades: 3, segs: 3 }),   // ~74 m, 32k tufts
+    flowers: Object.freeze({ base: 0.35, n: 64, rings: 2, g: 4 }),
+    ferns: Object.freeze({ base: 0.8, n: 48, rings: 2, g: 4 }),
   }),
   high: Object.freeze({
-    grass: Object.freeze({ base: 0.125, n: 96, rings: 5, g: 2, blades: 3, segs: 3 }),   // ~88 m, 46k tufts
-    flowers: Object.freeze({ base: 0.3, n: 96, rings: 3, g: 2 }),
-    ferns: Object.freeze({ base: 0.8, n: 48, rings: 2, g: 2 }),
+    grass: Object.freeze({ base: 0.125, n: 96, rings: 5, g: 4, blades: 3, segs: 3 }),   // ~88 m, 46k tufts
+    flowers: Object.freeze({ base: 0.3, n: 96, rings: 3, g: 4 }),
+    ferns: Object.freeze({ base: 0.8, n: 48, rings: 2, g: 4 }),
   }),
 });
 

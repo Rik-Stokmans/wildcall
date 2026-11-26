@@ -185,14 +185,21 @@ export function swayAt(y, height) {
 // --- wood ----------------------------------------------------------------------------------------
 /** Ring sides for a limb radius at a detail level. */
 export function sidesFor(r, detail) {
-  if (detail >= DETAIL.NEAR) return r >= 0.3 ? 10 : r >= 0.13 ? 8 : r >= 0.06 ? 6 : r >= 0.025 ? 4 : 3;
+  // Near: a couple more sides on the thick wood (the near band is short now, so the
+  // trunk silhouette is smooth up close without costing much).
+  if (detail >= DETAIL.NEAR) return r >= 0.3 ? 14 : r >= 0.13 ? 10 : r >= 0.06 ? 7 : r >= 0.025 ? 4 : 3;
   if (detail === DETAIL.MID) return r >= 0.2 ? 6 : r >= 0.08 ? 4 : 3;
   return r >= 0.25 ? 4 : 3;
 }
 
+/** Coarse levels stop a chain after the first segment thinner than this (m). */
+export function tipCutRadius(detail) {
+  return detail >= DETAIL.NEAR ? 0 : detail === DETAIL.MID ? 0.025 : 0.11;
+}
+
 /** Thinnest chain (radius at its start) drawn at a detail level. */
 export function minChainRadius(detail) {
-  return detail >= DETAIL.NEAR ? 0 : detail === DETAIL.MID ? 0.08 : 0.13;
+  return detail >= DETAIL.NEAR ? 0 : detail === DETAIL.MID ? 0.05 : 0.22;
 }
 
 /**
@@ -223,7 +230,12 @@ export function buildWood(model, style, detail) {
     // Ring centres and radii: the chain start, then every segment end.
     const pts = [first.a.slice()];
     const rad = [first.ra];
-    for (const si of chain.segs) { pts.push(segs[si].b.slice()); rad.push(segs[si].rb); }
+    // Coarser levels end a chain where it thins into twigs (hidden by the foliage there).
+    const cut = tipCutRadius(detail);
+    for (const si of chain.segs) {
+      pts.push(segs[si].b.slice()); rad.push(segs[si].rb);
+      if (segs[si].rb < cut) break;
+    }
     if (ci === 0) { // the trunk continues below the ground, flared a little
       pts.unshift([first.a[0], first.a[1] - ROOT_DEPTH, first.a[2]]);
       rad.unshift(first.ra * 1.12);
@@ -307,8 +319,10 @@ export function cardPlan(r, style, detail) {
   let size = Math.max(0.42, Math.min(style.card, minR * 1.25 + 0.2));
   let count;
   if (detail === DETAIL.FAR) {
-    size = Math.max(size * 2.6, (r[0] + r[1] + r[2]) / 3 * 1.35);
-    count = area > 30 ? 4 : 3;
+    // Far (beyond the mid band, ~110 m on medium): two or three big cards hold a mass's
+    // silhouette at that distance.
+    size = Math.max(size * 2.7, (r[0] + r[1] + r[2]) / 3 * 1.45);
+    count = area > 30 ? 3 : 2;
   } else {
     count = (area / (size * size)) * style.density * 1.6;
     if (detail === DETAIL.MID) { size *= 1.75; count /= 3.4; }

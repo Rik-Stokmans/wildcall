@@ -11,6 +11,70 @@ export const SHADOW_FAR = 110;
 
 /** Shadow casters kept around the camera whatever the view direction (m). */
 export const SHADOW_KEEP = 70;
+
+// --- distance bands (performance pass) --------------------------------------------------
+// Detail follows each instance's distance from the camera (not its chunk's LOD): near
+// cards and full limbs only close by, the mid model (fewer, larger cards, thick limbs
+// only) after `near` metres, the far model after `mid`. Around each boundary both
+// models are drawn over `fade` metres with complementary screen-space dither, so a
+// tree never visibly swaps. Shadows come from separate caster sets (mid detail) that
+// hold only the instances whose shadow can land in the sun's shadow map.
+
+/** Band edges in metres per quality, for trees and (smaller) for shrubs. */
+// `cut`: far trees dither out over `fade` metres before this distance (low only: deep
+// in its fog, where they are mostly sky colour anyway).
+export const TREE_BANDS = Object.freeze({
+  low: Object.freeze({ near: 24, mid: 60, fade: 8, cut: 215 }),
+  medium: Object.freeze({ near: 38, mid: 110, fade: 10, cut: 1e5 }),
+  high: Object.freeze({ near: 56, mid: 160, fade: 12, cut: 1e5 }),
+});
+export const SHRUB_BANDS = Object.freeze({
+  low: Object.freeze({ near: 14, mid: 45, fade: 5 }),
+  medium: Object.freeze({ near: 20, mid: 60, fade: 6 }),
+  high: Object.freeze({ near: 28, mid: 85, fade: 7 }),
+});
+
+/** The bands of a kind group for a settings.quality name. */
+export function bandsFor(isShrub, quality) {
+  const t = isShrub ? SHRUB_BANDS : TREE_BANDS;
+  return t[quality] || t.medium;
+}
+
+/**
+ * Which detail levels must hold an instance at horizontal distance `d` (bit 1 << DETAIL):
+ * its band, plus the neighbour band inside the cross-fade zones; `margin` widens the
+ * zones by how far the camera may move before the buffers are refilled.
+ */
+export function bandMask(d, bands, margin = 0) {
+  const h = bands.fade / 2 + margin;
+  let mask = 0;
+  if (d < bands.near + h) mask |= 1 << DETAIL.NEAR;
+  if (d > bands.near - h && d < bands.mid + h) mask |= 1 << DETAIL.MID;
+  if (d > bands.mid - h && d < (bands.cut || Infinity) + margin) mask |= 1 << DETAIL.FAR;
+  return mask;
+}
+
+/**
+ * Cross-fade window of a detail level: [inStart, inEnd, outStart, outEnd] in metres.
+ * The shader keeps a pixel while its dither value t satisfies t >= 1 − fadeIn and
+ * t < fadeOut, so the two levels around a boundary draw complementary pixels.
+ */
+export function fadeWindow(detail, bands, out = [0, 0, 0, 0]) {
+  const h = bands.fade / 2;
+  const cut = bands.cut || 1e8;
+  const NONE_IN = [-2, -1], NONE_OUT = [cut - bands.fade, cut];
+  const near = detail >= DETAIL.NEAR, mid = detail === DETAIL.MID;
+  const fin = near ? NONE_IN : mid ? [bands.near - h, bands.near + h] : [bands.mid - h, bands.mid + h];
+  const fout = near ? [bands.near - h, bands.near + h] : mid ? [bands.mid - h, bands.mid + h] : NONE_OUT;
+  out[0] = fin[0]; out[1] = fin[1]; out[2] = fout[0]; out[3] = fout[1];
+  return out;
+}
+
+/** The fade factors (0..1) the shader computes for a distance — for tests. */
+export function fadeAt(d, win) {
+  const c = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  return [c((d - win[0]) / (win[1] - win[0])), 1 - c((d - win[2]) / (win[3] - win[2]))];
+}
 /** The culling frustum is refreshed after the camera moved this far (m)… */
 export const CULL_MOVE = 6;
 /** …or turned this far, and is wider than the view by this many degrees. */
@@ -53,4 +117,10 @@ export function treeTint(kind, variant, x, z, out, o) {
   out[o] = b * (1 + warm * hue);
   out[o + 1] = b * (1 + warm * hue * 0.15);
   out[o + 2] = b * (1 - warm * hue * 1.3);
+}
+
+/** Zoom (fov / base fov) in steps: 1, 0.7, 0.5, 0.35, 0.25 (forest.js takes its root). */
+export function zoomStep(z) {
+  if (!(z < 0.85)) return 1;
+  return z >= 0.6 ? 0.7 : z >= 0.42 ? 0.5 : z >= 0.3 ? 0.35 : 0.25;
 }

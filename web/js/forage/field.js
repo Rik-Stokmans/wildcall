@@ -12,6 +12,10 @@ import { isForageKind, nodeId, nodeState, seasonOf } from './logic.js';
 const CHUNK_RING = 2;          // lod-0 chunks around the player that are scanned
 const SCAN_EVERY = 0.5;        // seconds between chunk scans
 const MOVE_REBUILD = 18;       // metres walked before view culling is redone
+// Performance pass (world/rendering): fruit and other crops are centimetre-sized and
+// cost far more triangles than the plant (a fruiting bramble ~11k); beyond this
+// distance they are sub-pixel even through 4× binoculars, so only the plant is drawn.
+const CROP_VIEW = 80;
 
 /** Wind for the plants: a gentle lean and flutter weighted by the aSway attribute. */
 function windPatch(material, uniforms) {
@@ -202,7 +206,7 @@ export function createForageField(ctx) {
       const m = model(node.kind, v);
       if (!m) continue;
       if (m.base) add(`b|${node.kind}|${v}`, m.base, baseMat, node);
-      const item = bearing(node);
+      const item = d <= CROP_VIEW ? bearing(node) : null;
       if (item && m.crops[item]) add(`c|${node.kind}|${v}|${item}`, m.crops[item], cropMat, node);
     }
     for (const [key, m] of meshes) if (!groups.has(key)) m.count = 0;

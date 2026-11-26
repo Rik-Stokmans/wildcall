@@ -24,6 +24,8 @@ import { createChunkRenderer } from './chunkRenderer.js';
 import { createWater } from './water.js';
 import { createGroundCover } from './groundCover.js';
 import { collectFrameStats, formatStats } from './debugStats.js';
+import { collectGaps, mowField } from './groundField.js';
+import { isAirborneAct } from '../birds/constants.js';
 
 /** Meshing budget per frame while the game waits for the world (ms). */
 const BOOT_BUILD_MS = 12;
@@ -44,6 +46,13 @@ export default {
     const vegKit = createVegetationKit();
     // c-trees: every tree and shrub is instanced across chunks under this one group.
     root.add(vegKit.trees);
+    // Performance pass: trees pick their detail by distance (bands per quality), and
+    // shadows come from caster sets fitted to the sun's shadow map.
+    vegKit.forest.setQuality(state.settings?.quality || 'medium');
+    vegKit.forest.setCamera(ctx.camera);
+    vegKit.forest.setBaseFov(() => state.settings?.fov || 70);
+    vegKit.setDecorRange(quality.decorFade[0], quality.decorFade[1]);
+    vegKit.forest.setShadowLight(() => (ctx.sky?.shadows ? ctx.sky.light : null));
     // Uniforms the terrain shader and the ground cover share (season tint, time, wind).
     const groundUniforms = {
       uGrassTint: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -79,6 +88,15 @@ export default {
     const collision = pipeline.collision;
     const ground = createGroundCover(root, { store, canopyAt, quality: state.settings?.quality, uniforms: groundUniforms });
     ground.setShadows(quality.shadows);
+    // The grass parts around ground birds (the server knows nothing of client grass:
+    // a bird it reports as visible must be visible), ground nests and the player's feet.
+    const nestList = () => { const l = ctx.nests?.list; return Array.isArray(l) ? l : null; };
+    const gapHeight = (x, z) => store.heightAt(x, z);
+    ground.setGapSource((out, cam, outY) => collectGaps(
+      out, cam, ctx.birds?.list?.() || null, isAirborneAct, gapHeight, nestList(), ctx.player?.feet || null, outY,
+    ));
+    // Short turf around the cabin and other buildings.
+    bus.on('pois', () => ground.setMow(mowField(Object.values(state.pois || {}))));
 
     // --- player tracking -----------------------------------------------------------
     const spawn = { x: 0, z: 0 };
@@ -164,6 +182,8 @@ export default {
       pipeline.configure(quality);
       water.setRadius(quality.radius);
       ground.setQuality(value);
+      vegKit.forest.setQuality(value);
+      vegKit.setDecorRange(quality.decorFade[0], quality.decorFade[1]);
       ground.setShadows(quality.shadows);
       if (fallbackLights && scene.fog?.isFog) scene.fog.far = (quality.radius + 0.5) * CHUNK_SIZE;
       // Decoration density and shadows are baked into the instanced meshes.
@@ -252,6 +272,8 @@ export default {
           inflight: pipeline.streamer.inflight.size,
           meshes: renderer.meshCount(),
           radius: quality.radius,
+          gaps: ground.gaps,
+          forest: vegKit.forest.stats,
         };
       },
     };
@@ -302,6 +324,7 @@ export default {
       groundEnv.sunDir = look.sunDir;
       groundEnv.light = look.light;
       ground.update(dt, ctx.time, ctx.camera?.position || feet, groundEnv);
+      vegKit.updateDecor(ctx.camera?.position || feet);
     }
   },
 

@@ -220,6 +220,9 @@ float layerDepth(float y0, float y1, float d, float H) {
   return d * (under + over) / span;
 }
 
+// True when the point at distance d along the view ray lies below the water plane.
+bool end0Below(vec3 o, vec3 v, float d) { return o.y > 0.0 && o.y + v.y * d < 0.0; }
+
 void main() {
   vec3 col = texture2D(tDiffuse, vUv).rgb;
   vec4 w = worldAt(vUv);
@@ -230,6 +233,10 @@ void main() {
   // Sky (and clouds, which do not write depth) is treated as seen through the whole
   // fogged distance, so the far terrain ring and the horizon get the same haze.
   float d = sky ? uFogFar : dist;
+  // Water does not write depth: under a pond or the sea the depth buffer holds the bed.
+  // The air ends at the water surface (y = 0), or ponds — always the lowest ground —
+  // fill with pale low-ground mist and read milky blue-grey from a bank.
+  if (!sky && v.y < -1e-3 && end0Below(uCamPos, v, d)) d = min(d, uCamPos.y / -v.y);
   vec3 end = uCamPos + v * d;
   float toSun = max(dot(v, uSunDir), 0.0);
   float phase = pow(toSun, 6.0);

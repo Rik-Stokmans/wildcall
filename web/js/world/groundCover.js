@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import {
   GROUND_RES, GROUND_TEXEL, LATTICE_BIAS, FADE_START, FADE_END,
   groundOrigin, allocGroundPlanes, fillGroundRows, createCanopyCache, ringLayout, ringHole, ringPatches,
+  MAX_GAPS,
 } from './groundField.js';
 import { groundQualityOf } from './constants.js';
 import { tuftGeometry, flowerGeometry, fernGeometry } from './groundModels.js';
@@ -50,6 +51,7 @@ float vnoise(vec2 p) {
 }
 `;
 
+const GAP_RANGE_GLSL = '75.0';
 const SCATTER_GLSL = /* glsl */`
 attribute vec2 aCell;
 uniform highp sampler2D uGH;
@@ -70,6 +72,10 @@ uniform float uH0;
 uniform vec4 uInner;
 uniform vec4 uAmount;     // x grass density, y grass height, z flowers, w ferns (season)
 uniform float uWet;       // rain on the leaves, 0..1
+uniform float uBoost;     // density multiplier (a coarser lattice keeps the same plants per m²)
+uniform vec4 uGaps[${MAX_GAPS}];  // ground birds, ground nests, the player's feet: (x, z, radius scale, height kept)
+uniform float uGapY[${MAX_GAPS}]; // the point the camera must see over the plants (bird body), or -1e4
+uniform int uGapN;
 varying vec3 vTrans;
 varying vec3 vShape;      // per-layer shape data for the fragment shader (cut-outs)
 
@@ -132,6 +138,44 @@ bool plantAt(out vec2 p, out float d, out float fade, out uint h, out float leve
   return fade > 0.002;
 }
 
+// Plants part around ground birds (so a bird the server can see is visible), ground
+// nests and the player's feet: shrunk to g.w within 0.5·g.z m, full height by 1.2·g.z m.
+float gapShrink(vec2 p) {
+  float k = 1.0;
+  for (int i = 0; i < ${MAX_GAPS}; i++) {
+    if (i >= uGapN) break;
+    vec4 g = uGaps[i];
+    k = min(k, mix(g.w, 1.0, smoothstep(0.5 * g.z, 1.2 * g.z, distance(p, g.xy))));
+  }
+  return k;
+}
+// And in a narrow cone from the camera to each ground bird no part of a plant rises
+// above the sight line to its body (tested per vertex, so leaning blades from beside
+// the cone are clipped too): the bird is never hidden by the grass in front of it.
+// The cone is always seen end-on, so it reads as the bird standing in a little dip.
+// Returns the height above the ground gy allowed at q (1e4 = no limit).
+float sightCap(vec2 q, float gy) {
+  float cap = 1e4;
+  for (int i = 0; i < ${MAX_GAPS}; i++) {
+    if (i >= uGapN) break;
+    float by = uGapY[i];
+    if (by < -1000.0) continue;
+    vec2 cd = uGaps[i].xy - cameraPosition.xz;
+    float D = length(cd);
+    if (D < 1.0) continue;
+    vec2 dir = cd / D;
+    vec2 rel = q - cameraPosition.xz;
+    float t = dot(rel, dir) / D;
+    float lat = abs(rel.x * dir.y - rel.y * dir.x);
+    float w = 0.12 + 0.38 * t;
+    if (t > 0.0 && t < 1.08 && lat < w) {
+      float allow = max(0.0, mix(cameraPosition.y, by, min(t, 1.0)) - 0.05 - gy);
+      cap = min(cap, mix(allow, 1e4, smoothstep(w * 0.6, w, lat)));
+    }
+  }
+  return cap;
+}
+
 float windGust(vec2 p) {
   return vnoise(p * 0.045 - uWindDir * uTime * 1.15) * 0.65 + vnoise(p * 0.16 - uWindDir * uTime * 2.2) * 0.35;
 }
@@ -151,12 +195,18 @@ vShape = vec3(0.0);
     vec2 uv = gUV(p);
     vec4 cov = texture(uGV, uv);
     float gy = gHeight(p);
-    if (gRand(h) < cov.r * uAmount.x && gy > 0.06) {
+    if (gRand(h) < cov.r * uAmount.x * uBoost && gy > 0.06) {
       vec4 aux = texture(uGA, uv);
       vec3 root = pow(texture(uGC, uv).rgb, vec3(2.2));
       float grow = smoothstep(0.0, 0.65, fade);
       float H = (0.13 + 0.85 * cov.g) * (0.6 + 0.75 * gRand(h)) * uAmount.y * (0.35 + 0.65 * grow);
-      float widen = max(1.0, d * 0.3) * grow;
+      bool gapped = d < ${GAP_RANGE_GLSL} && uGapN > 0;
+      if (gapped) H *= gapShrink(p);
+      // 30–70 m: fewer, wider, slightly lower blades whose colour settles towards the
+      // field colour, so the band reads as continuous soft cover, not sawtooth tufts.
+      float farBand = smoothstep(26.0, 60.0, d);
+      H *= 1.0 - 0.2 * farBand;
+      float widen = max(1.0, d * 0.3) * grow * (1.0 + 0.6 * farBand);
       float w = 0.034 * (0.75 + 0.5 * gRand(h)) * widen;
       float yaw = gRand(h) * 6.2831853;
       float curve = 0.18 + 0.4 * gRand(h);
@@ -174,12 +224,14 @@ vShape = vec3(0.0);
       float bl = min(1.0, length(lean) * v);
       float y = H * v * (1.0 - 0.32 * bl * bl);
       vec2 xz = p + off + across * side * w * (1.0 - 0.85 * v) + lean * H * v * v;
+      if (gapped) y = min(y, sightCap(xz, gy - 0.07));
       gPos = vec3(xz.x, gy - 0.07 + y, xz.y) - modelMatrix[3].xyz;
       gNrm = normalize(gNormal(aux) + vec3(fdir.x, 0.0, fdir.y) * 0.2 * v);
 
       vec3 tip = grassTip(root);
       vec3 c = mix(root * 0.6, tip, smoothstep(0.0, 1.0, v)) * shade;
       c *= 1.0 + 0.28 * uWind * smoothstep(0.5, 0.95, gust) * v;
+      c = mix(c, grassField(root) * mix(0.92, 1.04, v), 0.6 * farBand);
       c = mix(grassField(root), c, smoothstep(0.0, 0.7, fade));
       vColor = c * (1.0 - 0.1 * uWet);
       vec3 toP = normalize(vec3(xz.x, gy + y, xz.y) - cameraPosition);
@@ -204,7 +256,7 @@ vShape = vec3(0.0);
     vec4 cov = texture(uGV, uv);
     float gy = gHeight(p);
     float drift = smoothstep(0.42, 0.72, vnoise(p * 0.075 + 13.1)) * (0.55 + 0.45 * vnoise(p * 0.6 + 3.7));
-    if (gRand(h) < cov.b * uAmount.z * drift * 1.6 && gy > 0.06) {
+    if (gRand(h) < cov.b * uAmount.z * drift * 1.6 * uBoost && gy > 0.06) {
       vec4 col = texture(uGC, uv);
       vec4 aux = texture(uGA, uv);
       vec3 root = pow(col.rgb, vec3(2.2));
@@ -225,6 +277,7 @@ vShape = vec3(0.0);
       float fr = fract(sin((f + 1.0) * 12.9898 + ph) * 43758.5453);
       vec2 base = p + (f > 0.5 ? vec2(cos(ph + f * 2.3), sin(ph + f * 2.3)) * (0.1 + 0.08 * fr) : vec2(0.0));
       float Hs = tallBase * (0.8 + 0.4 * fr) * grow;
+      if (d < ${GAP_RANGE_GLSL} && uGapN > 0) { Hs *= gapShrink(base); Hs = min(Hs, sightCap(base, gy - 0.05)); }
       float gust = windGust(base);
       vec2 lean = uWindDir * (uWind * (0.15 + 0.6 * gust) + 0.05 * sin(uTime * 2.1 + ph + f)) + vec2(cos(ph * 3.0 + f), sin(ph * 3.0 + f)) * 0.12;
       vec2 top = base + lean * Hs;
@@ -243,8 +296,13 @@ vShape = vec3(0.0);
         vec2 q = position.xy;
         vec2 xz = top + q * R;
         float cup = part > 1.5 ? -0.25 : 0.3;
-        gPos = vec3(xz.x, by + Hs + R * cup + dot(q, lean) * R * 0.6, xz.y);
-        gNrm = normalize(vec3(-lean.x * 0.4, 1.0, -lean.y * 0.4));
+        // Heads turn a little towards the viewer (as flowers face the light), so seen
+        // side-on they still show an open face, not a flat line.
+        vec2 toCam = cameraPosition.xz - top;
+        toCam /= max(length(toCam), 1e-3);
+        float face = 0.55 * smoothstep(0.2, 0.0, (cameraPosition.y - (by + Hs)) / max(distance(cameraPosition.xz, top), 0.5)) + 0.25;
+        gPos = vec3(xz.x, by + Hs + R * cup + dot(q, lean) * R * 0.6 - dot(q, toCam) * R * face, xz.y);
+        gNrm = normalize(vec3(-lean.x * 0.4 + toCam.x * face * 0.6, 1.0, -lean.y * 0.4 + toCam.y * face * 0.6));
         vec3 eye = (row == 6 || sp > 1.5) ? petal * 0.55 : pow(vec3(0.95, 0.72, 0.16), vec3(2.2));
         vColor = part > 1.5 ? eye : petal;
         vShape = vec3(1.0, q);
@@ -272,7 +330,7 @@ vShape = vec3(0.0);
     vec4 cov = texture(uGV, uv);
     float gy = gHeight(p);
     float clump = smoothstep(0.3, 0.62, vnoise(p * 0.12 + 5.3));
-    if (gRand(h) < cov.a * uAmount.w * (0.25 + 1.1 * clump) && gy > 0.06) {
+    if (gRand(h) < cov.a * uAmount.w * (0.25 + 1.1 * clump) * uBoost && gy > 0.06) {
       vec4 col = texture(uGC, uv);
       vec4 aux = texture(uGA, uv);
       vec3 root = pow(col.rgb, vec3(2.2));
@@ -292,6 +350,8 @@ vShape = vec3(0.0);
       float rise = len * (1.45 * v - 1.05 * v * v) * (0.85 + 0.3 * fr);
       float halfW = len * 0.2 * pow(sin(3.1415927 * min(v * 1.08, 1.0)), 0.6) * max(1.0, d * 0.05);
       vec2 xz = p + dir * len * v * 0.95 + across * position.x * 2.0 * halfW + uWindDir * sway * len * v * v;
+      // Fronds over a ground bird bow down to the ground there.
+      if (d < ${GAP_RANGE_GLSL} && uGapN > 0) rise = min(rise * gapShrink(xz), sightCap(xz, gy - 0.04));
       gPos = vec3(xz.x, gy - 0.04 + rise - abs(position.x) * halfW * 0.5, xz.y) - modelMatrix[3].xyz;
       gNrm = normalize(gNormal(aux) + vec3(dir.x, 0.0, dir.y) * 0.35 * (v - 0.4));
       vec3 green = mix(pow(vec3(0.27, 0.47, 0.17), vec3(2.2)), root, 0.25);
@@ -362,7 +422,7 @@ const LAYERS = [
   // Far rings: fewer segments, more blades per tuft (they stand for a wider patch).
   { name: 'grass', main: GRASS_MAIN, head: '', geometry: (cfg, k) => (k < 2 ? tuftGeometry(cfg.blades, cfg.segs) : tuftGeometry(cfg.blades + 2, 1)) },
   { name: 'flowers', main: FLOWER_MAIN, head: PETALS_GLSL, geometry: () => flowerGeometry() },
-  { name: 'ferns', main: FERN_MAIN, head: '', geometry: (cfg, k) => fernGeometry(k === 0 ? 5 : 3) },
+  { name: 'ferns', main: FERN_MAIN, head: '', geometry: (cfg, k) => fernGeometry(k === 0 ? (cfg.segs || 5) : 3) },
 ];
 
 // Season → [grass density, grass height, flowers, ferns] and the tip tint.
@@ -419,7 +479,17 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     uSunCol: { value: new THREE.Color(1, 0.9, 0.7) },
     uAmount: { value: new THREE.Vector4(1, 1, 1, 1) },
     uGrassTint: uniforms.uGrassTint || { value: new THREE.Vector4(0, 0, 0, 0) },
+    uGaps: { value: Array.from({ length: MAX_GAPS }, () => new THREE.Vector4(1e9, 1e9, 1, 1)) },
+    uGapY: { value: new Float32Array(MAX_GAPS).fill(-1e4) },
+    uGapN: { value: 0 },
   };
+  const gapData = new Float32Array(MAX_GAPS * 4);
+  const gapY = new Float32Array(MAX_GAPS);
+  /** (out: Float32Array, cam) => count — see collectGaps; set by the world. */
+  let gapSource = null;
+  let gapT = 0;
+  /** (x, z) => 0..1 kept-short ground, or null (from the POIs). */
+  let mowAt = null;
 
   /** One built layer: per ring a material and g² patch meshes. */
   let layers = [];
@@ -451,7 +521,7 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
         geometry.setAttribute('aCell', cellAttr);
         geometry.instanceCount = p * p;
         const size = p * cfg.base * (1 << k);
-        geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(size / 2, 0, size / 2), size * 0.75 + 12);
+        geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(size / 2, 0, size / 2), size * 0.95 + 3);
         const uniforms = {
           ...shared,
           uSpacing: { value: cfg.base * (1 << k) },
@@ -459,6 +529,7 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
           uRing: { value: k },
           uMaxLevel: { value: cfg.rings - 1 },
           uH0: { value: cfg.n / 2 * cfg.base },
+          uBoost: { value: cfg.boost || 1 },
           uInner: { value: new THREE.Vector4(0, 0, 0, 0) },
         };
         const material = patchMaterial(spec.main, spec.head, uniforms, 'wc-ground-' + spec.name);
@@ -497,7 +568,7 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     }
     if (!job) return;
     const end = Math.min(GROUND_RES, job.row + ROWS_PER_FRAME);
-    fillGroundRows(store, canopy, job.ox, job.oz, back, job.row, end);
+    fillGroundRows(store, canopy, job.ox, job.oz, back, job.row, end, GROUND_RES, mowAt);
     job.row = end;
     if (end < GROUND_RES) return;
     front.height.set(back.height);
@@ -558,6 +629,10 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
       shadows = !!on;
       for (const l of layers) for (const r of l.rings) for (const m of r.meshes) m.receiveShadow = shadows;
     },
+    /** Where things the grass must part around are: fn(out Float32Array(MAX_GAPS·4), cam, outY) → count (collectGaps). */
+    setGapSource(fn) { gapSource = typeof fn === 'function' ? fn : null; },
+    /** Kept-short ground (x, z) → 0..1 (around buildings); refills the window. */
+    setMow(fn) { mowAt = typeof fn === 'function' ? fn : null; lastVersion = -1; sinceRefresh = REFRESH_SECONDS; },
     /** Drops the window (a new world). */
     reset() {
       job = null; lastVersion = -1; shownX = shownZ = NaN;
@@ -593,11 +668,32 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
       shared.uAmount.value.set(amount[0], amount[1], amount[2], amount[3]);
       shared.uGrassTint.value.set(tint[0], tint[1], tint[2], tint[3]);
 
+      // Gaps around ground birds etc.: a few times a second, no allocations.
+      gapT -= dt;
+      if (gapT <= 0) {
+        gapT = 0.15;
+        let n = 0;
+        if (gapSource) { try { n = gapSource(gapData, cam, gapY) | 0; } catch { n = 0; } }
+        n = Math.max(0, Math.min(MAX_GAPS, n));
+        const g = shared.uGaps.value, gy = shared.uGapY.value;
+        for (let i = 0; i < n; i++) {
+          g[i].set(gapData[i * 4], gapData[i * 4 + 1], gapData[i * 4 + 2], gapData[i * 4 + 3]);
+          gy[i] = gapY[i];
+        }
+        shared.uGapN.value = n;
+      }
       refresh(dt, cam.x, cam.z);
       place(cam.x, cam.z);
     },
     /** Uniforms the terrain shader shares (the seasonal grass tint). */
     sharedUniforms: { uGrassTint: shared.uGrassTint, uTime: shared.uTime, uWind: shared.uWind, uWet: shared.uWet, uWindDir: shared.uWindDir },
+    /** Diagnostics: the current gaps [{x, z, scale, keep, y}]. */
+    get gaps() {
+      const out = [];
+      const g = shared.uGaps.value, gy = shared.uGapY.value;
+      for (let i = 0; i < shared.uGapN.value; i++) out.push({ x: g[i].x, z: g[i].y, scale: g[i].z, keep: g[i].w, y: gy[i] });
+      return out;
+    },
     /** Draw calls the ground cover can issue this frame (before frustum culling). */
     visibleCount() {
       let n = 0;

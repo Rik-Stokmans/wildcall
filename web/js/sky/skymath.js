@@ -375,6 +375,8 @@ export function particleAmounts({ rain = 0, cloud = 0, wind = 0, season = 0, can
 const AERIAL_DAY = rgb(0x9fbde0);
 const AERIAL_NIGHT = rgb(0x1b2644);
 const MIST_DAY = rgb(0xe4ebf0);
+const MIST_PEARL = rgb(0xe9e6e2);
+const MIST_GOLD = rgb(0xf3dfb4);
 const RAIN_VEIL = rgb(0x8f9aa6);
 
 /**
@@ -402,8 +404,15 @@ export function atmosphereParams({ sky, mist = 0, rain = 0, wet = 0, cloud = 0, 
   mix3(aerial, a.haze, a.hazeAmt * 0.8 * day, aerial);
   mix3(aerial, sky.fog, clamp(cloud * 0.6 + rain * 0.5), aerial);
   const aerialAmt = clamp(0.36 + 0.15 * a.hazeAmt + 0.1 * clamp(cloud) - 0.1 * (1 - day) - 0.08 * sky.golden);
-  // Mist: whitish by day, takes the sky's colour at dawn/dusk and night.
-  const mistCol = mix3(sky.fog, MIST_DAY, 0.75 * day * (1 - sky.golden * 0.25), [0, 0, 0]);
+  // Mist: whitish by day; at dawn and dusk a soft pearl turning pale gold with the
+  // golden hour (never the dim olive-brown of the low-sun fog colour), as bright as the
+  // sky allows; the sky's own colour at night.
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const lowSun = mix3(MIST_PEARL, MIST_GOLD, clamp(sky.golden * 1.2), [0, 0, 0]);
+  const lit = clamp(Math.max(lum(sky.fog), lum(sky.horizon)) / lum(lowSun) * 1.15, 0.25, 1);
+  const twilight = lowSun.map((v) => v * lit);
+  const dayMist = mix3(twilight, MIST_DAY, smoothstep(0.55, 0.9, sky.daylight) * (1 - sky.golden), [0, 0, 0]);
+  const mistCol = mix3(sky.fog, dayMist, smoothstep(0.04, 0.3, sky.daylight) * 0.85, [0, 0, 0]);
   const wetMist = clamp(wet) * 0.12 * (1 - clamp(rain));
   const mistAmt = clamp(Math.max(clamp(mist), wetMist) + a.hazeAmt * 0.15 + 0.08 * clamp(rain));
   const mistHeight = 5 + 9 * clamp(mist) + 4 * clamp(rain);

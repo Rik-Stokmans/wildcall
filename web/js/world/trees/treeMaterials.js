@@ -28,8 +28,8 @@ uniform float uBend;
 uniform float uFlutter;
 uniform float uFreq;
 uniform float uThin;
-uniform vec3 uCamPos;
-uniform float uShadowFar;
+uniform vec4 uFade;   // distance-band cross-fade window (instancing.js fadeWindow)
+uniform float uLodScale; // zoom: distances shrink while looking through optics
 
 #ifdef USE_INSTANCING
 // World-space metres (at the model's scale 1) -> the instance's model space.
@@ -88,8 +88,8 @@ vec3 objectNormal = vec3(normal);
 
 // Shadow pass: the cards face the light here, so they would shadow themselves in
 // stripes; pushing them a little away from the light keeps the dappling (cards shade
-// the ones behind them) without the acne. Trees far from the player, outside any
-// shadow map, are collapsed so their vertices cost nothing more.
+// the ones behind them) without the acne. Only the shadow-caster sets (forest.js:
+// the instances whose shadow can land in the map) are drawn in this pass.
 const BEGIN = /* glsl */`
 vec3 transformed = vec3(position) + treeWind();
 #ifdef TREE_CARDS
@@ -97,17 +97,36 @@ vec3 transformed = vec3(position) + treeWind();
   vec3 toLight = vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
   transformed += treeLocal(-toLight * 0.9);
 #endif
-#ifdef USE_INSTANCING
-  vec3 ip = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
-  if (distance(ip.xz, uCamPos.xz) > uShadowFar) transformed = vec3(0.0);
-#endif
 `;
 
+// Main pass: the distance-band cross-fade. Instances wholly outside this level's band
+// are collapsed (their vertices cost almost nothing); inside a fade zone the fragment
+// stage keeps a dithered share of the pixels (complementary to the other level).
 const BEGIN_MAIN = /* glsl */`
 vec3 transformed = vec3(position) + treeWind();
 #ifdef TREE_CARDS
   transformed += cardOff;
 #endif
+#ifdef USE_INSTANCING
+{
+  vec3 ipw = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+  float dd = distance(ipw.xz, cameraPosition.xz) * uLodScale;
+  vTreeFade = vec2(clamp((dd - uFade.x) / (uFade.y - uFade.x), 0.0, 1.0),
+                   1.0 - clamp((dd - uFade.z) / (uFade.w - uFade.z), 0.0, 1.0));
+  if (vTreeFade.x <= 0.0 || vTreeFade.y <= 0.0) transformed = vec3(0.0);
+}
+#else
+  vTreeFade = vec2(1.0);
+#endif
+`;
+
+const DITHER = /* glsl */`
+#include <clipping_planes_fragment>
+{
+  // Interleaved gradient noise: a stable screen-space dither for the LOD cross-fade.
+  float tD = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  if (tD < 1.0 - vTreeFade.x || tD >= vTreeFade.y) discard;
+}
 `;
 
 const COLOR = /* glsl */`
@@ -190,7 +209,7 @@ reflectedLight.indirectDiffuse *= uAmbient;
 `;
 
 function patchVertex(shader, main) {
-  shader.vertexShader = HEADER + (main ? SEASON_UNIFORMS : '') + shader.vertexShader
+  shader.vertexShader = HEADER + (main ? SEASON_UNIFORMS + 'varying vec2 vTreeFade;\n' : '') + shader.vertexShader
     .replace('#include <begin_vertex>', main ? BEGIN_MAIN : BEGIN);
   if (main) {
     shader.vertexShader = shader.vertexShader
@@ -199,7 +218,8 @@ function patchVertex(shader, main) {
   }
   shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', ALPHA_TEST + '#include <alphatest_fragment>');
   if (main) {
-    shader.fragmentShader = shader.fragmentShader
+    shader.fragmentShader = 'varying vec2 vTreeFade;\n' + shader.fragmentShader
+      .replace('#include <clipping_planes_fragment>', DITHER)
       .replace('#include <lights_lambert_pars_fragment>', LEAF_LIGHT)
       .replace('#include <aomap_fragment>', AMBIENT);
   }
@@ -210,7 +230,7 @@ function patchVertex(shader, main) {
  * @param {object} o
  * @param {boolean} o.cards  leaf cards (true) or wood (false)
  * @param {THREE.Texture} o.map
- * @param {object} o.uniforms  shared live uniforms: uTime, uWind, uWindDir, uThin, uCamPos, uShadowFar,
+ * @param {object} o.uniforms  shared live uniforms: uTime, uWind, uWindDir, uThin, uFade (per detail), uLodScale,
  *   uSeasonA, uSeasonB, uSeasonRef, uSeasonAmt, plus per kind uBend, uFlutter, uFreq
  * @returns {{material: THREE.Material, depth: THREE.Material}}
  */

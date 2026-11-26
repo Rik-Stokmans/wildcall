@@ -21,7 +21,7 @@
 // tree models arrive (or should a server not send them) trees fall back to the
 // procedural low-poly models of vegModels.js.
 import * as THREE from 'three';
-import { VEG_INFO, VEG_KIND_COUNT } from './constants.js';
+import { VEG_INFO, VEG_KIND_COUNT, VEG, REGION } from './constants.js';
 import { buildVegModel, detailForLod } from './vegModels.js';
 import { seasonTint, easeTint } from './season.js';
 import { countInstances, fillInstances } from './instances.js';
@@ -41,6 +41,7 @@ uniform vec3 uSeasonA;
 uniform vec3 uSeasonB;
 uniform vec3 uSeasonRef;
 uniform float uSeasonAmt;
+uniform vec2 uDecorFar;   // small decoration shrinks away between these distances (0 = off)
 
 // Wind offset for this vertex in the instance's local space.
 vec3 vegWind(vec3 p) {
@@ -66,6 +67,10 @@ vec3 vegWind(vec3 p) {
 const BEGIN = /* glsl */`
 vec3 transformed = vec3(position) + vegWind(position);
 #ifdef USE_INSTANCING
+  if (uDecorFar.y > 0.0) {
+    vec3 ipw = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+    transformed *= 1.0 - smoothstep(uDecorFar.x, uDecorFar.y, distance(ipw.xz, cameraPosition.xz));
+  }
   if (aVeg2 < 1.0) {
     vec2 ip = mod(modelMatrix[3].xz * 0.29 + instanceMatrix[3].xz, 991.0);
     if (fract(sin(dot(ip, vec2(39.346, 11.135))) * 24634.6345) >= aVeg2) transformed = vec3(0.0);
@@ -138,6 +143,10 @@ export function createVegetationKit() {
 
   const materials = [];
   const depthMaterials = [];
+  // Performance pass: small decoration (flowers, tufts, ferns, mushrooms) shrinks away
+  // with distance and whole chunk meshes of it are hidden beyond (updateDecor).
+  const decorFar = { value: new THREE.Vector2(45, 65) };
+  const noFade = { value: new THREE.Vector2(0, 0) };
   for (let k = 0; k < VEG_KIND_COUNT; k++) {
     const info = VEG_INFO[k];
     const cu = classUniforms(info.season);
@@ -147,6 +156,7 @@ export function createVegetationKit() {
       uFlutter: { value: info.flutter },
       uFreq: { value: info.freq },
       uSeasonA: cu.uSeasonA, uSeasonB: cu.uSeasonB, uSeasonRef: cu.uSeasonRef, uSeasonAmt: cu.uSeasonAmt,
+      uDecorFar: info.decor ? decorFar : noFade,
     };
     // Single-sided on purpose: blades and petals are built with both windings already.
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -161,11 +171,11 @@ export function createVegetationKit() {
 
   const geometries = new Map();
   /** Shared geometry of a kind at a detail level (built on first use, kept for the session). */
-  function geometryFor(kind, detail) {
-    const key = kind * 4 + detail;
+  function geometryFor(kind, detail, snowy = false) {
+    const key = kind * 4 + detail + (snowy ? 1000 : 0);
     let g = geometries.get(key);
     if (g) return g;
-    const m = buildVegModel(kind, detail);
+    const m = buildVegModel(kind, detail, snowy);
     g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(m.position, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(m.normal, 3));
@@ -179,6 +189,9 @@ export function createVegetationKit() {
   }
 
   const counts = new Uint32Array(VEG_KIND_COUNT);
+  /** Every live decoration mesh (removed again when the chunk disposes it). */
+  const decorMeshes = new Set();
+  const sphere = new THREE.Sphere();
   const bounds = { minY: 0, maxY: 0, reach: 0 };
   const forest = createForest(shared);
 
@@ -211,7 +224,8 @@ export function createVegetationKit() {
       for (let k = 0; k < VEG_KIND_COUNT; k++) {
         const n = counts[k];
         if (!n || forest.draws(k)) continue;
-        const geo = geometryFor(k, detailForLod(k, chunk.lod));
+        // Rocks on snowy ground (Frostveil) wear snow caps instead of moss.
+        const geo = geometryFor(k, Math.min(detailForLod(k, chunk.lod), quality.vegDetail ?? 2), k === VEG.ROCK && snowyChunk(chunk));
         const matrices = new Float32Array(n * 16);
         const colors = new Float32Array(n * 3);
         const written = fillInstances(veg, k, ox, oz, quality.decor, geo.userData.model, matrices, colors, bounds);
@@ -227,11 +241,31 @@ export function createVegetationKit() {
         mesh.receiveShadow = !!quality.shadows;
         mesh.matrixAutoUpdate = false;
         mesh.name = 'veg:' + VEG_INFO[k].name;
+        if (VEG_INFO[k].decor) {
+          mesh.userData.decor = true;
+          decorMeshes.add(mesh);
+          mesh.addEventListener('dispose', () => decorMeshes.delete(mesh));
+        }
         out.push(mesh);
       }
       return out;
     },
 
+    /** Decoration fade distances [start, end] in metres (per quality). */
+    setDecorRange(start, end) { decorFar.value.set(start, end); },
+    /**
+     * Per frame: hides decoration meshes whose chunk lies wholly beyond the fade-out
+     * (their instances would all be collapsed anyway). A few dozen sphere tests.
+     */
+    updateDecor(cam) {
+      const end = decorFar.value.y;
+      for (const m of decorMeshes) {
+        if (!m.parent) continue;
+        sphere.copy(m.boundingSphere).applyMatrix4(m.parent.matrixWorld);
+        const d = Math.hypot(sphere.center.x - cam.x, sphere.center.z - cam.z) - sphere.radius;
+        m.visible = d < end;
+      }
+    },
     /**
      * Per-frame animation state.
      * @param {number} time   seconds
@@ -270,6 +304,24 @@ export function createVegetationKit() {
       }
     },
   };
+}
+
+/**
+ * True when a chunk is snowy ground: in Frostveil (or anywhere) with at least a third of
+ * its vertices snow-white (bright, unsaturated terrain colour).
+ */
+function snowyChunk(chunk) {
+  const c = chunk.colors, r = chunk.region;
+  if (!c || !c.length) return false;
+  let snow = 0, total = 0, frost = 0;
+  for (let v = 0; v * 3 < c.length; v += 2) {
+    const R = c[v * 3], G = c[v * 3 + 1], B = c[v * 3 + 2];
+    const max = Math.max(R, G, B), min = Math.min(R, G, B);
+    if (R + G + B > 560 && max - min < 40) snow++;
+    if (r && r[v] === REGION.FROSTVEIL) frost++;
+    total++;
+  }
+  return snow * 3 > total || (frost * 2 > total && snow * 6 > total);
 }
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v || 0; }
