@@ -21,8 +21,8 @@ const (
 	baseDensity = 3.2
 	maxRoster   = 48
 
-	rareShare      = 0.12 // a Rare species is this much scarcer than its Density says
-	legendaryShare = 0.04
+	rareShare      = 0.12  // a Rare species is this much scarcer than its Density says
+	legendaryShare = 0.12  // integration fix (was 0.04): with Density 0.02 no snowy owl lived in 30 Frostveil patches in winter
 	rarePlumage    = 0.015 // share of individuals with leucistic plumage
 
 	arriveSpread = 8 // in-game hours over which migrants arrive / leave at a season change

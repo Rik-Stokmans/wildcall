@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -66,6 +67,8 @@ type Config struct {
 	Seed string
 	// Logf receives diagnostics (nil = silent).
 	Logf func(format string, args ...any)
+	// Worlds builds the world for a seed (nil = world.New). Tests share instances.
+	Worlds func(seed int64) *world.World
 }
 
 // Sink receives encoded outbound messages. Send must not block.
@@ -103,6 +106,13 @@ type Session struct {
 	// Per-connection streaming state.
 	sentPOI   map[string]core.Vec3
 	sentTrail map[string]core.Vec3
+	// The 700 m POI/trail query runs off the simulation goroutine (a cold query
+	// generates structure cells and routes trails: tens of milliseconds).
+	saving  atomic.Bool // an autosave write is in flight
+	poiCh   chan poiResult
+	poiBusy bool
+	warmed  map[[2]int32]bool // eco cells whose perches have been pre-generated
+	warmedW *world.World
 
 	// Player state.
 	pose       proto.Pose
@@ -134,19 +144,19 @@ type Session struct {
 	lureID uint32
 
 	// Clocks.
-	now                              float64
-	tick                             uint32
-	obsAcc, envAcc, poiAcc, saveAcc  float64
-	narrAcc, discAcc                 float64
-	worstTick                        float64
-	dirty, minor                     bool
-	lastPush                         float64
-	lastLevel                        int
-	birdBuf                          []core.BirdState
-	evBuf                            []core.EcoEvent
-	poiBuf                           []core.POI
-	trailBuf                         []core.Trail
-	bytesOut                         int64
+	now                             float64
+	tick                            uint32
+	obsAcc, envAcc, poiAcc, saveAcc float64
+	narrAcc, discAcc                float64
+	worstTick                       float64
+	dirty, minor                    bool
+	lastPush                        float64
+	lastLevel                       int
+	birdBuf                         []core.BirdState
+	evBuf                           []core.EcoEvent
+	poiBuf                          []core.POI
+	trailBuf                        []core.Trail
+	bytesOut                        int64
 }
 
 type birdRef struct {
@@ -176,6 +186,7 @@ func New(cfg Config) (*Session, error) {
 		cfg:     cfg,
 		species: species.All(),
 		tracker: content.NewTracker(),
+		poiCh:   make(chan poiResult, 1),
 	}
 	f, st, aside, err := cfg.Store.Load()
 	switch st {
@@ -264,12 +275,15 @@ func (s *Session) newAdventure(name, seedText string) {
 	s.install(sd, txt, p, clock, nil, save.Seq{})
 	spawn, yaw := s.world.Spawn()
 	s.p.Pos, s.p.Yaw = spawn, yaw
+	s.feet = spawn
+	s.explore(spawn) // the player stands here: the map around the cabin is known
 	s.hasSave = false
 }
 
 // adopt installs a loaded save.
 func (s *Session) adopt(f *save.File) {
 	progress.Normalize(f.Profile)
+	s.sanitize(f.Profile)
 	clock := env.New(f.Seed, s.cfg.DayLen)
 	clock.Restore(f.Clock)
 	clock.SetDayLen(s.cfg.DayLen)
@@ -281,7 +295,11 @@ func (s *Session) install(sd int64, seedText string, p *proto.Profile, clock *en
 	if s.seedText == "" {
 		s.seedText = strconv.FormatInt(sd, 10)
 	}
-	s.world = world.New(sd)
+	if s.cfg.Worlds != nil {
+		s.world = s.cfg.Worlds(sd)
+	} else {
+		s.world = world.New(sd)
+	}
 	s.worldPtr.Store(s.world)
 	s.sim = eco.New(s.world, s.species, sd)
 	s.clock = clock
@@ -339,6 +357,27 @@ func (s *Session) File() *save.File {
 // Save writes the adventure to disk.
 func (s *Session) Save() error {
 	return s.cfg.Store.Save(s.File())
+}
+
+// autosave encodes the adventure on the simulation goroutine and writes it on a
+// helper goroutine, so disk latency (fsync) never stalls a tick.
+func (s *Session) autosave() {
+	if s.saving.Load() {
+		return
+	}
+	data, err := save.Encode(s.File())
+	if err != nil {
+		s.logf("autosave: %v", err)
+		return
+	}
+	s.saving.Store(true)
+	st := s.cfg.Store
+	go func() {
+		defer s.saving.Store(false)
+		if err := st.Write(data); err != nil {
+			s.logf("autosave: %v", err)
+		}
+	}()
 }
 
 // Profile returns the server-side profile (tests and tools; do not mutate from
@@ -409,7 +448,7 @@ func (s *Session) Handle(t string, d json.RawMessage) {
 
 func (s *Session) recoverMsg(t string) {
 	if r := recover(); r != nil {
-		s.logf("game: panic handling %q: %v", t, r)
+		s.logf("game: panic handling %q: %v\n%s", t, r, debug.Stack())
 		s.fail("Something went wrong there.")
 	}
 }
@@ -470,6 +509,8 @@ func (s *Session) hello(h proto.Hello) {
 	cabin, _ := s.world.POI("cabin")
 	s.atCabin = cabin.Pos.DistXZ(s.feet) <= cabinEnter
 	s.send(proto.SWelcome, s.welcome())
+	// From now on the adventure exists: a later connection offers "Continue".
+	s.hasSave = true
 	for _, l := range s.lures {
 		s.send(proto.SLure, proto.LureMsg{ID: l.id, Pos: l.pos, Kind: l.kind, Active: true})
 	}

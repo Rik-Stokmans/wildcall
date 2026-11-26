@@ -196,6 +196,7 @@ type conn struct {
 	srv    *Server
 	ws     *websocket.Conn
 	queue  chan frame
+	bin    chan []byte // terrain chunk frames (workers block here, never the simulation)
 	chunks chan proto.ChunkReq
 	birds  atomic.Pointer[[]byte]
 	poke   chan struct{}
@@ -221,9 +222,11 @@ func (c *conn) Send(t string, data []byte) {
 	}
 }
 
+// SendBinary queues a terrain chunk. It may block (chunk workers and tests only),
+// never the simulation's JSON messages, which have their own queue.
 func (c *conn) SendBinary(data []byte) {
 	select {
-	case c.queue <- frame{binary: true, data: data}:
+	case c.bin <- data:
 	case <-c.closed:
 	}
 }
@@ -243,6 +246,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	c := &conn{
 		srv: s, ws: ws,
 		queue:  make(chan frame, queueSize),
+		bin:    make(chan []byte, 32),
 		chunks: make(chan proto.ChunkReq, chunkQueue),
 		poke:   make(chan struct{}, 1),
 		closed: make(chan struct{}),
@@ -335,6 +339,10 @@ func (c *conn) writePump() {
 				mt = websocket.BinaryMessage
 			}
 			if err := c.write(mt, f.data); err != nil {
+				return
+			}
+		case b := <-c.bin:
+			if err := c.write(websocket.BinaryMessage, b); err != nil {
 				return
 			}
 		case <-c.poke:

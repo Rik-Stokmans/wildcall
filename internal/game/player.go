@@ -223,7 +223,7 @@ func (s *Session) near(poiID string, r float32) bool {
 func (s *Session) discover() {
 	pos := s.feet
 	sense := s.p.Stats.TrailSense
-	s.poiBuf = s.world.POIsNear(pos.X, pos.Z, 40, s.poiBuf[:0])
+	s.poiBuf = s.world.POIsNear(pos.X, pos.Z, max(40, sense+16), s.poiBuf[:0])
 	for _, poi := range s.poiBuf {
 		if !discoverable(poi.Kind) || s.p.Journal.Locations[poi.ID] != nil {
 			continue

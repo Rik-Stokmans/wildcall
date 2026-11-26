@@ -9,6 +9,7 @@ import (
 	"github.com/Rik-Stokmans/wildcall/internal/narrator"
 	"github.com/Rik-Stokmans/wildcall/internal/progress"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
+	"github.com/Rik-Stokmans/wildcall/internal/world"
 )
 
 // Active reports whether a greeted client is attached (the world runs only then).
@@ -92,9 +93,7 @@ func (s *Session) Tick(dt float32) {
 	s.saveAcc += float64(dt)
 	if s.saveAcc >= autosaveEvery {
 		s.saveAcc = 0
-		if err := s.Save(); err != nil {
-			s.logf("autosave: %v", err)
-		}
+		s.autosave()
 	}
 
 	s.afterChange()
@@ -377,9 +376,86 @@ func (s *Session) idleNarration() {
 	})
 }
 
+// poiResult is a finished background POI/trail query.
+type poiResult struct {
+	w      *world.World
+	pois   []core.POI
+	trails []core.Trail
+	warm   map[[2]int32]bool
+}
+
+// Ecosystem cells (eco's 128 m population cells) are activated within 520 m of the
+// player, each with a 96 m perch query. warmPerches runs those queries ahead of
+// time on the helper goroutine so that activation finds the world's perch and
+// height caches hot instead of generating terrain inside a simulation tick.
+const (
+	ecoCell    = 128
+	warmInner  = 420 // cells closer than this are already active
+	warmOuter  = 640 // warm cells out to here (activation is at 520 m)
+	warmForget = 900
+	ecoPerchR  = ecoCell * 0.75
+)
+
+func warmPerches(w *world.World, c core.Vec3, warmed map[[2]int32]bool) {
+	for k := range warmed {
+		cx, cz := (float32(k[0])+0.5)*ecoCell, (float32(k[1])+0.5)*ecoCell
+		if dx, dz := cx-c.X, cz-c.Z; dx*dx+dz*dz > warmForget*warmForget {
+			delete(warmed, k)
+		}
+	}
+	var buf []core.Perch
+	k0x, k0z := floorDiv(c.X-warmOuter, ecoCell), floorDiv(c.Z-warmOuter, ecoCell)
+	k1x, k1z := floorDiv(c.X+warmOuter, ecoCell), floorDiv(c.Z+warmOuter, ecoCell)
+	for kz := k0z; kz <= k1z; kz++ {
+		for kx := k0x; kx <= k1x; kx++ {
+			key := [2]int32{int32(kx), int32(kz)}
+			if warmed[key] {
+				continue
+			}
+			cx, cz := (float32(kx)+0.5)*ecoCell, (float32(kz)+0.5)*ecoCell
+			dx, dz := cx-c.X, cz-c.Z
+			d2 := dx*dx + dz*dz
+			if d2 > warmOuter*warmOuter || d2 < warmInner*warmInner {
+				continue
+			}
+			buf = w.PerchesNear(cx, cz, ecoPerchR, buf[:0])
+			warmed[key] = true
+		}
+	}
+}
+
 // streamPOIs sends POIs and trails within 700 m that this connection has not been
-// sent, and forgets those far behind so they are sent again on return.
+// sent, and forgets those far behind so they are sent again on return. The query
+// itself runs on a helper goroutine (the world is safe for concurrent use); its
+// result is applied on the next call, so streaming lags the player by about a
+// second.
 func (s *Session) streamPOIs() {
+	select {
+	case res := <-s.poiCh:
+		s.poiBusy = false
+		if res.w == s.world {
+			s.warmed = res.warm
+			s.applyPOIs(res.pois, res.trails)
+		}
+	default:
+	}
+	if !s.poiBusy {
+		s.poiBusy = true
+		w, c, ch, warm := s.world, s.feet, s.poiCh, s.warmed
+		if warm == nil || s.warmedW != w {
+			warm, s.warmedW = map[[2]int32]bool{}, w
+		}
+		s.warmed = nil // owned by the helper until it reports back
+		go func() {
+			pois := w.POIsNear(c.X, c.Z, poiRadius, nil)
+			trails := w.TrailsNear(c.X, c.Z, poiRadius, nil)
+			warmPerches(w, c, warm)
+			ch <- poiResult{w: w, pois: pois, trails: trails, warm: warm}
+		}()
+	}
+}
+
+func (s *Session) applyPOIs(pois []core.POI, trails []core.Trail) {
 	c := s.feet
 	for id, pos := range s.sentPOI {
 		if pos.DistXZ(c) > poiForget {
@@ -392,15 +468,13 @@ func (s *Session) streamPOIs() {
 		}
 	}
 	var msg proto.PoisMsg
-	s.poiBuf = s.world.POIsNear(c.X, c.Z, poiRadius, s.poiBuf[:0])
-	for _, poi := range s.poiBuf {
+	for _, poi := range pois {
 		if _, ok := s.sentPOI[poi.ID]; !ok {
 			s.sentPOI[poi.ID] = poi.Pos
 			msg.POIs = append(msg.POIs, poi)
 		}
 	}
-	s.trailBuf = s.world.TrailsNear(c.X, c.Z, poiRadius, s.trailBuf[:0])
-	for _, t := range s.trailBuf {
+	for _, t := range trails {
 		if _, ok := s.sentTrail[t.ID]; !ok && len(t.Points) > 0 {
 			s.sentTrail[t.ID] = t.Points[len(t.Points)/2]
 			msg.Trails = append(msg.Trails, t)

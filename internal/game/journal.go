@@ -103,7 +103,7 @@ func (s *Session) ensureMystery(sp *core.Species, level int, pos core.Vec3) *pro
 			FirstDay: s.clock.Env().Day,
 			Region:   int(s.world.RegionAt(pos.X, pos.Z)),
 			Pos:      pos, Candidates: []proto.Candidate{},
-			Species:  sp.ID,
+			Species: sp.ID,
 		}
 		s.p.Journal.Mysteries = append(s.p.Journal.Mysteries, m)
 		s.changed()

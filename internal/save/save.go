@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Rik-Stokmans/wildcall/internal/env"
@@ -77,9 +78,11 @@ func (s Status) String() string {
 	return [...]string{"missing", "loaded", "corrupt", "old-version"}[s]
 }
 
-// Store is a save directory.
+// Store is a save directory. Its methods are safe for concurrent use: writes of
+// save.json are serialised.
 type Store struct {
 	dir string
+	mu  sync.Mutex
 }
 
 // Open prepares a save directory (creating it and its photos folder).
@@ -147,15 +150,33 @@ func (s *Store) moveAside(tag string) (string, error) {
 
 // Save writes the file atomically and keeps the previous save as save.json.bak.
 func (s *Store) Save(f *File) error {
+	data, err := Encode(f)
+	if err != nil {
+		return err
+	}
+	return s.Write(data)
+}
+
+// Encode serialises a save file (stamping the version and time). Encoding is the
+// part that must see a consistent profile; Write can then run on another goroutine.
+func Encode(f *File) ([]byte, error) {
 	if f == nil || f.Profile == nil {
-		return errors.New("save: nothing to save")
+		return nil, errors.New("save: nothing to save")
 	}
 	f.Version = Version
 	f.SavedAt = time.Now().UTC()
 	data, err := json.Marshal(f)
 	if err != nil {
-		return fmt.Errorf("save: encode: %w", err)
+		return nil, fmt.Errorf("save: encode: %w", err)
 	}
+	return data, nil
+}
+
+// Write stores already encoded save data atomically (temp file, sync, rename) and
+// keeps the previous save as save.json.bak.
+func (s *Store) Write(data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	tmp, err := os.CreateTemp(s.dir, "save-*.tmp")
 	if err != nil {
 		return fmt.Errorf("save: %w", err)
