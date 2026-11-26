@@ -243,12 +243,15 @@ type Welcome struct {
 	Plants       []PlantDef        `json:"plants"`
 	Recipes      []RecipeDef       `json:"recipes"`
 	Trees        []TreeModel       `json:"trees"`
-	POIs         []core.POI        `json:"pois"`   // home-valley POIs + those near the player now
-	Trails       []core.Trail      `json:"trails"` // likewise
-	Shop         []string          `json:"shop"`   // item ids Finn sells
-	Profile      Profile           `json:"profile"`
-	Env          EnvMsg            `json:"env"`
-	Spawn        Teleport          `json:"spawn"`
+	// MarginNotes are the previous naturalist's notes on species (species id → note),
+	// shown in the journal while the player carries the Forgotten Field Journal.
+	MarginNotes map[string]string `json:"marginNotes"`
+	POIs        []core.POI        `json:"pois"`   // home-valley POIs + those near the player now
+	Trails      []core.Trail      `json:"trails"` // likewise
+	Shop        []string          `json:"shop"`   // item ids Finn sells
+	Profile     Profile           `json:"profile"`
+	Env         EnvMsg            `json:"env"`
+	Spawn       Teleport          `json:"spawn"`
 }
 
 // WorldInfo describes the generated world. It is unbounded: there is no size.

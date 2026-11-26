@@ -259,9 +259,11 @@ type QuestDef struct {
 	Rewards    Reward         `json:"rewards"`
 	Requires   []string       `json:"requires"` // quests that must be turned in first
 	ReqRank    int            `json:"reqRank"`
-	Hidden     bool           `json:"hidden"`   // not listed until discovered (e.g. found via a journal page)
-	Tutorial   bool           `json:"tutorial"` // the primary tutorial quest
-	AutoStart  bool           `json:"autoStart"`
+	// ReqRep gates the quest on reputation with a faction (faction → points needed).
+	ReqRep    map[string]int `json:"reqRep,omitempty"`
+	Hidden    bool           `json:"hidden"`   // not listed until discovered (e.g. found via a journal page)
+	Tutorial  bool           `json:"tutorial"` // the primary tutorial quest
+	AutoStart bool           `json:"autoStart"`
 }
 
 // ObjectiveDef is one quest step. Kind vocabulary (pinned; see docs/contract.md §Quest events):
@@ -371,12 +373,21 @@ type Profile struct {
 	Buffs    []Buff                 `json:"buffs"`   // active food and drink effects
 	Forage   map[string]int         `json:"forage"`  // forage node id → day it was picked (pruned once regrown)
 	Recipes  []string               `json:"recipes"` // recipe ids known
-	Stats    core.Stats             `json:"stats"`   // derived; recomputed by progress
-	Film     Film                   `json:"film"`
-	Totals   Totals                 `json:"totals"`
-	XPLog    map[string]int         `json:"xpLog"` // diminishing-returns counters, key "<source>:<species>"
-	Pos      core.Vec3              `json:"pos"`
-	Yaw      float32                `json:"yaw"`
+	// Ledger is the recent Field Credit history, newest last (capped at 40 entries).
+	Ledger []LedgerEntry  `json:"ledger"`
+	Stats  core.Stats     `json:"stats"` // derived; recomputed by progress
+	Film   Film           `json:"film"`
+	Totals Totals         `json:"totals"`
+	XPLog  map[string]int `json:"xpLog"` // diminishing-returns counters, key "<source>:<species>"
+	Pos    core.Vec3      `json:"pos"`
+	Yaw    float32        `json:"yaw"`
+}
+
+// LedgerEntry is one Field Credit movement (spec screen 13: earned rewards, spending).
+type LedgerEntry struct {
+	Day    int    `json:"day"`
+	Amount int    `json:"amount"` // positive = earned, negative = spent
+	Reason string `json:"reason"` // player-facing: "Quest: The Unseen Singer", "Bought Explorer Binoculars"
 }
 
 type ItemStack struct {
