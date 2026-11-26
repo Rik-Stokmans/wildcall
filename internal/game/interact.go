@@ -14,6 +14,10 @@ import (
 
 func takenFlag(poiID string) string { return "taken:" + poiID }
 
+// dialogQuiet is how long after the last dialogue node the narrator assumes the
+// conversation is still open (the client may close it without telling the server).
+const dialogQuiet = 45
+
 // msgInteract handles E on a POI, NPC, collectible or cache.
 func (s *Session) msgInteract(d []byte) {
 	var m proto.Interact
@@ -64,6 +68,7 @@ func (s *Session) talk(npc string) {
 	node := content.Talk(npc, s.p)
 	s.questEvent(content.Talked(npc))
 	s.send(proto.SDialog, node)
+	s.dialogUntil = s.now + dialogQuiet
 }
 
 func (s *Session) msgDialogChoice(d []byte) {
@@ -120,6 +125,11 @@ func (s *Session) msgDialogChoice(d []byte) {
 		node = proto.DialogNode{NPC: m.NPC, Name: def.Name, Role: def.Role, Lines: []string{}, Choices: []proto.DialogChoice{}}
 	}
 	s.send(proto.SDialog, node)
+	if len(node.Lines) == 0 && len(node.Choices) == 0 {
+		s.dialogUntil = 0
+	} else {
+		s.dialogUntil = s.now + dialogQuiet
+	}
 	for _, r := range rewards {
 		s.send(proto.SRewards, r)
 	}

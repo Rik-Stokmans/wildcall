@@ -196,10 +196,15 @@ func (s *Session) onHeard(ctx *field.Context, h field.Heard, bird core.BirdState
 		s.send(proto.SClue, c)
 	}
 	s.questEvent(content.Heard(sp.ID, known, s.at(h.Pos)))
-	if h.Clue.New || (known && h.Clue.Known != "") {
-		c := h.Clue
-		s.narrate(narrator.Event{Kind: narrator.CallHeard, Clue: &c, Subject: c.Mystery, Known: s.knownSp(sp)})
+	// Every heard call is offered (the narrator paces itself): a new voice, a mystery
+	// heard again, something unusual, or a known species recognised by ear. The species
+	// goes along only when the player both knows it and recognised it from this call.
+	c := h.Clue
+	var recognised *core.Species
+	if known && c.Known != "" {
+		recognised = s.knownSp(sp)
 	}
+	s.narrate(narrator.Event{Kind: narrator.CallHeard, Clue: &c, Subject: c.Mystery, Known: recognised})
 }
 
 // observe runs one observation tick (4 Hz).
@@ -367,7 +372,7 @@ func (s *Session) idleNarration() {
 		Still:   s.still,
 		Moving:  s.pose.Speed > 0.5,
 		AtCabin: s.atCabin,
-		Busy:    s.pose.Focus || s.rec != nil,
+		Busy:    s.pose.Focus || s.rec != nil || s.inDialog(),
 	}
 	s.safeNarrator(func() {
 		if n, ok := s.narr.Idle(nc, s.now); ok {

@@ -89,6 +89,8 @@ html, body {
   pointer-events: auto;
 }
 #screens > .screen[hidden] { display: none; }
+/* Module stylesheets set display on many elements; [hidden] must still win. */
+[hidden] { display: none !important; }
 
 button, input, textarea, select { font: inherit; color: inherit; }
 textarea, input { user-select: text; }

@@ -52,8 +52,28 @@ export function renderSettings(ctx, st) {
     return el('div', { class: 'menu-setting' }, el('span', { class: 'menu-setting-name' }, name), wrap);
   };
 
+  // The narrator (docs/contract.md §8): how often he speaks, how loud, which system voice.
+  const voiceSelect = () => {
+    let voices = [];
+    try { voices = ctx.narrator?.voices?.() || []; } catch { voices = []; }
+    const cur = state.settings.narratorVoice || '';
+    const opts = [el('option', { value: '' }, 'Automatic (best British voice)')];
+    for (const v of voices) opts.push(el('option', { value: v.name }, `${v.name} (${v.lang})`));
+    if (cur && !voices.some((v) => v.name === cur)) opts.push(el('option', { value: cur }, `${cur} (not installed)`));
+    const sel = el('select', { 'aria-label': 'Narrator voice', class: 'menu-select',
+      onchange: (e) => { state.setSetting('narratorVoice', e.target.value); sfx(ctx, 'click'); } }, opts);
+    sel.value = cur;
+    return el('label', { class: 'menu-setting' },
+      el('span', { class: 'menu-setting-name' }, 'Voice', voices.length ? null : el('small', 'Captions only: no system voice found')), sel);
+  };
+  const narratorCard = section('Narrator', el('div', { class: 'menu-card menu-settings-card' },
+    segmented('narrator', 'How often he speaks', [['off', 'Off'], ['sparse', 'Sparse'], ['normal', 'Normal'], ['chatty', 'Chatty']]),
+    slider(['volNarrator', 'Narrator volume', 0, 1, 0.01, pct]),
+    voiceSelect()));
+
   const left = el('div', { class: 'menu-col', 'data-scroll': 'set-l' },
     SLIDERS.map(([title, rows]) => section(title, el('div', { class: 'menu-card menu-settings-card' }, rows.map(slider)))),
+    narratorCard,
     section('Comfort', el('div', { class: 'menu-card menu-settings-card' },
       toggle('invertY', 'Invert vertical look'),
       segmented('quality', 'Graphics quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]),

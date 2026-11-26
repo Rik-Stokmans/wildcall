@@ -38,7 +38,7 @@ export function createTools(ctx, player) {
     focusDist: 20, targetDist: 20, probeT: 0,
     swayAmp: 0, sway: { yaw: 0, pitch: 0 }, shake: 0,
     sensScale: 1,
-    recording: false, recStart: 0, recState: null,
+    recording: false, recStart: 0, recState: null, recStateAt: 0,
     focus: false,
     nextShot: 0, pendingShots: 0,
     filter: '',
@@ -169,8 +169,16 @@ export function createTools(ctx, player) {
 
   function startRecording() {
     if (t.recording) return;
+    // The server refuses recStart without an audio device and would never answer
+    // with recState/recResult, leaving the panel stuck on "recording".
+    if (!state.profile?.equipped?.audio) {
+      overlay.message('No recorder equipped', 1.8);
+      ctx.audio?.uiSound?.('error');
+      return;
+    }
     t.recording = true;
     t.recStart = ctx.time;
+    t.recStateAt = ctx.time;
     t.recState = null;
     overlay.clearSpectrogram();
     net.send('recStart', {});
@@ -184,7 +192,14 @@ export function createTools(ctx, player) {
     ctx.audio?.uiSound?.('click');
     emitTool();
   }
-  bus.on('net:recState', (r) => { if (t.recording) t.recState = r; });
+  bus.on('net:recState', (r) => { if (t.recording) { t.recState = r; t.recStateAt = ctx.time; } });
+  // A refused start (error) or a recording the server dropped without a recResult
+  // (audio unequipped, resting) stops the 4 Hz recState stream: give up after 2.5 s.
+  function recWatchdog() {
+    if (t.recording && ctx.time - (t.recStateAt || 0) > 2.5) {
+      t.recording = false; t.recState = null; emitTool();
+    }
+  }
   bus.on('net:recResult', () => { t.recording = false; t.recState = null; emitTool(); });
 
   // ---------------------------------------------------------------------------------
@@ -227,6 +242,7 @@ export function createTools(ctx, player) {
   }
 
   function update(dt) {
+    recWatchdog();
     const playing = state.mode === 'play' && !player.s.busy;
     if (!playing) { t.rmb = false; t.lmb = false; }
     const stats = ctx.stats || {};

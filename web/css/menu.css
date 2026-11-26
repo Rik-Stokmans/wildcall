@@ -357,3 +357,7 @@
 @media (prefers-reduced-motion: reduce) {
   .menu-main-column, .menu-shell .kit-panel, .menu-newgame { animation: none; }
 }
+
+/* Narrator voice picker (settings tab). */
+.menu-select { margin-left: auto; max-width: 260px; padding: 4px 8px; border-radius: var(--r-sm); border: 1px solid rgba(85, 69, 55, .3); background: var(--cream); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.menu-select:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }

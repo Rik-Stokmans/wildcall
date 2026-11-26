@@ -143,6 +143,12 @@ type Session struct {
 	lures  []lure
 	lureID uint32
 
+	// Narration held back while a client message is handled (sent after its reply),
+	// and the time until which a dialogue is assumed open (the narrator stays quiet).
+	holdNarr    bool
+	heldNarr    []proto.Narration
+	dialogUntil float64
+
 	// Clocks.
 	now                             float64
 	tick                            uint32
@@ -441,13 +447,16 @@ func (s *Session) Handle(t string, d json.RawMessage) {
 		s.fail("Unknown message " + strconv.Quote(trim(t, 32)) + ".")
 		return
 	}
+	s.holdNarr = true
 	h(s, d)
 	s.afterChange()
+	s.releaseNarration()
 	s.flush()
 }
 
 func (s *Session) recoverMsg(t string) {
 	if r := recover(); r != nil {
+		s.holdNarr, s.heldNarr = false, s.heldNarr[:0]
 		s.logf("game: panic handling %q: %v\n%s", t, r, debug.Stack())
 		s.fail("Something went wrong there.")
 	}

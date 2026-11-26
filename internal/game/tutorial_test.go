@@ -160,19 +160,16 @@ func (w *watcher) look(tool string, zoom float32, focus bool) (core.BirdState, b
 	return b, true
 }
 
-// TestTutorialUnseenSinger plays the tutorial quest end to end on the real world and
-// checks that nothing names the wren before it is identified.
-func TestTutorialUnseenSinger(t *testing.T) {
-	h := newHarness(t, true)
+// playTutorialToIdentify plays the tutorial from Mara's offer up to the moment the
+// wren could be identified: accept, hear it (focus listening), investigate and
+// observe it, record it, gather more evidence. It does NOT identify it.
+func playTutorialToIdentify(t *testing.T, h *harness) (birdID uint32, m *proto.Mystery, w *watcher) {
+	t.Helper()
 	s := h.s
 	wren := s.spByID(wrenID)
 	if wren == nil {
 		t.Fatal("no wren in the catalog")
 	}
-	// Leak scan over every message from here until the identification.
-	scanFrom := len(h.all)
-	h.take()
-
 	// 1. Mara offers the tutorial; accepting it hands over her recorder.
 	_, _ = h.talkUntil("npc_mara", "mara", "accept:unseen_singer")
 	if st := h.questStatus("unseen_singer"); st != "active" {
@@ -190,7 +187,6 @@ func TestTutorialUnseenSinger(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.standNear("old_oak", 30)
-	var birdID uint32
 	if msg, err := s.Debug("spawn", wrenID); err != nil {
 		t.Fatalf("spawn: %v", err)
 	} else {
@@ -205,7 +201,7 @@ func TestTutorialUnseenSinger(t *testing.T) {
 	if birdID == 0 {
 		t.Fatal("spawned wren not found")
 	}
-	w := &watcher{h: h, bird: birdID, dist: 11}
+	w = &watcher{h: h, bird: birdID, dist: 11}
 
 	// Hear it (focus-listening), approach to investigate.
 	heard := false
@@ -219,7 +215,7 @@ func TestTutorialUnseenSinger(t *testing.T) {
 	if !heard {
 		t.Fatal("never heard the wren")
 	}
-	m := s.mysteryOf(wrenID)
+	m = s.mysteryOf(wrenID)
 	if m == nil || m.Level < proto.LevelHeard {
 		t.Fatalf("no heard-level mystery for the wren: %+v", m)
 	}
@@ -284,6 +280,20 @@ func TestTutorialUnseenSinger(t *testing.T) {
 		h.tick(1)
 	}
 	t.Logf("evidence before identify: %v", m.Evidence)
+
+	return birdID, m, w
+}
+
+// TestTutorialUnseenSinger plays the tutorial quest end to end on the real world and
+// checks that nothing names the wren before it is identified.
+func TestTutorialUnseenSinger(t *testing.T) {
+	h := newHarness(t, true)
+	s := h.s
+	wren := s.spByID(wrenID)
+	// Leak scan over every message from here until the identification.
+	scanFrom := len(h.all)
+	h.take()
+	birdID, m, w := playTutorialToIdentify(t, h)
 
 	// Leak scan: nothing sent so far may carry the wren's id or name, except the
 	// candidate tables (built from the player's own evidence) and numeric indices.
@@ -441,4 +451,46 @@ func trimForLog(s string) string {
 		return s[:400] + "…"
 	}
 	return s
+}
+
+// TestNarratorNeverNamesTheUnidentifiedWren plays the tutorial up to (not including)
+// the identification and checks the narrator's lines (contract §8, the non-spoiler
+// rule): the narrator speaks along the way, and no line names the wren, or any other
+// species the player has not identified.
+func TestNarratorNeverNamesTheUnidentifiedWren(t *testing.T) {
+	h := newHarness(t, true)
+	s := h.s
+	playTutorialToIdentify(t, h)
+	h.take()
+
+	var lines []proto.Narration
+	for _, mm := range h.all {
+		if mm.T == proto.SNarrate {
+			lines = append(lines, decodeAs[proto.Narration](t, mm.D))
+		}
+	}
+	for _, n := range lines {
+		t.Logf("narrator [%s p%d]: %s", n.Kind, n.Priority, n.Text)
+	}
+	// The tutorial run covers several minutes of play with calls heard, a bird
+	// watched, evidence gathered and a recording made: the narrator must have had
+	// something to say, or this test proves nothing.
+	if len(lines) < 3 {
+		t.Fatalf("only %d narrator lines during the tutorial; expected the narrator to speak", len(lines))
+	}
+	if len(s.p.Journal.Species) != 0 {
+		t.Fatalf("the test expects nothing identified yet, journal has %d species", len(s.p.Journal.Species))
+	}
+	for _, n := range lines {
+		low := strings.ToLower(n.Text)
+		if strings.Contains(low, "wren") {
+			t.Errorf("narrator names the unidentified wren: %q", n.Text)
+		}
+		for i := range s.species {
+			sp := &s.species[i]
+			if strings.Contains(low, strings.ToLower(sp.Name)) || strings.Contains(low, sp.ID) {
+				t.Errorf("narrator names unidentified species %s: %q", sp.ID, n.Text)
+			}
+		}
+	}
 }

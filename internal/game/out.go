@@ -72,13 +72,34 @@ func (s *Session) flush() {
 
 // narrate offers an event to the narrator and sends the line it may produce. The
 // narrator is isolated: a fault in it never disturbs the session.
+//
+// While a client message is being handled the lines are held back and sent after the
+// message's direct reply (see Handle), so that, for example, the narrator's comment on
+// an identification never reaches the client before the identifyResult itself.
 func (s *Session) narrate(ev narrator.Event) {
 	s.safeNarrator(func() {
 		if n, ok := s.narr.Offer(ev, s.now); ok {
+			if s.holdNarr {
+				s.heldNarr = append(s.heldNarr, n)
+				return
+			}
 			s.send(proto.SNarrate, n)
 		}
 	})
 }
+
+// releaseNarration sends the lines held back while a message was handled.
+func (s *Session) releaseNarration() {
+	s.holdNarr = false
+	for _, n := range s.heldNarr {
+		s.send(proto.SNarrate, n)
+	}
+	s.heldNarr = s.heldNarr[:0]
+}
+
+// inDialog reports whether a conversation is (probably) open on the client: the
+// narrator keeps quiet then.
+func (s *Session) inDialog() bool { return s.now < s.dialogUntil }
 
 func (s *Session) safeNarrator(fn func()) {
 	defer func() {

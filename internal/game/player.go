@@ -54,8 +54,12 @@ func (s *Session) msgPose(d []byte) {
 // applyPose moves the player: totals, observer velocity, fog of war, region
 // gating and cabin arrival. (Discovery of places runs at 2 Hz from Tick.)
 func (s *Session) applyPose(p proto.Pose) {
+	// Eye heights match the client controller (web/js/player/movement.js).
 	eyeH := float32(core.EyeHeight)
-	if p.Crouch || p.Sit {
+	switch {
+	case p.Sit:
+		eyeH = 0.85
+	case p.Crouch:
 		eyeH = 1.0
 	}
 	feet := core.V(p.X, p.Y-eyeH, p.Z)

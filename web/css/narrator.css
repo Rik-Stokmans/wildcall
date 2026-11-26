@@ -52,6 +52,14 @@
   white-space: nowrap;
 }
 
+/* The HUD's observation readout grows upwards from the bottom centre (hud.css
+   .hud-bottom, up to ~200 px above 7vh) and would sit under the caption. While it is
+   shown the caption moves to the top, under the compass and the region name. */
+body:has(#hud .hud-sight:not([hidden])) .nar-caption {
+  bottom: auto;
+  top: 104px;
+}
+
 /* While a screen is open the caption sits a little lower and softer. */
 body:has(#screens > .screen:not([hidden])) .nar-caption {
   bottom: 6vh;

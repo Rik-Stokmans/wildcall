@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
@@ -98,6 +99,14 @@ func newSession(t testing.TB, dir, seed string, dev bool) *Session {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Autosaves are written on a helper goroutine: let an in-flight write finish
+	// before the test's temporary save directory is removed (cleanups run LIFO, and
+	// the directory was created before this session).
+	t.Cleanup(func() {
+		for i := 0; i < 500 && s.saving.Load(); i++ {
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
 	return s
 }
 
