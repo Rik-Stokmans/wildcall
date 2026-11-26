@@ -1,1 +1,198 @@
-/* forage.css — owned by the forage client task; see docs/contract.md §9 */
+/* forage.css — c-field: the "New plant" card, buff chips, the field kitchen ('cook'),
+   the Herbarium and Nests journal sections. Class prefix frg-. Builds on the tokens in
+   base.css; field-journal paper, soft shadows, journal serif for names. */
+
+.frg-faint { color: var(--ink-soft); opacity: .85; }
+.frg-plant-art, .frg-item-art { display: block; }
+.frg-item-art.faint, .frg-detail-art.faint canvas { filter: grayscale(1) sepia(.25) opacity(.32) blur(.4px); }
+
+/* ------------------------------------------------------------- New plant card */
+.frg-cards {
+  position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%);
+  z-index: var(--z-toast); pointer-events: none; transition: opacity .3s;
+}
+.frg-cards.frg-cards-hidden { opacity: 0; }
+.frg-card {
+  display: flex; gap: 14px; align-items: center; padding: 10px 18px 10px 10px; min-width: 330px; max-width: 460px;
+  background: linear-gradient(160deg, var(--cream), var(--paper-light)); border-radius: var(--r-lg);
+  border: 1px solid rgba(196, 175, 130, .8); box-shadow: var(--shadow-lift);
+  animation: frg-card-in .6s var(--ease) both; transition: opacity .6s, transform .6s var(--ease);
+}
+.frg-card.out { opacity: 0; transform: translateY(14px); }
+@keyframes frg-card-in { from { opacity: 0; transform: translateY(24px) scale(.96); } to { opacity: 1; transform: none; } }
+.frg-card-art { flex: none; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 6px rgba(40, 30, 20, .22); transform: rotate(-3deg); }
+.frg-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.frg-card-kicker { display: flex; align-items: center; gap: 5px; font: 700 10.5px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--forest-soft); }
+.frg-card-name { font: 600 22px/1.15 var(--font-journal); color: var(--forest-deep); }
+.frg-card-sci { font: italic 13px/1.2 var(--font-journal); color: var(--ink-soft); }
+.frg-card-recipes { margin-top: 6px; font-size: 12px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.frg-card-recipes b { font: 600 12px var(--font-ui); color: var(--amber-deep); background: rgba(201, 138, 80, .14); border-radius: 99px; padding: 1px 8px; }
+.frg-card-hint { margin-top: 4px; font-size: 11px; color: var(--ink-soft); opacity: .8; }
+
+/* ------------------------------------------------------------- buff chips */
+#hud .frg-buffs {
+  position: absolute; right: 22px; bottom: 96px; display: flex; flex-direction: row-reverse; gap: 8px; align-items: flex-end;
+}
+#hud[data-level="essential"] .frg-buffs { opacity: 0; }
+#hud[data-level="dim"] .frg-buffs { opacity: .35; }
+.frg-buff {
+  display: flex; align-items: center; gap: 0; padding: 3px; border-radius: 99px; pointer-events: auto;
+  background: rgba(242, 235, 221, .82); box-shadow: var(--shadow-soft); color: var(--ink);
+  animation: frg-buff-in .5s var(--ease) both; transition: opacity .8s, transform .8s var(--ease), gap .4s var(--ease), padding .4s var(--ease);
+}
+@keyframes frg-buff-in { from { opacity: 0; transform: translateY(10px) scale(.8); } to { opacity: 1; transform: none; } }
+.frg-buff.gone { opacity: 0; transform: translateY(8px) scale(.7); }
+.frg-buff.ending { opacity: .5; }
+.frg-buff-badge { position: relative; width: 40px; height: 40px; flex: none; }
+.frg-buff-ring { position: absolute; inset: 0; width: 40px; height: 40px; }
+.frg-ring-track { stroke: rgba(85, 69, 55, .16); stroke-width: 3.4; }
+.frg-ring-bar { stroke: var(--forest-soft); stroke-width: 3.4; stroke-linecap: round; transition: stroke-dashoffset .9s linear; }
+.frg-buff-drink .frg-ring-bar { stroke: var(--sky); }
+.frg-buff-meal .frg-ring-bar { stroke: var(--amber); }
+.frg-buff.low .frg-ring-bar { stroke: var(--danger); animation: frg-low 1.6s ease-in-out infinite; }
+@keyframes frg-low { 50% { opacity: .45; } }
+.frg-buff-art { position: absolute; inset: 7px; border-radius: 50%; overflow: hidden; background: rgba(255, 255, 255, .55); display: grid; place-items: center; }
+.frg-buff-art canvas { width: 26px; height: 26px; }
+.frg-buff-text { display: flex; flex-direction: column; max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transition: max-width .5s var(--ease), opacity .4s; line-height: 1.2; }
+.frg-buff-text b { font: 600 13px var(--font-journal); }
+.frg-buff-text span { font-size: 11px; color: var(--ink-soft); }
+.frg-buff.expanded .frg-buff-text, .frg-buff:hover .frg-buff-text { max-width: 260px; opacity: 1; margin-left: 8px; }
+.frg-buff-time { font: 600 11px/1 var(--font-ui); font-variant-numeric: tabular-nums; color: var(--ink-soft); padding: 0 8px 0 5px; }
+
+/* ------------------------------------------------------------- the field kitchen */
+.frg-cook-screen {
+  display: grid; place-items: center; background: rgba(24, 32, 26, .55);
+  -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); animation: frg-fade .28s var(--ease);
+}
+@keyframes frg-fade { from { opacity: 0; } }
+.frg-cook-frame { width: min(1180px, 96vw); height: min(680px, 94vh); }
+.frg-cook-screen .kit-panel { display: flex; flex-direction: column; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; }
+.frg-cook-screen .kit-panel-body.frg-cook-body { flex: 1; min-height: 0; overflow: hidden; padding: 0; }
+.frg-cook-layout { display: grid; grid-template-columns: minmax(380px, 1.05fr) 1fr; height: 100%; }
+.frg-cook-list { overflow-y: auto; padding: 14px 18px 18px 20px; border-right: 1px dashed rgba(85, 69, 55, .25); }
+.frg-cook-detail { overflow-y: auto; padding: 18px 24px 20px 26px; background: radial-gradient(ellipse at 30% 0%, rgba(255, 255, 255, .35), transparent 60%); }
+.frg-cook-foot { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+
+.frg-cook-group + .frg-cook-group { margin-top: 16px; }
+.frg-cook-group.dim .frg-recipe { opacity: .62; }
+.frg-cook-group-title { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font: 600 15px var(--font-journal); color: var(--forest-deep); }
+.frg-cook-group-title .frg-faint { font: 400 12px var(--font-ui); }
+.frg-cook-cards { display: flex; flex-direction: column; gap: 6px; }
+.frg-recipe {
+  display: grid; grid-template-columns: 46px 1fr auto; gap: 10px; align-items: center; text-align: left;
+  padding: 6px 10px 6px 6px; border-radius: var(--r-md); border: 1px solid transparent; cursor: pointer;
+  background: rgba(255, 255, 255, .32); transition: background .15s var(--ease), border-color .15s, transform .15s var(--ease);
+}
+.frg-recipe:hover { background: rgba(255, 255, 255, .6); }
+.frg-recipe.selected { background: rgba(255, 255, 255, .78); border-color: var(--moss); box-shadow: 0 1px 6px rgba(40, 30, 20, .12); }
+.frg-recipe-art { width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center; background: rgba(232, 220, 192, .7); }
+.frg-recipe-main { min-width: 0; }
+.frg-recipe-name { font: 600 14.5px/1.2 var(--font-journal); color: var(--ink); }
+.frg-recipe.unknown .frg-recipe-name { color: var(--ink-soft); letter-spacing: .12em; }
+.frg-recipe-needs { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 3px; }
+.frg-need { font-size: 11px; padding: 0 6px; border-radius: 99px; background: rgba(168, 85, 63, .12); color: var(--danger); white-space: nowrap; }
+.frg-need.ok { background: rgba(124, 154, 112, .2); color: var(--forest); }
+.frg-recipe-hint { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; font-style: italic; }
+.frg-tag { display: inline-flex; align-items: center; gap: 3px; font: 600 11px/1 var(--font-ui); padding: 4px 8px; border-radius: 99px; white-space: nowrap; }
+.frg-tag.ready { background: var(--forest-soft); color: var(--cream); }
+.frg-tag.missing, .frg-tag.nofire { background: rgba(85, 69, 55, .1); color: var(--ink-soft); }
+.frg-tag.station { background: rgba(98, 127, 154, .16); color: var(--sky); }
+.frg-tag.unknown { background: transparent; color: var(--ink-soft); opacity: .8; }
+
+.frg-detail-head { display: flex; gap: 16px; align-items: center; }
+.frg-detail-art { width: 104px; height: 104px; flex: none; display: grid; place-items: center; border-radius: 18px; background: rgba(232, 220, 192, .8); box-shadow: inset 0 0 0 1px rgba(196, 175, 130, .6); }
+.frg-detail-name { margin: 0; font: 600 26px/1.1 var(--font-journal); color: var(--forest-deep); }
+.frg-inpack { display: inline-block; margin-top: 6px; font: 600 11.5px var(--font-ui); color: var(--forest); background: rgba(124, 154, 112, .2); padding: 2px 9px; border-radius: 99px; }
+.frg-detail-desc { margin: 14px 0 12px; font: 15px/1.5 var(--font-journal); color: var(--ink); }
+.frg-effect { padding: 10px 14px; border-radius: var(--r-md); background: rgba(255, 255, 255, .5); border-left: 3px solid var(--moss); }
+.frg-effect-head { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.frg-slot { font: 700 10.5px/1 var(--font-ui); text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 99px; color: var(--cream); background: var(--forest-soft); }
+.frg-slot-drink { background: var(--sky); }
+.frg-slot-meal { background: var(--amber-deep); }
+.frg-effect-text { margin-top: 6px; font: 600 15px var(--font-journal); color: var(--forest-deep); }
+.frg-mods { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-soft); }
+.frg-mods b { color: var(--forest); }
+.frg-mods li.bad b { color: var(--danger); }
+.frg-effect-note { margin-top: 6px; font-size: 11.5px; }
+.frg-sub { margin: 16px 0 6px; font: 600 14px var(--font-journal); color: var(--bark); }
+.frg-ingredients { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.frg-ingredients li { display: grid; grid-template-columns: 34px 1fr auto 70px; gap: 10px; align-items: center; padding: 3px 8px 3px 3px; border-radius: 8px; background: rgba(255, 255, 255, .3); }
+.frg-ingredients li.short { background: rgba(168, 85, 63, .08); }
+.frg-ingredients li .kit-icon { color: var(--forest); justify-self: end; }
+.frg-ing-art { width: 34px; height: 34px; display: grid; place-items: center; }
+.frg-ing-name { font-size: 14px; }
+.frg-ing-count { font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.frg-ing-count b { color: var(--ink); }
+.frg-ing-short { justify-self: end; font-size: 11.5px; color: var(--danger); }
+.frg-cook-actions { display: flex; gap: 12px; align-items: center; margin-top: 18px; }
+.frg-qty { display: inline-flex; align-items: center; gap: 6px; padding: 3px; border-radius: 99px; background: rgba(255, 255, 255, .5); }
+.frg-qty.off { opacity: .55; }
+.frg-qty-n { min-width: 26px; text-align: center; font: 700 15px var(--font-ui); font-variant-numeric: tabular-nums; }
+.frg-reason { display: flex; gap: 6px; align-items: flex-start; margin-top: 12px; font-size: 13px; color: var(--ink-soft); }
+.frg-reason .kit-icon { flex: none; margin-top: 2px; color: var(--sky); }
+.frg-hint-box { display: flex; gap: 8px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r-md); background: rgba(124, 154, 112, .14); font: italic 14px/1.45 var(--font-journal); color: var(--forest-deep); }
+.frg-hint-box .kit-icon { flex: none; margin-top: 3px; }
+.frg-empty { padding: 30px; text-align: center; color: var(--ink-soft); }
+
+/* ------------------------------------------------------------- herbarium */
+.frg-herb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px 8px; padding: 4px 2px 10px; }
+.frg-herb-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px 5px; cursor: pointer;
+  border: 1px solid rgba(196, 175, 130, .7); border-radius: 6px;
+  background: linear-gradient(170deg, #f7f0de, #ede2c6); box-shadow: 0 1px 3px rgba(40, 30, 20, .14);
+  transition: transform .15s var(--ease), box-shadow .15s var(--ease);
+}
+.frg-herb-cell:nth-child(3n) { transform: rotate(.8deg); }
+.frg-herb-cell:nth-child(3n+1) { transform: rotate(-.6deg); }
+.frg-herb-cell:hover { transform: translateY(-2px) rotate(0); box-shadow: 0 4px 10px rgba(40, 30, 20, .2); }
+.frg-herb-cell.selected { border-color: var(--forest-soft); box-shadow: 0 0 0 2px rgba(74, 116, 89, .35), 0 4px 10px rgba(40, 30, 20, .2); }
+.frg-herb-cell.unknown { background: rgba(242, 235, 221, .45); border-style: dashed; box-shadow: none; }
+.frg-herb-cell-name { font: 600 11.5px/1.2 var(--font-journal); color: var(--ink); text-align: center; min-height: 2.4em; display: flex; align-items: center; }
+.frg-herb-cell.unknown .frg-herb-cell-name { color: var(--ink-soft); opacity: .6; }
+.frg-herb-empty { margin: 8px 4px; font: italic 14px/1.5 var(--font-journal); color: var(--ink-soft); }
+.frg-herb-top { display: flex; gap: 18px; align-items: flex-start; margin-bottom: 8px; }
+.frg-herb-plate { flex: none; padding: 7px; background: #fbf6ea; border: 1px solid rgba(196, 175, 130, .8); box-shadow: 0 3px 10px rgba(40, 30, 20, .18); transform: rotate(-1.2deg); }
+.frg-herb-page.unknown { align-items: center; text-align: center; justify-content: center; gap: 10px; }
+.frg-herb-page.unknown .frg-herb-plate { transform: none; background: rgba(251, 246, 234, .5); box-shadow: none; border-style: dashed; }
+.frg-herb-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.frg-herb-name { margin: 0; font: 600 25px/1.1 var(--font-journal); color: var(--forest-deep); }
+.frg-herb-sci { font: italic 14px var(--font-journal); color: var(--ink-soft); }
+.frg-herb-text { max-width: 340px; font: 14.5px/1.5 var(--font-journal); }
+.frg-herb-seasons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 8px 0 6px; }
+.frg-season { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 2px 5px; border-radius: 7px; background: rgba(85, 69, 55, .07); font-size: 10.5px; color: var(--ink-soft); min-height: 46px; }
+.frg-season.on { background: rgba(124, 154, 112, .22); color: var(--forest-deep); font-weight: 600; }
+.frg-season.now { box-shadow: inset 0 0 0 1.5px var(--amber); }
+.frg-season canvas { width: 22px; height: 22px; }
+.frg-herb-record { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.frg-herb-record .jr-kv:last-child { grid-column: 1 / -1; }
+.frg-herb-section h3 { display: flex; align-items: center; gap: 6px; margin: 12px 0 2px; font: 600 14px var(--font-journal); color: var(--bark); }
+.frg-herb-section p { margin: 0; font: 14.5px/1.5 var(--font-journal); }
+.frg-caution { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: rgba(201, 138, 80, .14); font: 13.5px/1.45 var(--font-journal); color: var(--bark); }
+.frg-caution .kit-icon { flex: none; margin-top: 2px; color: var(--amber-deep); }
+
+/* ------------------------------------------------------------- nests */
+.frg-nest-list { display: flex; flex-direction: column; gap: 5px; padding: 2px; }
+.frg-nest-row {
+  display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center; text-align: left; cursor: pointer;
+  padding: 6px 10px 6px 6px; border-radius: 9px; border: 1px solid transparent; background: rgba(255, 255, 255, .28);
+}
+.frg-nest-row:hover { background: rgba(255, 255, 255, .55); }
+.frg-nest-row.selected { background: rgba(255, 255, 255, .75); border-color: var(--moss); }
+.frg-nest-badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(124, 154, 112, .22); color: var(--forest); }
+.frg-nest-badge.stage-0 { background: rgba(85, 69, 55, .1); color: var(--bark-soft); }
+.frg-nest-badge.stage-2 { background: rgba(98, 127, 154, .2); color: var(--sky); }
+.frg-nest-badge.stage-3 { background: rgba(201, 138, 80, .22); color: var(--amber-deep); }
+.frg-nest-row-main { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.frg-nest-row-main b { font: 600 14px var(--font-journal); }
+.frg-nest-row-main span { font-size: 11.5px; color: var(--ink-soft); }
+.frg-nest-owner { font: italic 13px var(--font-journal); color: var(--forest-deep); }
+.frg-nest-owner.unknown { color: var(--ink-soft); opacity: .7; }
+.frg-nest-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 30px 18px; color: var(--ink-soft); text-align: center; font: italic 14px/1.5 var(--font-journal); }
+.frg-nest-photo { margin: 0 0 10px; padding: 8px 8px 4px; background: #fbf6ea; box-shadow: 0 3px 10px rgba(40, 30, 20, .2); transform: rotate(-.8deg); }
+.frg-nest-photo img { display: block; width: 100%; border-radius: 2px; }
+.frg-nest-photo figcaption { font: italic 12px var(--font-journal); color: var(--ink-soft); padding: 4px 2px; }
+.frg-nest-sketch { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 16px; margin-bottom: 10px; border: 1px dashed rgba(85, 69, 55, .3); border-radius: 8px; color: var(--bark-soft); text-align: center; font: italic 13px var(--font-journal); }
+.frg-nest-title { margin: 4px 0 6px; font: 600 22px/1.2 var(--font-journal); color: var(--forest-deep); }
+.frg-nest-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.frg-nest-note { margin: 10px 0 0; font: 14px/1.5 var(--font-journal); }
+.frg-link { border: 0; background: none; padding: 0; color: var(--forest-soft); text-decoration: underline; cursor: pointer; font: inherit; }

@@ -14,7 +14,20 @@ const SECTIONS = [
   { id: 'locations', label: 'Places', icon: 'compass', render: renderLocations },
   { id: 'history', label: 'Natural History', icon: 'journal', render: renderHistory },
   { id: 'rare', label: 'Rare Discoveries', icon: 'star', render: renderRare },
+  // c-field hooks: the Herbarium (web/js/forage/herbarium.js) and the Nests list
+  // (web/js/nests/journal.js); both follow this file's {left, right} section contract.
+  { id: 'herbarium', label: 'Herbarium', icon: 'leaf', render: (env) => fieldSection(env, 'forage', 'herbarium', 'Pressed plants will appear here.') },
+  { id: 'nests', label: 'Nests', icon: 'nest', render: (env) => fieldSection(env, 'nests', 'journalSection', 'Nests you find will appear here.') },
 ];
+
+/** Renders a section owned by another module, or a quiet blank spread if it is missing. */
+function fieldSection(env, mod, fn, blank) {
+  try {
+    const out = env.ctx[mod]?.[fn]?.(env);
+    if (out?.left && out?.right) return out;
+  } catch (err) { console.error(`[journal] ${mod}.${fn} failed`, err); }
+  return { left: el('div', { class: 'jr-col' }, el('p', blank)), right: el('div', { class: 'jr-col' }) };
+}
 
 export function createJournalScreen(ctx) {
   const root = screenRoot(ctx, 'journal');
@@ -56,6 +69,8 @@ export function createJournalScreen(ctx) {
       locations: Object.keys(j.locations || {}).length,
       history: (j.lore || []).length,
       rare: (j.rare || []).length,
+      herbarium: Object.keys(j.plants || {}).length,
+      nests: (j.nests || []).length,
     };
     const mysteries = mysteryCards(ctx.state.profile).length;
     fill(book,

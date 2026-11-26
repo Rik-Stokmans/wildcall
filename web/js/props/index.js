@@ -410,7 +410,11 @@ export default {
           if (!prop.poi || prop.kind === 'lure' || prop.kind === 'feeder') continue;
           entries.push({ poi: prop.poi, pos: prop.interactPos, radius: interactRadius(prop.poi) });
         }
-        return filterInteractables(entries, flags(), state.npcs, []);
+        const out = filterInteractables(entries, flags(), state.npcs, []);
+        // c-field hook: forage plants near the player ("Pick"); E on them is answered
+        // by ctx.forage (see web/js/forage/index.js), not sent to the server.
+        try { const extra = ctx.forage?.interactables?.(); if (extra?.length) out.push(...extra); } catch { /* forage is optional */ }
+        return out;
       },
       /** Feet position of an NPC (by NPC id or its POI id), or null if unknown. */
       npcPos(id) {

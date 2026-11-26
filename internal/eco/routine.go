@@ -55,12 +55,16 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 	ph := s.birdPhase(b)
 
 	if p.asleep[ph] {
-		if prev == mRoost && b.cur == memRoost {
+		if prev == mRoost && (b.cur == memRoost || b.then == thenRoost && s.onNest(b)) {
 			b.mode = mRoost
 			b.timer = s.rnd(90, 240) // still night (or still day, for an owl): sleep on
 			return
 		}
 		s.goRoost(b, p)
+		return
+	}
+	// Nest duty comes before everything else the day offers.
+	if s.nestBout(b, p) {
 		return
 	}
 	if p.lureEater && b.lureCD <= 0 && s.tryLure(b, p) {
@@ -83,7 +87,7 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 
 	a := p.activity[ph] * s.wxActive
 	dawn := s.phase == core.PhaseDawn
-	var w [8]float32
+	var w [7]float32
 	const (
 		cFeed = iota
 		cSong
@@ -92,7 +96,6 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 		cPreen
 		cBathe
 		cSocial
-		cNest
 	)
 	w[cFeed] = 0.4 + 1.6*a
 	if p.boutRate > 0 && b.has(memSong) {
@@ -114,9 +117,6 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 		w[cSocial] = 0.14
 	} else if p.flock {
 		w[cSocial] = 0.06
-	}
-	if p.specNest && s.season == core.Spring && (ph == core.PhaseDawn || ph == core.PhaseMorning || ph == core.PhaseAfternoon) && b.has(memRoost) {
-		w[cNest] = 0.35
 	}
 	var sum float32
 	for _, v := range w {
@@ -154,9 +154,6 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 		s.fly(b, p, b.mem[memBath], memBath, core.ActFlying, 1, thenBathe)
 	case cSocial:
 		s.social(b, p)
-	case cNest:
-		b.n = int8(2 + s.rng.IntN(3))
-		s.nestGather(b, p)
 	default:
 		if b.airborne() {
 			s.goPerch(b, p, thenPerch)
@@ -217,17 +214,7 @@ func (s *Sim) subStep(b *bird, p *profile) {
 			b.sub = s.rnd(2, 5)
 		}
 	case mNest:
-		if then(b.stage) == thenNestPick {
-			if b.has(memRoost) {
-				s.fly(b, p, b.mem[memRoost], memRoost, core.ActNesting, 0.8, thenNestBuild)
-				return
-			}
-		}
-		if b.n--; b.n > 0 {
-			s.nestGather(b, p)
-			return
-		}
-		s.boutEnd(b, p)
+		s.nestStep(b, p)
 	}
 }
 
@@ -646,22 +633,11 @@ func (s *Sim) social(b *bird, p *profile) {
 	}
 }
 
-// nestGather flies to pick up nest material near the nest.
-func (s *Sim) nestGather(b *bird, p *profile) {
-	b.mode = mNest
-	nest := b.mem[memRoost].Pos
-	for tries := 0; tries < 3; tries++ {
-		a := s.rnd(0, 2*math.Pi)
-		d := s.rnd(4, 14)
-		if pc, ok := s.groundAt(p, nest.X+d*sin32(a), nest.Z-d*cos32(a), false); ok {
-			s.fly(b, p, pc, noPerch, core.ActFlying, 0.8, thenNestPick)
-			return
-		}
-	}
-	s.boutEnd(b, p)
-}
-
 func (s *Sim) goRoost(b *bird, p *profile) {
+	// A bird with eggs or small chicks spends the night (an owl: the day) on them.
+	if s.roostOnNest(b, p) {
+		return
+	}
 	if !b.has(memRoost) {
 		s.goPerch(b, p, thenRoost)
 		return
@@ -865,11 +841,14 @@ func (s *Sim) place(b *bird) {
 	b.n, b.timer, b.sub = 0, 0, 0
 	b.callCD = s.rnd(0, 20)
 
+	h := hash2(b.seed, uint64(int64(s.abs*4)))
+	if s.placeAtNest(b, p, h) {
+		return
+	}
 	if l := s.leader(b); l != nil && followable(l) && !l.moving {
 		s.follow(b, p, l, true)
 		return
 	}
-	h := hash2(b.seed, uint64(int64(s.abs*4)))
 	if p.asleep[s.birdPhase(b)] {
 		i := memRoost
 		if !b.has(i) {

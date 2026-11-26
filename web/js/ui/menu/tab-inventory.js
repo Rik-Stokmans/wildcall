@@ -4,7 +4,7 @@ import { el, icon, button, itemCard, rarityBadge, label } from '../kit.js';
 import * as L from './logic.js';
 import { section, note, sfx, modRows } from './common.js';
 
-const KIND_TEXT = { equipment: 'Equipment', gadget: 'Gadget', supply: 'Supply', keepsake: 'Keepsake' };
+const KIND_TEXT = { equipment: 'Equipment', gadget: 'Gadget', supply: 'Supply', keepsake: 'Keepsake', ingredient: 'Ingredient', food: 'Food' };
 const TIER_TEXT = ['', 'Basic', 'Explorer', 'Specialist', 'Unique'];
 
 export function renderInventory(ctx, st) {
@@ -50,10 +50,10 @@ export function renderInventory(ctx, st) {
       ? shown.map((s) => {
         const def = state.items[s.item];
         if (!def) return null;
-        return el('div', { class: 'menu-grid-cell' }, itemCard(def, {
+        return el('div', { class: 'menu-grid-cell' }, larderArt(ctx, def, itemCard(def, {
           qty: s.qty, selected: st.itemSel?.item === s.item && !st.itemSel?.slot,
           onClick: () => { st.itemSel = { item: s.item }; sfx(ctx, 'click'); st.rerender(); },
-        }));
+        }), 34));
       })
       : el('div', { class: 'menu-empty small' }, (p.inventory || []).length ? 'Nothing here matches that filter.' : 'Your pack is empty. Explore, and you will find things worth carrying.'));
 
@@ -83,18 +83,21 @@ function itemDetail(ctx, st, cap) {
       onClick: () => { sfx(ctx, 'equip'); net.send('equip', { item: def.id }); } }));
   }
   if (!isEquipped && L.canUse(def)) {
-    actions.push(button(def.use === 'film' ? 'Load film' : def.use === 'seed' ? 'Scatter seed' : 'Use', { variant: 'primary', icon: def.use === 'seed' ? 'seed' : 'film',
+    actions.push(button(L.useLabel(def), { variant: 'primary', icon: def.use === 'seed' ? 'seed' : def.use === 'eat' ? 'heart' : 'film',
       onClick: () => { sfx(ctx, 'click'); net.send('use', { item: def.id }); } }));
+    // c-field: what eating it does, and that it replaces the current buff of its kind.
+    if (def.use === 'eat' && def.buff) actions.push(note(`${def.buff.text}. Replaces any ${def.buff.slot} you already had.`));
   }
   if (!isEquipped && !L.canEquip(def) && !L.canUse(def)) {
-    actions.push(note(def.kind === 'gadget' ? 'Works while you carry it.' : def.kind === 'keepsake' ? 'A keepsake. It is yours to keep.' : ''));
+    actions.push(note(def.kind === 'gadget' ? 'Works while you carry it.' : def.kind === 'keepsake' ? 'A keepsake. It is yours to keep.'
+      : def.kind === 'ingredient' ? 'An ingredient for the field kitchen: cook it at the cabin or over a camp fire.' : ''));
   }
 
   const lines = (list, cls) => list?.length ? el('ul', { class: 'menu-prosons ' + cls }, list.map((t) => el('li', t))) : null;
 
   return el('div', { class: 'menu-detail-inner' },
     el('div', { class: 'menu-detail-head' },
-      el('span', { class: `menu-item-art kit-rarity-${def.rarity | 0}`, style: { '--rarity': `var(--rarity-${def.rarity | 0})` } }, icon(def.icon || 'backpack', 34)),
+      el('span', { class: `menu-item-art kit-rarity-${def.rarity | 0}`, style: { '--rarity': `var(--rarity-${def.rarity | 0})` } }, larderIcon(ctx, def, 34) || icon(def.icon || 'backpack', 34)),
       el('div',
         el('h2', { class: 'menu-detail-title' }, def.name),
         el('div', { class: 'menu-detail-sub' }, rarityBadge(def.rarity),
@@ -106,4 +109,18 @@ function itemDetail(ctx, st, cap) {
     (def.rarity >= 2 && def.history) ? section('History', el('p', { class: 'menu-history' }, def.history)) : null,
     def.rarity >= 2 && def.special ? section('Special', el('p', { class: 'menu-effect' }, def.special)) : null,
     el('div', { class: 'menu-detail-actions' }, actions));
+}
+
+// c-field hook: ingredients and food show a small painting of themselves (ctx.forage.foodArt)
+// instead of a generic icon; anything else, or a missing forage module, keeps the icon.
+function larderIcon(ctx, def, size) {
+  if (def?.kind !== 'ingredient' && def?.kind !== 'food') return null;
+  try { return ctx.forage?.foodArt?.(def.id, size) || null; } catch { return null; }
+}
+
+function larderArt(ctx, def, card, size) {
+  const art = larderIcon(ctx, def, size);
+  const slot = art && card.querySelector('.kit-item-icon');
+  if (slot) slot.replaceChildren(art);
+  return card;
 }

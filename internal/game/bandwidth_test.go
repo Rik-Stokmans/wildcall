@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rik-Stokmans/wildcall/internal/core"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
 )
 
@@ -11,6 +12,8 @@ import (
 func TestBandwidthAtCabin(t *testing.T) {
 	h := newHarness(t, false)
 	s := h.s
+	// Spring: the breeding season, so nests are streamed too.
+	s.clock.SetSeason(core.Spring)
 	feet := h.standNear("cabin", 6)
 	h.tick(10)
 	h.take()
@@ -28,8 +31,8 @@ func TestBandwidthAtCabin(t *testing.T) {
 	}
 	wall := time.Since(t0)
 	rate := float64(s.BytesOut()-b0) / (ticks * 0.1)
-	t.Logf("at the cabin: %.1f KB/s (%v); by type (bytes/s): %v; %d birds in the last snapshot; sim cost %.2f ms/tick",
-		rate/1024, s.clock.Env().Phase(), perSecond(byType, ticks*0.1), len(s.birdBuf), wall.Seconds()*1e3/ticks)
+	t.Logf("at the cabin: %.1f KB/s (%v, %v); by type (bytes/s): %v; %d birds in the last snapshot, %d nests within %d m; sim cost %.2f ms/tick",
+		rate/1024, s.clock.Env().Season, s.clock.Env().Phase(), perSecond(byType, ticks*0.1), len(s.birdBuf), len(s.nestBuf), nestStreamR, wall.Seconds()*1e3/ticks)
 	if rate > 200*1024 {
 		t.Errorf("%.0f KB/s at the cabin", rate/1024)
 	}

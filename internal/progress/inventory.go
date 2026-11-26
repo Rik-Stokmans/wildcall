@@ -166,7 +166,7 @@ func AddItem(p *proto.Profile, itemID string, qty int) (stored int, err error) {
 	if qty <= 0 {
 		return 0, fail(ErrInvalid, "Nothing to add.")
 	}
-	if def.Kind != KindSupply {
+	if !stackable(def) {
 		if Owned(p, itemID) {
 			return 0, fail(ErrAlreadyOwned, "You already have the %s.", def.Name)
 		}
@@ -364,6 +364,10 @@ func UseItem(p *proto.Profile, itemID string) (use string, err error) {
 	if def.Use == "" {
 		return "", fail(ErrInvalid, "The %s is not something you use up.", def.Name)
 	}
+	if def.Use == UseEat {
+		// Eating needs the game clock for the buff's end: that is Eat's job.
+		return "", fail(ErrInvalid, "The %s is for eating: use Eat.", def.Name)
+	}
 	if Carried(p, itemID) <= 0 {
 		if Stored(p, itemID) > 0 {
 			return "", fail(ErrNotOwned, "Your %s is in cabin storage.", def.Name)
@@ -453,7 +457,7 @@ func CanBuy(p *proto.Profile, itemID string) error {
 	if rep := p.Rep[FactionOutfitters]; rep < def.ReqRep {
 		return fail(ErrReputation, "Finn only sells the %s to customers he knows well (reputation %d of %d).", def.Name, rep, def.ReqRep)
 	}
-	if def.Kind != KindSupply && Owned(p, itemID) {
+	if !stackable(def) && Owned(p, itemID) {
 		return fail(ErrAlreadyOwned, "You already own the %s.", def.Name)
 	}
 	if price := discounted(p, def.Price); p.Credits < price {

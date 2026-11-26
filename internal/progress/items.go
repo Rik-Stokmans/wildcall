@@ -25,6 +25,7 @@ func buildItems() []proto.ItemDef {
 		opticsItems(), cameraItems(), audioItems(),
 		backpackItems(), navigationItems(), clothingItems(),
 		gadgetItems(), keepsakeItems(), supplyItems(),
+		ingredientItems(), foodItemDefs(),
 	} {
 		all = append(all, family...)
 	}
@@ -136,6 +137,13 @@ func findUpgrade(d *proto.ItemDef, upgradeID string) *proto.UpgradeDef {
 	return nil
 }
 
+// stackable reports whether items of this kind stack in the backpack and may be
+// held in any number (supplies, ingredients and food); everything else is a
+// one-of-a-kind piece of kit.
+func stackable(def *proto.ItemDef) bool {
+	return def.Kind == KindSupply || def.Kind == KindIngredient || def.Kind == KindFood
+}
+
 // ShopItems returns the ids Finn sells, in display order: every item with a price.
 // Starting-kit items are not stocked (they cannot be lost, so nobody needs a second
 // pair) and unique finds are never for sale. Whether the player may buy a listed
@@ -153,6 +161,11 @@ func ShopItems() []string {
 func cloneItem(d *proto.ItemDef) proto.ItemDef {
 	c := *d
 	c.Mods = cloneMods(d.Mods)
+	if d.Buff != nil {
+		b := *d.Buff
+		b.Mods = cloneMods(d.Buff.Mods)
+		c.Buff = &b
+	}
 	c.Pros = append([]string{}, d.Pros...)
 	c.Cons = append([]string{}, d.Cons...)
 	c.Upgrades = make([]proto.UpgradeDef, len(d.Upgrades))

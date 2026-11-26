@@ -22,6 +22,15 @@ var pinnedItems = []string{
 	"basic_binoculars", "starter_camera", "canvas_satchel", "trail_map", "field_clothes", "basic_recorder",
 	"explorer_binoculars", "forgotten_journal", "historical_binoculars", "vintage_recorder", "explorers_lens",
 	"naturalists_compass", "research_backpack", "film_roll", "seed_mix",
+	// Ingredients: the 19 foraged yields and the pantry staples (contract §12).
+	"blackberry", "wild_strawberry", "bilberry", "elderflower", "elderberry", "rosehip", "hazelnut", "chestnut",
+	"nettle", "wild_garlic", "water_mint", "chamomile", "pine_tips", "chanterelle", "penny_bun", "sea_buckthorn",
+	"samphire", "cloudberry", "wild_thyme", "oats", "honey", "flour",
+	// Food.
+	"pine_tip_tea", "mint_tea", "chamomile_tea", "thyme_honey_tea", "nettle_tea", "elderflower_cordial",
+	"elderberry_syrup", "rosehip_syrup", "sea_buckthorn_juice", "berry_oat_bars", "hazelnut_trail_mix",
+	"roasted_chestnuts", "cloudberry_preserve", "bilberry_tart", "nettle_soup", "wild_garlic_flatbread",
+	"mushroom_broth", "forager_stew", "samphire_salad",
 }
 
 var pinnedPOIs = []string{

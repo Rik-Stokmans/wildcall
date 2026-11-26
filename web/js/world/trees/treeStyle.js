@@ -22,8 +22,8 @@ const pal = (low, high) => Object.freeze({ low: hex(low), high: hex(high) });
 const OAK_LEAF = [pal(0x2f5a26, 0x76a845), pal(0x2b5524, 0x6c9f3f), pal(0x35602a, 0x82b04c)];
 const CHESTNUT_LEAF = [pal(0x2e5822, 0x6f9e38), pal(0x34602a, 0x7aa742), pal(0x2a5020, 0x679535)];
 const BIRCH_LEAF = [pal(0x46772e, 0x9cc25a), pal(0x4c7d30, 0xa8c962), pal(0x41702b, 0x92ba52)];
-const PINE_NEEDLE = [pal(0x173d2b, 0x3f7448), pal(0x1a432e, 0x467b4b), pal(0x163a2a, 0x3a6d45)];
-const SNOW_NEEDLE = [pal(0x1b3f31, 0x40704f), pal(0x1d4434, 0x467653)];
+const PINE_NEEDLE = [pal(0x24503a, 0x5a9160), pal(0x285640, 0x619866), pal(0x224b37, 0x548a5b)];
+const SNOW_NEEDLE = [pal(0x274d3f, 0x5a8a6b), pal(0x2a5243, 0x5f9070)];
 const AMBER_OAK_LEAF = [
   pal(0x7c3613, 0xd17a2c), // rust
   pal(0x8d5016, 0xe6a73c), // amber gold
@@ -41,7 +41,7 @@ export const SNOW = Object.freeze(hex(0xf4f7fb));
  * stems head towards higher up (pine's orange upper trunk); `mark` paints birch.
  */
 const BARK = {
-  oak: { root: hex(0x5a4a3b), base: hex(0x8a7863), top: hex(0x968470), twig: hex(0x6e5c4a), moss: hex(0x5d7341), tex: 'furrow' },
+  oak: { root: hex(0x5e4b39), base: hex(0x947b5f), top: hex(0x9f876b), twig: hex(0x765f49), moss: hex(0x5d7341), tex: 'furrow' },
   chestnut: { root: hex(0x584738), base: hex(0x82705c), top: hex(0x8c7862), twig: hex(0x6b5644), moss: hex(0x5f7542), tex: 'spiral' },
   birch: { root: hex(0x5b544b), base: hex(0xe4e0d4), top: hex(0xeeebe2), twig: hex(0x5c3f33), moss: null, tex: 'birch' },
   pine: { root: hex(0x553a2c), base: hex(0x8e5a3e), top: hex(0xd8864a), twig: hex(0x6e4c38), moss: null, tex: 'plates' },
@@ -70,7 +70,7 @@ STYLE.set(VEG.AMBER_OAK, { ...base, name: 'amber_oak', bark: BARK.oak, leaf: AMB
 STYLE.set(VEG.BIRCH, { ...base, name: 'birch', bark: BARK.birch, leaf: BIRCH_LEAF, season: 'broadleaf', card: 0.85, density: 1.25, bend: 0.26, flutter: 0.1, freq: 1.5 });
 STYLE.set(VEG.AMBER_BIRCH, { ...STYLE.get(VEG.BIRCH), name: 'amber_birch', leaf: AMBER_BIRCH_LEAF, season: '', leafHue: 0.24 });
 STYLE.set(VEG.PINE, { ...base, name: 'pine', bark: BARK.pine, leaf: PINE_NEEDLE, leafTex: 'needle', season: 'evergreen', card: 0.95, density: 1.35, bend: 0.2, flutter: 0.035, freq: 0.9, leafHue: 0.1 });
-STYLE.set(VEG.SNOW_PINE, { ...STYLE.get(VEG.PINE), name: 'snow_pine', leaf: SNOW_NEEDLE, season: '', snow: true, bend: 0.12, flutter: 0.02, leafHue: 0.04 });
+STYLE.set(VEG.SNOW_PINE, { ...STYLE.get(VEG.PINE), name: 'snow_pine', leaf: SNOW_NEEDLE, season: '', snow: true, bend: 0.12, flutter: 0.02, leafHue: 0.02 });
 STYLE.set(VEG.SNAG, { ...base, name: 'snag', bark: BARK.snag, leaf: [], season: '', bend: 0.03, flutter: 0 });
 STYLE.set(VEG.SHRUB, { ...base, name: 'shrub', bark: BARK.shrub, leaf: SHRUB_LEAF, season: 'shrub', card: 0.62, density: 1.5, bend: 0.06, flutter: 0.04, freq: 1.9, leafHue: 0.18 });
 for (const s of STYLE.values()) Object.freeze(s);

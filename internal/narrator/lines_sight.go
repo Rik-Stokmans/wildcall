@@ -6,19 +6,17 @@ func init() {
 	register(map[string][]string{
 		// An unidentified bird under observation.
 		"observe.unknown": {
-			"{subj}, {act}. Now, who might you be?",
-			"There. Something {size}, {colours}. Hold still, just a moment longer.",
-			"Something {size}, with {bill}. Let's take a closer look.",
-			"{subj}. Note the {marking}, I'm almost sure of it.",
-			"{shape}, {act}. I don't know you yet, but I will.",
-			"Look at it, {act}, without a care in the world. Or without a care about us, at any rate.",
+			"{subj}. Now, who might you be?",
 			"{subj}. Not one I know. Every detail matters now.",
-			"Watch, don't guess. Size, shape, colour. The rest follows.",
-			"Ah, there you are. {colours}, and {size}.",
-			"Easy now. {subj}, and it hasn't seen us. Or it's being polite.",
-			"There's our mystery, {act}, quite unaware of the fuss it's causing.",
-			"{subj}. A face I don't know, and I'm rather glad of it.",
+			"There. Something {size}. Hold still, just a moment longer.",
+			"Ah, there you are. {colours}, and quite at home.",
+			"Something with {bill}. Let's take a closer look.",
 			"Well, well. {shape}. I wonder what you are.",
+			"There's our mystery, {act}. Now, who are you?",
+			"Look at it, without a care in the world. Or without a care about us, at any rate.",
+			"Watch, don't guess. Size, shape, colour. The rest follows.",
+			"Easy now. It hasn't seen us. Or it's being polite.",
+			"A face I don't know, and I'm rather glad of it.",
 			"Got you. Well, I've got your outline, anyway.",
 		},
 		"observe.blocked.foliage": {
@@ -52,14 +50,9 @@ func init() {
 		},
 		// An identified bird with no species line to hand.
 		"observe.known": {
-			"The {name}, {act}. Lovely.",
 			"There's the {name}. Just as I'd hoped.",
-			"Ah, {aname}, {act}. Taking no notice of us whatsoever.",
-			"{aname}, {where}. Familiar, and still a pleasure.",
 			"The {name} again. Always worth a second look.",
-			"Look at that {name}. I never tire of them.",
 			"Hello again, {name}.",
-			"The {name}, {act}, as though we weren't here at all.",
 		},
 
 		// New evidence noticed about an unidentified bird.
@@ -69,28 +62,25 @@ func init() {
 			"{size}. That narrows it down a little.",
 		},
 		"evidence.shape": {
-			"{shape}. That's a start.",
 			"The silhouette says a great deal. {shape}.",
-			"Look at the outline. {shape}.",
+			"Look at the outline. That's a start.",
 		},
 		"evidence.colour": {
 			"{colours}. Hard to miss, once you've seen it.",
-			"Colour now. {colours}, mostly.",
+			"Colour now. {colours}, I'd say.",
 			"{colours}. I'll remember that.",
 		},
 		"evidence.marking": {
-			"There, the {marking}. That's the detail to remember.",
-			"Note the {marking}. Field marks are everything.",
-			"The {marking}. Now we're getting somewhere.",
+			"There, that marking. That's the detail to remember.",
+			"Note the markings. Field marks are everything.",
+			"A proper field mark. Now we're getting somewhere.",
 		},
 		"evidence.bill": {
 			"And the bill. {bill}. A bill tells you what a bird eats, and that tells you a lot.",
 			"Look at that, {bill}. Built for a particular job.",
-			"{bill}. Worth remembering.",
 		},
 		"evidence.flight": {
 			"{flight}. The way a bird flies is a kind of signature.",
-			"Did you see that? {flight}.",
 			"In the air now. {flight}.",
 		},
 		"evidence.behavior": {
@@ -102,7 +92,7 @@ func init() {
 			"{habitat}. A bird is very often exactly where it belongs.",
 		},
 		"evidence.pitch": {
-			"That voice again, and now I've had a proper listen. {sound}.",
+			"Now I've had a proper listen. {pitch}.",
 		},
 		"evidence.pattern": {
 			"The rhythm of it. {sound}. That's worth writing down.",
@@ -113,21 +103,21 @@ func init() {
 			"Every little detail helps.",
 		},
 
-		// Uncommon behaviour seen. {subj} is a perceived description or "the <name>".
+		// Uncommon behaviour seen.
 		"behaviour.feeding": {
-			"{subj}, feeding. That's the moment, right there.",
-			"Breakfast, or lunch, or whatever this is. {subj} has found something good.",
+			"Feeding. That's the moment, right there.",
+			"Breakfast, or lunch, or whatever this is. Something good, anyway.",
 			"Look, it's caught something. Nature at its most practical.",
 			"Feeding. The most honest thing any creature does.",
 		},
 		"behaviour.bathing": {
-			"A bath. {subj}, splashing about like a small child. Wonderful.",
+			"A bath. Splashing about like a small child. Wonderful.",
 			"Bathing. Dignity completely abandoned. I love it.",
 			"Look at that, a proper wash. Every feather gets attention.",
 			"There's nothing quite like a bird in a bath. Pure enthusiasm.",
 		},
 		"behaviour.nesting": {
-			"Nesting material. {subj} is building something.",
+			"Nesting material. Somebody is building something.",
 			"Carrying something to a nest, I think. A respectful distance, now.",
 			"A home in the making. Very busy, very important.",
 			"There's a nest nearby, I'm sure of it. Gently does it.",
@@ -141,7 +131,7 @@ func init() {
 		"behaviour.hovering": {
 			"Hovering. Hanging there in the air by sheer effort.",
 			"Look at that, perfectly still in mid air. Exhausting, I should think.",
-			"{subj}, hovering. Every wingbeat a small act of balance.",
+			"Hovering. Every wingbeat a small act of balance.",
 		},
 		"behaviour.diving": {
 			"And in it goes. Straight down.",
@@ -150,7 +140,7 @@ func init() {
 		},
 		"behaviour.preening": {
 			"Preening. Feathers need constant care, rather like a good tweed jacket.",
-			"A spot of grooming. {subj} is taking its appearance very seriously.",
+			"A spot of grooming. Somebody is taking their appearance very seriously.",
 			"Preening. One feather at a time, nothing rushed.",
 		},
 		"behaviour.generic": {

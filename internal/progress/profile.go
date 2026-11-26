@@ -18,8 +18,9 @@ const (
 
 // NewProfile creates a brand-new naturalist: level 1, rank 1 (Beginner), 60 Field
 // Credits, the starting kit equipped (no recorder yet — Mara provides it), an empty
-// backpack, Greenhollow Woods unlocked, nothing explored, and every map and slice
-// non-nil so the profile marshals without nulls.
+// backpack, Greenhollow Woods unlocked, nothing explored, the three starting recipes
+// of the field kitchen known, and every map and slice non-nil so the profile
+// marshals without nulls.
 func NewProfile(name string) *proto.Profile {
 	p := &proto.Profile{
 		Name:     strings.TrimSpace(name),
@@ -35,8 +36,10 @@ func NewProfile(name string) *proto.Profile {
 
 // Normalize makes a profile safe to use and to send: nil maps and slices become
 // empty ones, the four reputation tracks exist, level and rank are in range, the
-// home region is unlocked, and everything derived is recomputed. Call it on a
-// profile loaded from a save file. It never takes anything away from the player.
+// home region is unlocked, the field-kitchen fields are filled in (MigrateLarder:
+// forage records, herbarium, recipes, buffs), and everything derived is recomputed.
+// Call it on a profile loaded from a save file. It never takes anything away from
+// the player.
 func Normalize(p *proto.Profile) {
 	if p.Name == "" {
 		p.Name = "Naturalist"
@@ -123,6 +126,8 @@ func Normalize(p *proto.Profile) {
 	if j.Badges == nil {
 		j.Badges = []string{}
 	}
+
+	MigrateLarder(p)
 
 	Recompute(p)
 	if p.Film.Used < 0 {

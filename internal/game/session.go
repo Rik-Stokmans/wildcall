@@ -127,6 +127,12 @@ type Session struct {
 	region     core.RegionID
 	lockedAt   map[core.RegionID]float64
 	lastFocus  bool
+	lastSit    bool
+
+	// Narrator moments (latched; see moments.go).
+	climbed, waded, sheltered bool
+	emptyFor                  float32
+	emptySaid                 bool
 
 	// Perception.
 	rng          *rand.Rand
@@ -136,6 +142,11 @@ type Session struct {
 	rec          *field.Recording
 	recObsAcc    float32
 	sightBird    uint32
+	nestWatch    field.NestWatch
+	sightNests   []core.Nest
+	nestBuf      []core.Nest
+	lastNests    []byte
+	lastNestsAt  float64
 	heardBirds   map[uint32]bool
 	investigated map[uint32]bool
 	mysteryBird  map[string]birdRef
@@ -153,7 +164,7 @@ type Session struct {
 	now                             float64
 	tick                            uint32
 	obsAcc, envAcc, poiAcc, saveAcc float64
-	narrAcc, discAcc                float64
+	narrAcc, discAcc, nestAcc       float64
 	worstTick                       float64
 	dirty, minor                    bool
 	lastPush                        float64
@@ -290,6 +301,7 @@ func (s *Session) newAdventure(name, seedText string) {
 func (s *Session) adopt(f *save.File) {
 	progress.Normalize(f.Profile)
 	s.sanitize(f.Profile)
+	s.sanitizeLarder(f.Profile)
 	clock := env.New(f.Seed, s.cfg.DayLen)
 	clock.Restore(f.Clock)
 	clock.SetDayLen(s.cfg.DayLen)
@@ -321,6 +333,11 @@ func (s *Session) install(sd int64, seedText string, p *proto.Profile, clock *en
 	}
 	s.tracker.Sync(p)
 	progress.Recompute(p)
+	// Buffs run on the game clock: whatever ran out while the game was closed (or
+	// was saved with an older clock) is gone now.
+	progress.ExpireBuffs(p, s.gameHours())
+	progress.PruneForage(p, s.clock.Env().Day)
+	s.syncLoreRecipes()
 	s.lastLevel = p.Level
 	s.resetExplored()
 	s.lures = nil
@@ -337,6 +354,10 @@ func (s *Session) install(sd int64, seedText string, p *proto.Profile, clock *en
 func (s *Session) resetPerception() {
 	s.board.Reset()
 	s.watch.Reset()
+	s.nestWatch.Reset()
+	s.lastNests = nil
+	s.climbed, s.waded, s.sheltered = false, false, false
+	s.emptyFor, s.emptySaid = 0, false
 	s.calls = field.CallLog{}
 	s.rec = nil
 	s.sightBird = 0
@@ -484,6 +505,8 @@ func init() {
 		proto.CSkill:        (*Session).msgSkill,
 		proto.CCabin:        (*Session).msgCabin,
 		proto.CNote:         (*Session).msgNote,
+		proto.CForage:       (*Session).msgForage,
+		proto.CCook:         (*Session).msgCook,
 		proto.CDebug:        (*Session).msgDebug,
 	}
 }
@@ -590,12 +613,15 @@ func (s *Session) welcome() proto.Welcome {
 		Quests:       s.questView(),
 		Collectibles: content.Collectibles(s.species),
 		Lore:         content.Lore(),
+		Plants:       content.Plants(),
+		Recipes:      content.Recipes(),
 		POIs:         pois,
 		Trails:       trails,
 		Shop:         progress.ShopItems(),
 		Profile:      s.clientView(),
 		Env:          s.envMsg(),
 		Spawn:        proto.Teleport{Pos: s.feet, Yaw: spawnYaw},
+		Trees:        s.world.TreeModels(),
 	}
 }
 

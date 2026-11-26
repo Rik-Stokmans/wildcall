@@ -422,6 +422,10 @@ func TestDialogueActionsReferenceKnownThings(t *testing.T) {
 						if a.Flag == "" || !a.Value {
 							t.Errorf("%s/%s: bad set_flag %+v", name, npc, a)
 						}
+					case ActionLearnRecipe:
+						if _, ok := Recipe(a.Recipe); !ok {
+							t.Errorf("%s/%s: unknown recipe in %+v", name, npc, a)
+						}
 					case ActionOpenShop, ActionClose:
 					default:
 						t.Errorf("%s/%s: unknown action kind %q", name, npc, a.Kind)

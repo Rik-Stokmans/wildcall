@@ -11,7 +11,7 @@ const (
 	occEndSkip  = 1.2  // ignore the terrain this close to either end (perches sit on it)
 	occTerrainT = 0.2  // the line must pass this far below the ground to count
 	occMax      = 0.95 // foliage alone never blocks completely
-	occReach    = 12.0 // the widest crown: how far beyond a chunk its foliage can reach
+	occReach    = 16.0 // the widest crown: how far beyond a chunk its foliage can reach (see crownMaxR)
 )
 
 // Occlusion returns how blocked the straight line from -> to is: 1 if the terrain

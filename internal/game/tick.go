@@ -36,6 +36,7 @@ func (s *Session) Tick(dt float32) {
 	} else {
 		s.still = 0
 	}
+	s.expireBuffs()
 	evs := s.sim.Step(dt, envNow, s.observer())
 	s.noise = 0
 	s.evBuf = append(s.evBuf[:0], evs...)
@@ -58,6 +59,10 @@ func (s *Session) Tick(dt float32) {
 		step := float32(s.obsAcc)
 		s.obsAcc = 0
 		s.observe(ctx, step, s.birdBuf)
+		if s.havePose {
+			s.watchNests(ctx, step)
+			s.emptyView(step)
+		}
 		if s.rec != nil {
 			s.send(proto.SRecState, s.rec.Tick(ctx, step, s.pose, s.birdBuf))
 			if s.rec.Seconds() >= recMaxSeconds {
@@ -80,6 +85,11 @@ func (s *Session) Tick(dt float32) {
 		s.poiAcc = 0
 		s.streamPOIs()
 	}
+	s.nestAcc += float64(dt)
+	if s.nestAcc >= nestEvery {
+		s.nestAcc = 0
+		s.streamNests()
+	}
 	s.discAcc += float64(dt)
 	if s.discAcc >= 0.5 && s.havePose {
 		s.discAcc = 0
@@ -88,6 +98,7 @@ func (s *Session) Tick(dt float32) {
 	s.narrAcc += float64(dt)
 	if s.narrAcc >= 1 {
 		s.narrAcc = 0
+		s.moments()
 		s.idleNarration()
 	}
 	s.saveAcc += float64(dt)

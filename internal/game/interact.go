@@ -115,6 +115,8 @@ func (s *Session) msgDialogChoice(d []byte) {
 				s.p.Flags[a.Flag] = a.Value
 				s.changed()
 			}
+		case content.ActionLearnRecipe:
+			s.learnRecipe(a.Recipe)
 		case content.ActionClose:
 			closing = true
 		case content.ActionOpenShop:
@@ -249,6 +251,7 @@ func (s *Session) openCache(poi core.POI) {
 	}
 	xp := s.award(progress.SrcCollectible, poi.ID, progress.XPCollectible)
 	s.toast("item", poi.Name, "Opened.", xp, "cache")
+	s.narrate(narrator.Event{Kind: narrator.Collected, Item: "cache"})
 	s.questEvent(content.CacheOpened(poi.ID, s.at(poi.Pos)))
 	s.changed()
 }
@@ -302,6 +305,7 @@ func (s *Session) pickUp(poi core.POI) {
 		}
 	}
 	s.toast("item", title, text, xp, poi.Kind)
+	s.narrate(narrator.Event{Kind: narrator.Collected, Item: poi.Kind})
 	s.questEvent(content.Collected(id, poi.Kind, s.at(poi.Pos)))
 }
 

@@ -13,47 +13,14 @@
 // giant Old Oak gets its own denser cards), lod 1 → mid, lod 2 → far (a handful of big
 // cards per mass and only the thick limbs — the same silhouette and colours).
 import * as THREE from 'three';
-import { hashByte } from '../color.js';
 import { CHUNK_SIZE, VEG } from '../constants.js';
 import { seasonTint, easeTint, seasonThin } from '../season.js';
 import { treeStyle, isModelKind, TREE_VARIANTS } from './treeStyle.js';
-import { prepareModel, buildWood, buildFoliage, writeInstanceMatrix, DETAIL } from './treeGeometry.js';
+import { prepareModel, buildWood, buildFoliage, writeInstanceMatrix, woodDistance, unplacePoint, DETAIL } from './treeGeometry.js';
 import { shrubModel, SHRUB_VARIANTS } from './shrubModels.js';
+import { detailFor, modelVariant, treeTint, modelReach, SHADOW_FAR, SHADOW_KEEP, CULL_MOVE, CULL_TURN_COS, CULL_MARGIN_DEG } from './instancing.js';
 import { createTreeMaterial } from './treeMaterials.js';
 import { treeTextures } from './textures.js';
-
-/** Trees further than this from the camera (m) cast no shadow (beyond every shadow map). */
-export const SHADOW_FAR = 110;
-
-/** Instances at or above this scale are drawn with the giant detail near the player. */
-export const GIANT_SCALE = 1.8;
-
-/** Detail level for a chunk LOD and instance scale. */
-export function detailFor(lod, scale) {
-  if (lod <= 0) return scale >= GIANT_SCALE ? DETAIL.GIANT : DETAIL.NEAR;
-  return lod === 1 ? DETAIL.MID : DETAIL.FAR;
-}
-
-/** Model variant of an instance's variant byte. */
-export function modelVariant(kind, variant) {
-  return kind === VEG.SHRUB ? variant % SHRUB_VARIANTS : variant % TREE_VARIANTS;
-}
-
-/**
- * Colour multiplier of a tree instance (linear RGB around 1): a little tone and a
- * warm/cool drift, more in the foliage-heavy amber kinds, almost none on snow.
- */
-export function treeTint(kind, variant, x, z, out, o) {
-  const style = treeStyle(kind);
-  const h = (Math.floor(x * 3.1) * 73 + Math.floor(z * 2.7) * 151) & 0xffff;
-  const tone = hashByte(variant, h & 255);
-  const warm = hashByte(variant ^ (h >> 8), 5) - 0.5;
-  const hue = style ? style.leafHue : 0.15;
-  const b = 0.9 + tone * 0.2;
-  out[o] = b * (1 + warm * hue);
-  out[o + 1] = b * (1 + warm * hue * 0.15);
-  out[o + 2] = b * (1 - warm * hue * 1.3);
-}
 
 const groupKey = (kind, variant, detail) => (kind * 8 + variant) * 4 + detail;
 
@@ -95,10 +62,63 @@ export function createForest(shared) {
   // render: onBeforeRender is not called for shadow maps.
   const camPos = { value: new THREE.Vector3() };
   const shadowFar = { value: SHADOW_FAR };
+  let viewCamera = null;
   const trackCamera = (renderer, scene, camera) => {
     const e = camera.matrixWorld.elements;
     camPos.value.set(e[12], e[13], e[14]);
+    viewCamera = camera;
   };
+
+  // --- culling --------------------------------------------------------------------------------
+  // The instance buffers hold only the chunks inside a widened view frustum (plus
+  // the shadow casters around the player). They are refilled when the camera has
+  // turned or moved enough to approach the margin, never per frame.
+  const cull = {
+    frustum: new THREE.Frustum(),
+    wide: new THREE.PerspectiveCamera(),
+    matrix: new THREE.Matrix4(),
+    dir: new THREE.Vector3(0, 0, 0),
+    pos: new THREE.Vector3(Infinity, 0, 0),
+    fov: 0, aspect: 0,
+    active: false,
+  };
+  const box = new THREE.Box3();
+  const tmpDir = new THREE.Vector3();
+  function updateCull() {
+    const cam = viewCamera;
+    if (!cam || !cam.isPerspectiveCamera) return false;
+    cam.getWorldDirection(tmpDir);
+    const moved = cull.pos.distanceToSquared(camPos.value) > CULL_MOVE * CULL_MOVE;
+    const turned = tmpDir.dot(cull.dir) < CULL_TURN_COS;
+    if (!moved && !turned && cam.fov === cull.fov && cam.aspect === cull.aspect && cull.active) return false;
+    cull.dir.copy(tmpDir);
+    cull.pos.copy(camPos.value);
+    cull.fov = cam.fov; cull.aspect = cam.aspect;
+    const w = cull.wide;
+    w.fov = Math.min(170, cam.fov * 1.25 + CULL_MARGIN_DEG);
+    w.aspect = cam.aspect;
+    w.near = 0.1;
+    w.far = Math.max(cam.far, 1);
+    w.updateProjectionMatrix();
+    w.matrixWorld.copy(cam.matrixWorld);
+    w.matrixWorldInverse.copy(cam.matrixWorldInverse);
+    cull.matrix.multiplyMatrices(w.projectionMatrix, w.matrixWorldInverse);
+    cull.frustum.setFromProjectionMatrix(cull.matrix);
+    cull.active = true;
+    return true;
+  }
+  function segVisible(g, s) {
+    if (!cull.active) return true;
+    const b = s.box;
+    if (g.detail >= DETAIL.NEAR) { // shadow casters around the player stay, wherever they are
+      const dx = Math.max(b[0] - cull.pos.x, 0, cull.pos.x - b[3]);
+      const dz = Math.max(b[2] - cull.pos.z, 0, cull.pos.z - b[5]);
+      if (dx * dx + dz * dz < SHADOW_KEEP * SHADOW_KEEP) return true;
+    }
+    box.min.set(b[0], b[1], b[2]);
+    box.max.set(b[3], b[4], b[5]);
+    return cull.frustum.intersectsBox(box);
+  }
   const materials = new Map();
   function materialsFor(kind) {
     let m = materials.get(kind);
@@ -169,12 +189,19 @@ export function createForest(shared) {
   }
 
   function rebuild(g) {
-    let n = 0;
-    for (const s of g.segs.values()) n += s.n;
-    if (n > g.cap || n < g.cap / 4) { // grow (or shrink a lot): new buffers
+    let n = 0, total = 0;
+    const shown = [];
+    for (const s of g.segs.values()) {
+      total += s.n;
+      if (!segVisible(g, s)) continue;
+      shown.push(s);
+      n += s.n;
+    }
+    // Capacity follows all registered instances, so turning around never reallocates.
+    if (total > g.cap || total < g.cap / 4) { // grow (or shrink a lot): new buffers
       disposeMeshes(g);
-      if (!n) return;
-      g.cap = Math.max(16, Math.ceil(n * 1.5));
+      if (!total) return;
+      g.cap = Math.max(16, Math.ceil(total * 1.5));
       const geo = geometryFor(g.kind, g.variant, g.detail);
       const mats = materialsFor(g.kind);
       const near = g.detail >= DETAIL.NEAR;
@@ -200,7 +227,7 @@ export function createForest(shared) {
     const mArr = g.meshes[0].instanceMatrix.array;
     const cArr = g.meshes[0].instanceColor.array;
     let o = 0;
-    for (const s of g.segs.values()) {
+    for (const s of shown) {
       mArr.set(s.m.subarray(0, s.n * 16), o * 16);
       cArr.set(s.c.subarray(0, s.n * 3), o * 3);
       o += s.n;
@@ -250,11 +277,18 @@ export function createForest(shared) {
     for (const [g, list] of per) {
       const n = list.length;
       const m = new Float32Array(n * 16), c = new Float32Array(n * 3);
+      const model = models.get(g.kind * 8 + g.variant);
+      const reach = modelReach(model);
+      const bx = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
       list.forEach((i, j) => {
-        writeInstanceMatrix(m, j * 16, veg.x[i], veg.y[i], veg.z[i], veg.scale[i], veg.rot[i]);
+        const k = veg.scale[i];
+        writeInstanceMatrix(m, j * 16, veg.x[i], veg.y[i], veg.z[i], k, veg.rot[i]);
         treeTint(veg.kind[i], veg.variant[i], veg.x[i] - ox, veg.z[i] - oz, c, j * 3);
+        bx[0] = Math.min(bx[0], veg.x[i] - reach * k); bx[3] = Math.max(bx[3], veg.x[i] + reach * k);
+        bx[2] = Math.min(bx[2], veg.z[i] - reach * k); bx[5] = Math.max(bx[5], veg.z[i] + reach * k);
+        bx[1] = Math.min(bx[1], veg.y[i] - 1); bx[4] = Math.max(bx[4], veg.y[i] + (model.height + 1) * k);
       });
-      g.segs.set(rec.key, { m, c, n });
+      g.segs.set(rec.key, { m, c, n, box: bx });
       rec.groups.add(g);
       dirty.add(g);
     }
@@ -328,6 +362,7 @@ export function createForest(shared) {
    */
   function update(dt, season) {
     curSeason = season;
+    if (updateCull()) for (const g of groups.values()) dirty.add(g);
     for (const g of dirty) rebuild(g);
     dirty.clear();
     const tk = 1 - Math.exp(-dt * 0.35);
@@ -346,7 +381,7 @@ export function createForest(shared) {
     u.uThin.value = u.thin;
   }
 
-  return {
+  const api = {
     root,
     draws,
     handleFor,
@@ -371,5 +406,30 @@ export function createForest(shared) {
     },
     /** The prepared model of a kind and model variant (for tools and tests), or undefined. */
     model: (kind, variant) => models.get(kind * 8 + variant),
+    /**
+     * Diagnostics: the drawn tree wood nearest to a world point within `r` metres —
+     * {d: distance to the bark surface in metres (negative = inside), kind, variant,
+     * seg, x, z} or null. Used to check that birds on branch perches stand on limbs.
+     */
+    nearestWood(x, y, z, r = 20) {
+      let best = null;
+      for (const rec of live.values()) {
+        const v = rec.chunk.veg;
+        for (let i = 0; i < v.count; i++) {
+          const kind = v.kind[i];
+          if (!draws(kind) || kind === VEG.SHRUB) continue;
+          if (Math.abs(v.x[i] - x) > r || Math.abs(v.z[i] - z) > r) continue;
+          const model = models.get(kind * 8 + modelVariant(kind, v.variant[i]));
+          if (!model) continue;
+          const inst = { x: v.x[i], y: v.y[i], z: v.z[i], scale: v.scale[i], rot: v.rot[i] };
+          const h = woodDistance(model, unplacePoint([x, y, z], inst));
+          const d = h.d * inst.scale;
+          if (!best || Math.abs(d) < Math.abs(best.d)) best = { d, kind, variant: modelVariant(kind, v.variant[i]), seg: h.seg, x: inst.x, z: inst.z };
+        }
+      }
+      return best;
+    },
   };
+  root.userData.forest = api;
+  return api;
 }

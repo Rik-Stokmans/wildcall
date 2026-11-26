@@ -19,7 +19,7 @@ const (
 	mSoar               // circling
 	mLure               // feeding at a lure
 	mBathe              // splashing at the water's edge
-	mNest               // carrying material between a gathering spot and the nest
+	mNest               // at or busy with its nest: building, sitting, feeding chicks (nest.go)
 	mRoost              // asleep
 	mAlert              // frozen, watching the observer
 	mHide               // tucked into cover until the danger has passed
@@ -31,7 +31,7 @@ const (
 // timed lists the modes whose bout ends when the decision timer runs out. The
 // others end on their own terms (a counted series of steps, the fear level, an
 // arrival).
-var timed = [modeCount]bool{mIdle: true, mGround: true, mGlean: true, mClimb: true, mSwim: true, mSoar: true, mLure: true, mBathe: true, mRoost: true}
+var timed = [modeCount]bool{mIdle: true, mGround: true, mGlean: true, mClimb: true, mSwim: true, mSoar: true, mLure: true, mBathe: true, mRoost: true, mNest: true}
 
 // then says what a bird does when the move it is making completes.
 type then uint8
@@ -52,8 +52,10 @@ const (
 	thenSoar                  // start circling
 	thenLure                  // feed at the lure
 	thenBathe                 // bathe
-	thenNestPick              // pick up nest material
-	thenNestBuild             // add it to the nest
+	thenNestPick              // pick up nest material, or catch food for the chicks
+	thenNestBuild             // add it to the nest, or feed the chicks
+	thenNestSit               // settle on the nest: incubating or brooding
+	thenNestVisit             // a short visit to the nest (feeding the sitting mate)
 	thenSocial                // display / chatter
 	thenRoost                 // go to sleep
 	thenHide                  // tuck into cover
@@ -75,7 +77,7 @@ const (
 // Perch memory layout: every bird remembers a handful of places in its territory.
 const (
 	memSong  = 0  // the song post
-	memRoost = 1  // where it sleeps (and nests)
+	memRoost = 1  // where it sleeps
 	memBath  = 2  // a spot at the water's edge, if the territory has one
 	memFeed  = 3  // memFeed..memFeed+maxFeed-1: feeding spots
 	maxFeed  = 4  //
@@ -96,10 +98,10 @@ type bird struct {
 	then   then
 	mv     moveKind
 	style  flightKind
-	cur    int8 // remembered perch the bird is on, or noPerch
-	dest   int8 // remembered perch the current move ends on, or noPerch
-	n      int8 // steps left in the current bout (trips, hover stations, flight legs)
-	stage  uint8
+	cur    int8  // remembered perch the bird is on, or noPerch
+	dest   int8  // remembered perch the current move ends on, or noPerch
+	n      int8  // steps left in the current bout (trips, hover stations, flight legs)
+	stage  uint8 // nest bouts: what the trips are for (nsGather / nsFood / nsSit / nsVisit)
 
 	destKind core.PerchKind
 	sp       int16
@@ -228,7 +230,7 @@ func (s *Sim) stepBird(b *bird, idx int32, dt float32) {
 			s.hoverTick(b, dt)
 		case mAway:
 			// The countdown only runs once the bird has calmed down at its refuge.
-			if b.fear < fearAlert {
+			if b.fear < fearAlert && !s.nestBlocked(b) {
 				if b.away -= dt; b.away <= 0 {
 					s.comeHome(b, p)
 				}

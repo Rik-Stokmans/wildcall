@@ -149,6 +149,12 @@ func (s *Session) msgUse(d []byte) {
 		s.fail("That could not be read.")
 		return
 	}
+	if edible(m.Item) {
+		if err := s.eat(m.Item); err != nil {
+			s.failErr(err)
+		}
+		return
+	}
 	if def, ok := progress.Item(m.Item); ok && def.Use == progress.UseSeed && !s.havePose {
 		s.fail("Find somewhere to scatter it first.")
 		return
@@ -253,6 +259,7 @@ func (s *Session) rest(until float32) error {
 	hours := s.clock.SkipTo(until)
 	e := s.clock.Env()
 	s.sim.FastForward(hours, e)
+	s.expireBuffs()
 	for i := range s.lures {
 		if !s.lures[i].permanent {
 			s.lures[i].ttl -= hours * 3600
@@ -387,12 +394,17 @@ func (s *Session) submit(id string) error {
 		if ph.Submitted {
 			return gentleErr("Already submitted.")
 		}
-		if ph.Stars <= 0 || len(ph.Subjects) == 0 {
+		nest := s.nestOfPhoto(id)
+		if ph.Stars <= 0 || (len(ph.Subjects) == 0 && nest == "") {
 			return gentleErr("There is no bird in that photograph to submit.")
 		}
 		ph.Submitted = true
 		stars, what, src = ph.Stars, "photo", progress.SrcSubmitPhoto
-		spID, key = ph.Subjects[0].Species, ph.Subjects[0].Mystery
+		if len(ph.Subjects) > 0 {
+			spID, key = ph.Subjects[0].Species, ph.Subjects[0].Mystery
+		} else {
+			key = "nest:" + nest
+		}
 	} else if r := s.recByID(id); r != nil {
 		if r.Submitted {
 			return gentleErr("Already submitted.")

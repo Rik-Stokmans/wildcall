@@ -66,7 +66,29 @@ var (
 	rgSummerVisitor = [4]bool{true, true, false, false}
 	rgWinterVisitor = [4]bool{false, false, true, true}
 	rgWinterOnly    = [4]bool{false, false, false, true}
+
+	rgSummerAutumnVisitor = [4]bool{true, true, true, false}
 )
+
+// When nests are active (spring, summer, autumn, winter).
+var (
+	rgNestSpring       = [4]bool{true, false, false, false}
+	rgNestSpringSummer = [4]bool{true, true, false, false}
+)
+
+// rgNest describes a species' real nest: the site type, the perch kinds it is built
+// on (most typical first), its height in metres above the ground or water (for
+// ledges and banks: above the foot of the cliff or the water), when it is active,
+// its outer diameter in metres and one field-guide sentence.
+func rgNest(site string, perches []string, hmin, hmax float32, seasons [4]bool, size float32, desc string) core.NestInfo {
+	return core.NestInfo{Site: site, Perches: perches, HeightMin: hmin, HeightMax: hmax, Seasons: seasons, Size: size, Desc: desc}
+}
+
+// rgNoNest is the nest entry of a bird that never breeds in the game's regions
+// (winter visitors): site "none", explained by desc.
+func rgNoNest(desc string) core.NestInfo {
+	return core.NestInfo{Site: "none", Perches: []string{}, Desc: desc}
+}
 
 func rgHab(key string, weight float32) core.HabitatWeight {
 	return core.HabitatWeight{Habitat: key, Weight: weight}
@@ -195,6 +217,17 @@ func rgMallard() core.Species {
 			Size: "large", Shape: "duck", Primary: "grey", Secondary: "green",
 			Marking: "glossy green head with a white neck ring", Bill: "flat", Flight: "direct",
 		},
+		Nest: rgNest("ground", []string{"ground", "shrub", "reed"}, 0, 0.5, rgNestSpring, 0.3,
+			"A shallow hollow lined with grass and the duck's own soft down, hidden in thick vegetation near water."),
+		Facts: []string{
+			"Only the female mallard gives the loud quack; the drake has a soft, rasping voice.",
+			"Nearly all farmyard ducks are descended from the wild mallard.",
+			"The female lines her nest with down plucked from her own breast.",
+			"After breeding, drakes moult into a dull 'eclipse' plumage and cannot fly for several weeks.",
+			"Ducklings can swim and feed themselves within hours of hatching.",
+			"Mallards can sleep with one eye open, keeping half the brain awake to watch for danger.",
+			"Mallards sometimes nest far from water, even in trees, and lead the ducklings back to it.",
+		},
 		Difficulty: 1,
 		Similar:    []string{"common_moorhen"},
 		Relations: []string{
@@ -264,6 +297,16 @@ func rgCommonMoorhen() core.Species {
 			Size: "medium", Shape: "rail", Primary: "black", Secondary: "brown",
 			Marking: "red bill shield and a white line along the flank", Bill: "short", Flight: "direct",
 		},
+		Nest: rgNest("floating", []string{"reed", "water", "shore"}, 0, 1, rgNestSpringSummer, 0.3,
+			"A cup of dead reeds and water plants built among reeds at the water's edge or anchored in the shallows."),
+		Facts: []string{
+			"Moorhens have no webbed feet, yet they swim well, nodding their heads with each stroke.",
+			"The name means hen of the mere, not of the moor.",
+			"Young from an early brood often help to feed their parents' later chicks.",
+			"On their long, spread toes moorhens can walk across lily pads.",
+			"A frightened moorhen can dive and hide underwater with only its bill showing.",
+			"Moorhens build extra platforms of reeds where the family can rest besides the real nest.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"mallard"},
 		Relations: []string{
@@ -324,6 +367,16 @@ func rgGreyHeron() core.Species {
 		Traits: core.Traits{
 			Size: "huge", Shape: "heron", Primary: "grey", Secondary: "white",
 			Marking: "black plume behind the eye on a white head", Bill: "dagger", Flight: "direct",
+		},
+		Nest: rgNest("platform", []string{"fork", "canopy", "branch"}, 6, 25, rgNestSpringSummer, 0.9,
+			"A large, untidy platform of sticks high in a tall tree, usually one of many in a colony that is used year after year."),
+		Facts: []string{
+			"Grey herons nest together in heronries high in the treetops, some used for centuries.",
+			"Herons start nesting very early, sometimes in February, before the trees are in leaf.",
+			"A heron may stand still for minutes before striking at a fish in a flash.",
+			"Herons swallow fish, frogs, voles and even ducklings whole.",
+			"In flight a heron tucks its neck back into an S, while cranes stretch theirs out.",
+			"A heron's wings span nearly two metres, yet it weighs less than two kilograms.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"eurasian_bittern", "great_cormorant"},
@@ -397,6 +450,16 @@ func rgReedWarbler() core.Species {
 		Traits: core.Traits{
 			Size: "small", Shape: "warbler", Primary: "brown", Secondary: "buff",
 			Marking: "plain unmarked face with a pale throat", Bill: "thin", Flight: "direct",
+		},
+		Nest: rgNest("reed", []string{"reed"}, 0.3, 1.8, rgNestSpringSummer, 0.08,
+			"A deep cup woven around several living reed stems above the water, so deep the eggs cannot roll out when the reeds sway."),
+		Facts: []string{
+			"Reed warblers weave their deep nest around several living reed stems.",
+			"The deep cup keeps the eggs from rolling out when the reeds thrash in the wind.",
+			"The reed warbler is one of the cuckoo's commonest hosts.",
+			"Reed warblers spend the winter in Africa, crossing the Sahara twice a year.",
+			"Its chattering song repeats every phrase two or three times, steady as clockwork.",
+			"Many reed warblers come back to the very same patch of reeds year after year.",
 		},
 		Difficulty: 3,
 		Similar:    []string{"common_chiffchaff", "eurasian_blackcap", "eurasian_wren"},
@@ -476,6 +539,17 @@ func rgBittern() core.Species {
 			Size: "large", Shape: "heron", Primary: "buff", Secondary: "brown",
 			Marking: "golden buff streaked like dead reeds, black crown", Bill: "dagger", Flight: "direct",
 		},
+		Nest: rgNest("reed", []string{"reed", "shore"}, 0, 0.5, rgNestSpring, 0.35,
+			"A platform of dead reed stems and sedge built by the female alone, deep in the wettest part of the reedbed."),
+		Facts: []string{
+			"A booming male bittern can be heard up to five kilometres away on a still night.",
+			"Researchers tell individual bitterns apart by the shape of each male's boom.",
+			"To boom, the male gulps air into his gullet, swelling his neck like a bellows.",
+			"When alarmed a bittern freezes with its bill pointing to the sky, swaying with the reeds.",
+			"The female bittern builds the nest and raises the chicks alone.",
+			"Bitterns almost vanished from Britain; restored reedbeds have brought them back.",
+			"An old country name for the bittern, butterbump, imitates its boom.",
+		},
 		Difficulty: 5,
 		Similar:    []string{"grey_heron"},
 		Relations: []string{
@@ -549,6 +623,16 @@ func rgMarshHarrier() core.Species {
 		Traits: core.Traits{
 			Size: "large", Shape: "raptor", Primary: "brown", Secondary: "buff",
 			Marking: "cream crown and throat on a chocolate-brown body", Bill: "hooked", Flight: "flapglide",
+		},
+		Nest: rgNest("reed", []string{"reed", "ground"}, 0, 0.5, rgNestSpringSummer, 0.7,
+			"A big, flat platform of reeds and sticks on the ground deep inside the reedbed."),
+		Facts: []string{
+			"A male marsh harrier passes food to his mate in mid-air; she flips over and catches it.",
+			"Unlike most birds of prey, marsh harriers nest on the ground, deep in the reeds.",
+			"In 1971 only a single pair of marsh harriers nested in Britain; now there are hundreds.",
+			"It hunts by flying low and slow, tilting from side to side just above the reeds.",
+			"Females are bigger than males and chocolate brown with a cream head.",
+			"Young males take a few years to grow their grey wing panels.",
 		},
 		Difficulty: 3,
 		Similar:    []string{"common_buzzard", "golden_eagle"},
@@ -637,6 +721,16 @@ func rgWheatear() core.Species {
 			Size: "small", Shape: "songbird", Primary: "grey", Secondary: "buff",
 			Marking: "white rump and a black T on the tail", Bill: "thin", Flight: "direct",
 		},
+		Nest: rgNest("burrow", []string{"rock", "ground", "bank", "ledge"}, 0, 1, rgNestSpringSummer, 0.12,
+			"A loose cup of grass and moss deep in a rock crevice, a gap in a stone wall or an old rabbit burrow."),
+		Facts: []string{
+			"Wheatears from Alaska winter in East Africa, one of the longest journeys of any songbird.",
+			"The name comes from old words for 'white rump', after the dazzling white patch above the tail.",
+			"Wheatears nest in holes: rabbit burrows, rock crevices and gaps in stone walls.",
+			"It is one of the first summer visitors to return, often arriving in March.",
+			"Its alarm call sounds like two pebbles knocked together.",
+			"A wheatear bobs and flicks its tail constantly while standing on a rock.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"grey_wagtail", "snow_bunting"},
 		Relations: []string{
@@ -708,6 +802,17 @@ func rgRaven() core.Species {
 			Size: "large", Shape: "corvid", Primary: "black", Secondary: "black",
 			Marking: "all black with a shaggy throat and wedge-shaped tail", Bill: "stout", Flight: "soaring",
 		},
+		Nest: rgNest("platform", []string{"ledge", "fork", "canopy"}, 3, 40, rgNestSpring, 0.9,
+			"A bulky nest of sticks thickly lined with wool and fur, on a sheltered crag ledge or high in a tall tree, often used for many years."),
+		Facts: []string{
+			"The raven is the largest member of the crow family, with a wingspan well over a metre.",
+			"Ravens nest very early, often laying their eggs in February while snow still lies.",
+			"Ravens play: they slide down snowy slopes and drop sticks to catch them again in mid-air.",
+			"Legend says Britain will fall if the ravens ever leave the Tower of London.",
+			"A raven pair stays together for life and holds its territory all year round.",
+			"Ravens sometimes roll onto their backs in flight, tumbling for a moment before righting themselves.",
+			"In Norse myth, Odin's ravens, Thought and Memory, flew over the world and brought him news.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"common_buzzard", "golden_eagle", "great_cormorant"},
 		Relations: []string{
@@ -733,7 +838,9 @@ func rgRingOuzel() core.Species {
 		Rarity:   core.Uncommon,
 		Regions:  []core.RegionID{core.RegionWindpeak},
 		Habitats: []core.HabitatWeight{rgHab("alpine", 0.5), rgHab("cliff", 0.25), rgHab("shrub", 0.25)},
-		Seasons:  rgResident,
+		// A summer visitor that stays on into autumn for the rowan and juniper berries,
+		// then winters in the mountains of Spain and North Africa.
+		Seasons: rgSummerAutumnVisitor,
 		Look: core.Appearance{
 			Length: 0.24, Wingspan: 0.40, Plump: 1.0, Neck: 0.2, Legs: 0.5,
 			Tail: 0.8, TailShape: "square", Bill: 0.7, BillShape: "thin", WingShape: "pointed",
@@ -778,6 +885,16 @@ func rgRingOuzel() core.Species {
 		Traits: core.Traits{
 			Size: "medium", Shape: "thrush", Primary: "black", Secondary: "white",
 			Marking: "white crescent across the breast", Bill: "thin", Flight: "direct",
+		},
+		Nest: rgNest("cup_shrub", []string{"shrub", "bank", "rock", "ground"}, 0, 2, rgNestSpringSummer, 0.17,
+			"A cup of grass plastered with mud and lined with fine grass, on the ground under heather, on a crag or in a steep gully bank."),
+		Facts: []string{
+			"The ring ouzel is a mountain thrush, dark as soot, with a white crescent across its breast.",
+			"Ring ouzels spend the winter in the mountains of Spain and North Africa.",
+			"It nests on the ground under heather, on crags or among the stones of steep gullies.",
+			"In autumn it feeds on rowan and juniper berries before flying south.",
+			"It is a shy bird, flying off high and far when disturbed.",
+			"Ring ouzel numbers have fallen sharply in Britain, and it is now a bird of high conservation concern.",
 		},
 		Difficulty: 3,
 		Similar:    []string{"common_blackbird"},
@@ -843,6 +960,17 @@ func rgGoldenEagle() core.Species {
 		Traits: core.Traits{
 			Size: "huge", Shape: "raptor", Primary: "brown", Secondary: "buff",
 			Marking: "golden nape and vast, long-fingered wings", Bill: "hooked", Flight: "soaring",
+		},
+		Nest: rgNest("platform", []string{"ledge", "fork"}, 2, 60, rgNestSpringSummer, 1.5,
+			"A huge eyrie of branches and heather lined with grass and woodrush, on a crag ledge or in an old pine, added to year after year."),
+		Facts: []string{
+			"A golden eagle's wings can span more than two metres.",
+			"A pair may own several eyries and use a different one in different years.",
+			"After decades of new sticks an old eyrie can stand two metres deep.",
+			"Golden eagles usually lay two eggs, but often only one chick survives.",
+			"Golden eagles hunt mountain hares and grouse, and eat carrion in winter.",
+			"In a hunting stoop a golden eagle can top two hundred and forty kilometres an hour.",
+			"Wild golden eagles can live for more than thirty years.",
 		},
 		Difficulty: 5,
 		Similar:    []string{"common_buzzard", "western_marsh_harrier", "common_raven"},
@@ -929,6 +1057,17 @@ func rgHerringGull() core.Species {
 			Size: "large", Shape: "gull", Primary: "white", Secondary: "grey",
 			Marking: "pale grey back, black wingtips and pink legs", Bill: "stout", Flight: "soaring",
 		},
+		Nest: rgNest("ledge", []string{"ledge", "rock", "structure", "ground"}, 0, 40, rgNestSpringSummer, 0.4,
+			"A mound of grass and seaweed with a shallow cup, on a cliff ledge, a rocky island or a rooftop."),
+		Facts: []string{
+			"A herring gull chick pecks the red spot on its parent's bill to make it bring up food.",
+			"Herring gulls patter their feet on wet grass to bring earthworms to the surface.",
+			"Young herring gulls take four years to grow the clean grey and white of adults.",
+			"Herring gulls drop shellfish onto rocks from a height to crack them open.",
+			"Herring gulls can drink seawater, getting rid of the salt through glands above the eyes.",
+			"Many herring gulls now nest on rooftops in seaside towns, far from any cliff.",
+			"Despite seeming everywhere, herring gulls have declined so much that they are red-listed in Britain.",
+		},
 		Difficulty: 1,
 		// No other bird in the guide is really like it.
 		Similar: []string{},
@@ -1007,6 +1146,16 @@ func rgOystercatcher() core.Species {
 			Size: "medium", Shape: "wader", Primary: "black", Secondary: "white",
 			Marking: "long carrot-orange bill and pink legs", Bill: "dagger", Flight: "direct",
 		},
+		Nest: rgNest("scrape", []string{"shore", "ground", "rock"}, 0, 0.3, rgNestSpringSummer, 0.2,
+			"A shallow scrape in shingle, sand or short turf, sometimes rimmed with small stones and shell fragments."),
+		Facts: []string{
+			"Oystercatchers rarely eat oysters; mussels, cockles and worms are their usual food.",
+			"Some oystercatchers hammer shells open while others stab between the two halves.",
+			"Unusually for waders, oystercatcher parents bring food to their chicks.",
+			"Oystercatchers can live for more than forty years.",
+			"The tip of the bill wears blunt or pointed depending on the food the bird eats.",
+			"The nest is just a scrape in the shingle, sometimes decorated with bits of shell.",
+		},
 		Difficulty: 1,
 		Similar:    []string{"atlantic_puffin"},
 		Relations: []string{
@@ -1071,6 +1220,16 @@ func rgCormorant() core.Species {
 			Size: "huge", Shape: "seabird", Primary: "black", Secondary: "white",
 			Marking: "white chin patch on a snaky black neck", Bill: "hooked", Flight: "direct",
 		},
+		Nest: rgNest("ledge", []string{"ledge", "rock", "fork"}, 0, 40, rgNestSpringSummer, 0.6,
+			"A heap of seaweed and sticks on a broad cliff ledge or a rocky island, crowded among the nests of the colony and whitened by droppings."),
+		Facts: []string{
+			"Cormorant feathers soak up water, which helps the bird dive but means it must dry its wings.",
+			"Cormorants chase fish underwater, kicking with big feet that have webs between all four toes.",
+			"In China and Japan people have fished with trained cormorants for well over a thousand years.",
+			"Cormorants nest in colonies on cliff ledges, rocky islands and sometimes trees.",
+			"Cormorant droppings can whiten and eventually kill the trees they nest in.",
+			"A swimming cormorant sits so low that only its head, neck and back show.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"grey_heron", "common_raven"},
 		Relations: []string{
@@ -1134,6 +1293,17 @@ func rgPuffin() core.Species {
 		Traits: core.Traits{
 			Size: "medium", Shape: "seabird", Primary: "black", Secondary: "white",
 			Marking: "huge banded orange bill on a pale clown face", Bill: "stout", Flight: "whirring",
+		},
+		Nest: rgNest("burrow", []string{"ground", "bank", "ledge"}, 0, 50, rgNestSpringSummer, 0.15,
+			"A burrow dug with bill and feet into the soft turf of a clifftop or slope, or an old rabbit hole, ending in a chamber lined with grass and feathers."),
+		Facts: []string{
+			"A puffin can carry a dozen or more small fish crosswise in its bill.",
+			"Puffins dig burrows in clifftop turf with bill and feet, or take over rabbit holes.",
+			"Each pair lays a single egg, and the chick is called a puffling.",
+			"A puffin beats its wings up to four hundred times a minute.",
+			"Puffin pairs often return to the same burrow year after year.",
+			"Puffins spend the whole winter far out at sea, never coming to land.",
+			"The bright outer plates of a puffin's bill are shed after the breeding season.",
 		},
 		Difficulty: 3,
 		Similar:    []string{"eurasian_oystercatcher"},
@@ -1208,6 +1378,16 @@ func rgRedwing() core.Species {
 			Size: "medium", Shape: "thrush", Primary: "brown", Secondary: "red",
 			Marking: "cream eyebrow and rust-red flanks", Bill: "thin", Flight: "direct",
 		},
+		Nest: rgNoNest("Redwings breed in the birch forests of Scandinavia and Russia and only spend the winter here, so they never nest."),
+		Facts: []string{
+			"Redwings migrate at night, and their thin calls drift down from flocks passing unseen overhead.",
+			"The red is not on the wing at all but on the flanks and under the wing.",
+			"Most redwings breed in Scandinavia and Russia and come south for the winter.",
+			"When snow falls, redwings move on fast, sometimes flying hundreds of kilometres to find open ground.",
+			"Redwings strip hawthorn and holly berries, then turn to worms in the fields.",
+			"The redwing is the smallest true thrush regularly seen in Britain.",
+			"Only a handful of redwing pairs nest in Scotland each year.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"song_thrush"},
 		Relations: []string{
@@ -1277,6 +1457,15 @@ func rgBrambling() core.Species {
 		Traits: core.Traits{
 			Size: "small", Shape: "finch", Primary: "orange", Secondary: "black",
 			Marking: "orange breast and shoulders with a white rump", Bill: "short", Flight: "undulating",
+		},
+		Nest: rgNoNest("Bramblings breed in the birch and conifer forests of the far north and only visit here in winter, so they never nest."),
+		Facts: []string{
+			"Bramblings gather in huge winter flocks wherever beech mast is plentiful.",
+			"Winter roosts in Europe have held millions of bramblings in a single valley.",
+			"In spring the male's head turns glossy black as the brown feather tips wear away.",
+			"Bramblings breed in the birch and conifer forests of Scandinavia and Russia.",
+			"Bramblings often feed among other finches; look for the white rump as a flock flies up.",
+			"Its call is a harsh, nasal wheeze, a good clue in a mixed winter flock.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"common_chaffinch", "hawfinch"},
@@ -1351,6 +1540,16 @@ func rgHawfinch() core.Species {
 			Size: "small", Shape: "finch", Primary: "brown", Secondary: "orange",
 			Marking: "massive steel-grey bill on a bull-necked head", Bill: "stout", Flight: "undulating",
 		},
+		Nest: rgNest("cup_fork", []string{"fork", "branch", "canopy"}, 3, 15, rgNestSpring, 0.15,
+			"A shallow, untidy cup of twigs and lichen on a broad horizontal fork, often high in an old tree."),
+		Facts: []string{
+			"A hawfinch's bill can crush with a force of over forty kilograms, enough to crack cherry stones.",
+			"The scientific name Coccothraustes means 'kernel breaker'.",
+			"Hawfinches are shy and spend most of their time high in the crowns of old trees.",
+			"They feed on the hard seeds of hornbeam, cherry, beech and yew.",
+			"Its loud, explosive 'tzik' call is often the only clue that a hawfinch is about.",
+			"In the autumn of 2017 hawfinches from the continent arrived in record numbers in Britain.",
+		},
 		Difficulty: 5,
 		Similar:    []string{"common_chaffinch", "brambling"},
 		Relations: []string{
@@ -1375,7 +1574,7 @@ func rgSnowBunting() core.Species {
 			"panels that make a flying flock look like blowing snowflakes. On the ground it runs rather than hops. The " +
 			"flight call is a soft, rippling, tinkling 'tirrirrirrip', often followed by a clear descending 'tew'.",
 		Fact: "No songbird nests farther north. Males return to the high Arctic while it is still thirty degrees below " +
-			"freezing to claim the best rock crevices, and feathered legs help keep out the cold.",
+			"freezing to claim the best rock crevices, where the females line their nests thickly with feathers and fur.",
 		Rarity:   core.Common,
 		Regions:  []core.RegionID{core.RegionFrostveil},
 		Habitats: []core.HabitatWeight{rgHab("snow", 0.7), rgHab("alpine", 0.3)},
@@ -1423,6 +1622,16 @@ func rgSnowBunting() core.Species {
 		Traits: core.Traits{
 			Size: "small", Shape: "finch", Primary: "white", Secondary: "buff",
 			Marking: "big white wing panels and a ginger cap", Bill: "short", Flight: "undulating",
+		},
+		Nest: rgNest("ground", []string{"rock", "ledge", "ground"}, 0, 3, rgNestSpringSummer, 0.12,
+			"A bulky cup of moss and grass thickly lined with feathers and hair, deep in a crevice among boulders or scree."),
+		Facts: []string{
+			"Snow buntings breed farther north than almost any other songbird.",
+			"Males return to the Arctic weeks before the females, to claim the best rock crevices.",
+			"Snow buntings nest deep in rock crevices, where the eggs are out of the wind.",
+			"In spring the male turns brilliant black and white as the brown feather tips wear away.",
+			"A flock in flight flashes so much white that it looks like a flurry of snowflakes.",
+			"A few pairs of snow buntings nest high in the Scottish mountains.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"northern_wheatear", "rock_ptarmigan"},
@@ -1496,6 +1705,16 @@ func rgPtarmigan() core.Species {
 			Size: "medium", Shape: "grouse", Primary: "white", Secondary: "black",
 			Marking: "pure white with a black tail and feathered feet", Bill: "short", Flight: "whirring",
 		},
+		Nest: rgNest("scrape", []string{"ground", "rock"}, 0, 0.3, rgNestSpringSummer, 0.2,
+			"A shallow scrape lined with a few leaves and feathers, often beside a rock or under a low shrub on open mountainside."),
+		Facts: []string{
+			"Ptarmigan moult three times a year, white in winter, mottled in summer and grey in autumn.",
+			"Feathered feet work like snowshoes and keep a ptarmigan's toes warm.",
+			"On the coldest nights a ptarmigan burrows into the snow to sleep.",
+			"A ptarmigan trusts its camouflage and often sits still until you are a few steps away.",
+			"The male has a red comb over the eye and a black stripe from bill to eye.",
+			"The hen sits so tight on her eggs that she can almost be touched.",
+		},
 		Difficulty: 4,
 		Similar:    []string{"snowy_owl", "snow_bunting"},
 		Relations: []string{
@@ -1565,6 +1784,15 @@ func rgSnowyOwl() core.Species {
 		Traits: core.Traits{
 			Size: "large", Shape: "owl", Primary: "white", Secondary: "grey",
 			Marking: "lemon-yellow eyes in a round, white, tuftless head", Bill: "hooked", Flight: "flapglide",
+		},
+		Nest: rgNoNest("Snowy owls breed on the Arctic tundra and only wander here in winter, so they never nest."),
+		Facts: []string{
+			"Snowy owls hunt by day as readily as by night, having evolved under the midnight sun.",
+			"Old male snowy owls can be almost pure white, while females are heavily barred.",
+			"A single snowy owl may eat over a thousand lemmings in a year.",
+			"In good lemming years snowy owls lay far more eggs than in poor ones.",
+			"Thick feathers cover even a snowy owl's toes against the Arctic cold.",
+			"In some winters snowy owls wander far south and turn up where none has been seen for decades.",
 		},
 		Difficulty: 5,
 		Similar:    []string{"rock_ptarmigan", "tawny_owl"},

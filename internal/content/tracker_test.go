@@ -36,6 +36,7 @@ func TestEventConstructorsUseTheVocabulary(t *testing.T) {
 		Recorded("mallard", 2, at), Discovered("hide_creek", "hide", at), Collected("page_1", "page", at),
 		CacheOpened("cache_camp", at), Talked("mara"), Returned(), Researched("study", "mallard", "", 0),
 		RareFound("out_of_range", "mallard", at),
+		Foraged("bramble", at), Cooked("mint_tea", "drink", 2), Eaten("mint_tea", "drink"),
 	}
 	seen := map[string]bool{}
 	for _, e := range events {
@@ -49,7 +50,7 @@ func TestEventConstructorsUseTheVocabulary(t *testing.T) {
 			t.Errorf("no constructor produces kind %q", k)
 		}
 	}
-	want := []string{"hear", "observe", "identify", "photo", "record", "discover", "collect", "talk", "return", "research", "rare"}
+	want := []string{"hear", "observe", "identify", "photo", "record", "discover", "collect", "talk", "return", "research", "rare", "forage", "cook", "eat"}
 	got := ObjectiveKinds()
 	sort.Strings(want)
 	sort.Strings(got)

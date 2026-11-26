@@ -25,9 +25,9 @@ var iconVocabulary = toSet(strings.Fields(`
 	cabin tower station camp viewpoint hide landmark npc page relic cache gate`))
 
 var (
-	itemKinds   = toSet([]string{KindEquipment, KindGadget, KindSupply, KindKeepsake})
+	itemKinds   = toSet([]string{KindEquipment, KindGadget, KindSupply, KindKeepsake, KindIngredient, KindFood})
 	itemSources = toSet([]string{"start", "shop", "quest", "loot", "research"})
-	itemUses    = toSet([]string{UseFilm, UseSeed})
+	itemUses    = toSet([]string{UseFilm, UseSeed, UseEat})
 	// The contract's skill ids, discipline by discipline in the spec's order.
 	pinnedSkills = map[string][]string{
 		DiscAcoustics:   {"keen_ears", "sound_direction", "acoustic_memory", "frequency_awareness", "deep_listening", "echo_reading", "natural_recognition"},
@@ -382,17 +382,34 @@ func Validate() []error {
 				// checks assume this never happens.
 				bad("%s: a carried item may not modify capacity", owner)
 			}
-		case KindSupply:
+		case KindSupply, KindIngredient, KindFood:
 			if it.Slot != "" || len(it.Mods) != 0 || len(it.Upgrades) != 0 {
-				bad("%s: a supply has no slot, mods or upgrades", owner)
+				bad("%s: a %s has no slot, mods or upgrades", owner, it.Kind)
 			}
 		}
-		if it.Kind == KindSupply {
-			if it.Stack < 2 || !itemUses[it.Use] {
+		switch it.Kind {
+		case KindSupply:
+			if it.Stack < 2 || !itemUses[it.Use] || it.Use == UseEat {
 				bad("%s: a supply needs a stack size and a use (stack %d, use %q)", owner, it.Stack, it.Use)
 			}
-		} else if it.Stack != 0 || it.Use != "" {
-			bad("%s: only supplies stack or have a use", owner)
+		case KindIngredient, KindFood:
+			if it.Stack < 2 || it.Source == "start" {
+				bad("%s: a %s stacks (stack %d)", owner, it.Kind, it.Stack)
+			}
+			if (it.Kind == KindFood || it.Buff != nil) != (it.Use == UseEat) || (it.Use != "" && it.Use != UseEat) {
+				bad("%s: use %q does not fit its buff", owner, it.Use)
+			}
+		default:
+			if it.Stack != 0 || it.Use != "" {
+				bad("%s: only supplies, ingredients and food stack or have a use", owner)
+			}
+		}
+		if it.Buff != nil || it.Kind == KindFood {
+			if it.Buff == nil {
+				bad("%s: food needs a buff", owner)
+			} else {
+				validateBuff(owner, it, wire, bad)
+			}
 		}
 
 		if it.Tier == 4 {
@@ -407,7 +424,7 @@ func Validate() []error {
 				bad("%s: tier 4 but not one of the six pinned unique items", owner)
 			}
 		}
-		if it.Price > 0 && it.Kind != KindSupply && it.ReqRank < it.Tier-1 {
+		if it.Price > 0 && !stackable(it) && it.ReqRank < it.Tier-1 {
 			bad("%s: tier %d sold below rank %d", owner, it.Tier, it.Tier-1)
 		}
 
@@ -441,9 +458,16 @@ func Validate() []error {
 			}
 		}
 	}
-	if n := len(items); n < 36 || n > 44 {
-		bad("items: catalog has %d items, want 36–44", n)
+	kit := 0
+	for i := range items {
+		if items[i].Kind != KindIngredient && items[i].Kind != KindFood {
+			kit++
+		}
 	}
+	if kit < 36 || kit > 44 {
+		bad("items: catalog has %d items besides ingredients and food, want 36–44", kit)
+	}
+	validateLarderItems(bad)
 	for _, id := range pinnedItems {
 		if !itemIDs[id] {
 			bad("item %q (pinned) is missing", id)
@@ -504,4 +528,96 @@ func modSignature(m map[string]float32) string {
 		fmt.Fprintf(&b, "%s=%g;", k, m[k])
 	}
 	return b.String()
+}
+
+// forbiddenBuffStats are never touched by food: the pack size the pack-room checks
+// rely on, and the economy (spec §22: no credits or XP for eating).
+var forbiddenBuffStats = toSet([]string{"capacity", "xpMult", "creditMult", "discount", "filmCap"})
+
+// validateBuff checks one item's BuffDef: a real slot with a fitting duration, a few
+// modest, wholly beneficial modifiers on real stats, and the player-facing text.
+func validateBuff(owner string, it *proto.ItemDef, wire map[string]float64, bad func(string, ...any)) {
+	b := it.Buff
+	if !containsString(buffSlots, b.Slot) {
+		bad("%s: buff slot %q", owner, b.Slot)
+	}
+	// Hours: drinks 2–3, snacks 2–4, meals 4–6; raw edibles a short hour.
+	lo, hi := float32(0.5), float32(1.5)
+	if it.Kind == KindFood {
+		switch b.Slot {
+		case SlotDrink:
+			lo, hi = 2, 3
+		case SlotSnack:
+			lo, hi = 2, 4
+		case SlotMeal:
+			lo, hi = 4, 6
+		}
+		if want := foodSlots[it.ID]; want != "" && want != b.Slot {
+			bad("%s: buff slot %q, want %q", owner, b.Slot, want)
+		}
+	} else if b.Slot != SlotSnack {
+		bad("%s: a raw edible is a snack, not a %s", owner, b.Slot)
+	}
+	if b.Hours < lo || b.Hours > hi {
+		bad("%s: buff lasts %g hours, want %g–%g", owner, b.Hours, lo, hi)
+	}
+	if len(b.Mods) == 0 || len(b.Mods) > 4 {
+		bad("%s: buff has %d modifiers, want 1–4", owner, len(b.Mods))
+	}
+	for k, v := range b.Mods {
+		if _, ok := wire[k]; !ok {
+			bad("%s: buff modifier key %q is not a core.Stats JSON name", owner, k)
+			continue
+		}
+		switch {
+		case forbiddenBuffStats[k]:
+			bad("%s: food may not modify %s", owner, k)
+		case v == 0 || math.IsNaN(float64(v)) || math.IsInf(float64(v), 0):
+			bad("%s: buff modifier %q has a useless value %v", owner, k, v)
+		case IsTradeoff(k, v):
+			bad("%s: buff modifier %q = %v makes things worse (food never punishes)", owner, k, v)
+		}
+		if l, ok := statLimits[k]; ok && math.Abs(float64(v)) > 0.25*(l[1]-l[0]) {
+			bad("%s: buff modifier %q = %v is not modest (over a quarter of its range)", owner, k, v)
+		}
+	}
+	if strings.TrimSpace(b.Text) == "" {
+		bad("%s: buff has no text", owner)
+	}
+}
+
+// validateLarderItems checks the pinned larder item ids: 19 foraged ingredients
+// that are never sold, three priced pantry staples, and 19 foods that are never sold.
+func validateLarderItems(bad func(string, ...any)) {
+	check := func(id, kind string, sold bool) {
+		it := itemIndex[id]
+		switch {
+		case it == nil:
+			bad("item %q (pinned) is missing", id)
+		case it.Kind != kind:
+			bad("item %s: kind %q, want %q", id, it.Kind, kind)
+		case sold != (it.Price > 0):
+			bad("item %s: price %d, sold=%v expected", id, it.Price, sold)
+		}
+		if it != nil && it.Kind == KindIngredient && sold == false && it.Source != "loot" {
+			bad("item %s: foraged ingredients have source loot", id)
+		}
+	}
+	for _, id := range foragedIngredients {
+		check(id, KindIngredient, false)
+	}
+	for _, id := range pantryIngredients {
+		check(id, KindIngredient, true)
+	}
+	for _, id := range foodItems {
+		check(id, KindFood, false)
+		if it := itemIndex[id]; it != nil && it.Buff == nil {
+			bad("item %s: food without a buff", id)
+		}
+	}
+	for _, id := range startingRecipes {
+		if it := itemIndex[id]; it == nil || it.Kind != KindFood {
+			bad("starting recipe %q makes no food item", id)
+		}
+	}
 }

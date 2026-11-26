@@ -56,8 +56,9 @@ type Sim struct {
 	service  int       // round-robin cursor over cellList
 	forced   []forced  // vagrants placed to honour the autumn guarantee
 
-	events  []core.EcoEvent
-	scratch []core.Perch
+	events   []core.EcoEvent
+	scratch  []core.Perch
+	nestUsed []int32 // scratch: perches taken by nests while a cell's nests are built
 
 	lures   []lure
 	lureSeq uint32
@@ -162,6 +163,7 @@ func (s *Sim) Step(dt float32, env core.Env, obs core.Observer) []core.EcoEvent 
 		}
 	}
 	s.tickLures(dt)
+	s.nestWatch(dt)
 
 	far2 := float32(farRadius * farRadius)
 	sub := s.tick % farEvery
@@ -499,7 +501,3 @@ func (s *Sim) setObserver(o core.Observer) {
 	}
 	s.oDecay = fearDecay * stillBonus * s.obs.Settle
 }
-
-// Nests appends every nest within radius of center to buf.
-// STUB: replaced by the nests task (docs/contract.md §10).
-func (s *Sim) Nests(center core.Vec3, radius float32, buf []core.Nest) []core.Nest { return buf }

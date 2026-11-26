@@ -158,6 +158,21 @@ func ghDrum(strikes int, hz, firstGap, lastGap float32) []core.Note {
 	return out
 }
 
+// When nests are active (spring, summer, autumn, winter). Single-brooded birds nest
+// in spring only; birds that raise a second brood, or whose chicks are still in the
+// nest at midsummer, are active through spring and summer.
+var (
+	ghNestSpring       = [4]bool{true, false, false, false}
+	ghNestSpringSummer = [4]bool{true, true, false, false}
+)
+
+// ghNest describes a species' real nest: the site type, the perch kinds it is built
+// on (most typical first), its height above the ground or water in metres, when it
+// is active, its outer diameter in metres and one field-guide sentence.
+func ghNest(site string, perches []string, hmin, hmax float32, seasons [4]bool, size float32, desc string) core.NestInfo {
+	return core.NestInfo{Site: site, Perches: perches, HeightMin: hmin, HeightMax: hmax, Seasons: seasons, Size: size, Desc: desc}
+}
+
 // ghCall assembles a vocalization. A bout is repMin..repMax phrases, gap seconds apart.
 func ghCall(kind, pitch, pattern string, loud float32, repMin, repMax int, gap float32, notes []core.Note) core.Call {
 	return core.Call{
@@ -239,6 +254,17 @@ func ghRobin() core.Species {
 			Size: "small", Shape: "songbird", Primary: "brown", Secondary: "orange",
 			Marking: "orange-red face and breast", Bill: "thin", Flight: "darting",
 		},
+		Nest: ghNest("cup_shrub", []string{"shrub", "bank", "ground", "trunk"}, 0, 3, ghNestSpringSummer, 0.12,
+			"A cup of moss and dead leaves lined with hair, tucked into a hollow in a bank, among ivy or the roots of a tree, rarely more than a couple of metres up."),
+		Facts: []string{
+			"Robins sing almost all year, and in autumn and winter the females sing too, each defending her own territory.",
+			"A male robin will attack a tuft of red feathers on a stick, because a red breast means a rival.",
+			"Robins often sing at night under street lamps, and are then mistaken for nightingales.",
+			"Young robins have no red breast at all: they are speckled brown until their first moult.",
+			"Robins have nested in old kettles, coat pockets and the engines of parked tractors.",
+			"Robins can sense the Earth's magnetic field, and migrating robins use it as a compass.",
+			"Victorian postmen wore red coats and were nicknamed robins, which is how the bird got onto Christmas cards.",
+		},
 		Difficulty: 1,
 		Similar:    []string{"common_chaffinch"},
 		Relations: []string{
@@ -306,6 +332,17 @@ func ghBlueTit() core.Species {
 		Traits: core.Traits{
 			Size: "tiny", Shape: "tit", Primary: "blue", Secondary: "yellow",
 			Marking: "blue cap, white face with a dark eye-stripe", Bill: "short", Flight: "whirring",
+		},
+		Nest: ghNest("cavity", []string{"cavity"}, 1, 8, ghNestSpring, 0.1,
+			"A soft cup of moss, hair and feathers inside a small tree hole or nest box, the entrance barely wider than a coin."),
+		Facts: []string{
+			"Blue tits lay some of the biggest clutches of any songbird, often ten eggs or more.",
+			"At the peak, a pair of blue tits can make several hundred feeding trips to the nest in one day.",
+			"The blue cap reflects ultraviolet light, which birds can see and we cannot.",
+			"In the 1920s British blue tits learned to peck through the foil tops of milk bottles to reach the cream.",
+			"On Corsica, blue tits tuck sprigs of lavender and mint into the nest, which seems to help keep parasites down.",
+			"Blue tits hang upside down from the thinnest twigs to pick insects from under leaves and buds.",
+			"The whole brood leaves the nest within a day or so, about three weeks after hatching.",
 		},
 		Difficulty: 1,
 		Similar:    []string{"great_tit", "long_tailed_tit"},
@@ -376,6 +413,16 @@ func ghGreatTit() core.Species {
 			Size: "small", Shape: "tit", Primary: "yellow", Secondary: "black",
 			Marking: "black stripe down a yellow belly, white cheeks", Bill: "short", Flight: "undulating",
 		},
+		Nest: ghNest("cavity", []string{"cavity"}, 1, 6, ghNestSpring, 0.12,
+			"A thick pad of moss lined with hair and wool, in a tree hole, an old woodpecker hole or a nest box."),
+		Facts: []string{
+			"Great tits time their nesting to the peak of oak caterpillars, and warmer springs have moved both earlier.",
+			"The great tits of Wytham Woods near Oxford have been studied every single year since 1947.",
+			"In some Hungarian caves, great tits hunt hibernating bats when other food is hard to find.",
+			"Great tits learn by watching one another, and a new trick can spread through a whole wood.",
+			"The black stripe down the belly is broad in males and narrow, often broken, in females.",
+			"Its ringing 'teacher, teacher' is one of the first songs of the year, often heard on mild January days.",
+		},
 		Difficulty: 1,
 		Similar:    []string{"blue_tit"},
 		Relations: []string{
@@ -444,6 +491,17 @@ func ghBlackbird() core.Species {
 		Traits: core.Traits{
 			Size: "medium", Shape: "thrush", Primary: "black", Secondary: "yellow",
 			Marking: "orange-yellow bill and eye-ring", Bill: "thin", Flight: "direct",
+		},
+		Nest: ghNest("cup_shrub", []string{"shrub", "fork", "trunk"}, 0.5, 5, ghNestSpringSummer, 0.2,
+			"A sturdy cup of grass and twigs plastered inside with mud and lined with fine grass, in a thick bush, a hedge or against ivy on a trunk."),
+		Facts: []string{
+			"Blackbirds were shy forest birds until about two hundred years ago, when they moved into towns and gardens.",
+			"Only the male blackbird is black; the female is dark brown with a faintly streaked throat.",
+			"The female builds the nest alone: a cup of grass plastered inside with mud.",
+			"Blackbirds sunbathe by spreading their wings and tail on warm ground, looking almost collapsed.",
+			"Many blackbirds from Scandinavia cross the North Sea to spend the winter in Britain.",
+			"The loud 'chink-chink' of blackbirds at dusk is them settling to roost, and often scolding a cat or an owl.",
+			"A blackbird can raise three broods in one summer if the worms hold out.",
 		},
 		Difficulty: 1,
 		Similar:    []string{"song_thrush", "ring_ouzel", "golden_oriole"},
@@ -523,6 +581,17 @@ func ghWren() core.Species {
 			Size: "tiny", Shape: "songbird", Primary: "brown", Secondary: "buff",
 			Marking: "short cocked tail, fine dark barring", Bill: "thin", Flight: "whirring",
 		},
+		Nest: ghNest("dome", []string{"shrub", "bank", "ground"}, 0, 3, ghNestSpringSummer, 0.12,
+			"A domed ball of moss, leaves and grass with a small side entrance, hidden among roots, ivy or a tangle of bramble close to the ground."),
+		Facts: []string{
+			"A wren weighs about as much as a pound coin, yet has one of the loudest songs for its size.",
+			"Its scientific name, Troglodytes, means cave-dweller, after its habit of creeping into holes and crevices.",
+			"A male wren builds up to half a dozen domed nests and then shows the female round them.",
+			"More than sixty wrens have been found huddled together in one nest box on a freezing night.",
+			"Folk tales make the wren king of the birds: it hid on an eagle's back and flew higher still.",
+			"Wrens are among Britain's commonest birds, yet a long, hard winter can kill a large share of them.",
+			"Wrens creep like mice among roots and stones, hunting spiders in the darkest, dampest tangles.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"eurasian_treecreeper", "goldcrest", "eurasian_reed_warbler"},
 		Relations: []string{
@@ -599,6 +668,16 @@ func ghChaffinch() core.Species {
 			Size: "small", Shape: "finch", Primary: "pink", Secondary: "grey",
 			Marking: "double white wing-bars, blue-grey cap", Bill: "stout", Flight: "undulating",
 		},
+		Nest: ghNest("cup_fork", []string{"fork", "shrub", "branch"}, 1, 10, ghNestSpring, 0.1,
+			"A neat, deep cup of moss and grass bound with spider silk and decorated outside with lichen, set in a fork of a tree or a bush."),
+		Facts: []string{
+			"Chaffinches sing in regional dialects, learned from their neighbours in their first spring.",
+			"A young chaffinch that never hears an adult sing grows up to sing only a simple, unfinished song.",
+			"The female decorates her nest with lichen and cobwebs, so it melts into the bark.",
+			"Chaffinches feed their chicks almost entirely on caterpillars, not the seeds the adults live on.",
+			"The chaffinch is one of Europe's most numerous birds, with well over a hundred million pairs.",
+			"Linnaeus named it coelebs, the bachelor, because mainly males stayed in Sweden through the winter.",
+		},
 		Difficulty: 1,
 		Similar:    []string{"brambling", "hawfinch", "european_robin"},
 		Relations: []string{
@@ -665,6 +744,17 @@ func ghGreatSpottedWoodpecker() core.Species {
 		Traits: core.Traits{
 			Size: "medium", Shape: "woodpecker", Primary: "black", Secondary: "white",
 			Marking: "white shoulder patches, crimson under the tail", Bill: "chisel", Flight: "undulating",
+		},
+		Nest: ghNest("cavity", []string{"cavity"}, 3, 9, ghNestSpring, 0.14,
+			"A fresh hole chiselled into a trunk or a thick dead limb, the floor bare except for a few wood chips."),
+		Facts: []string{
+			"Drumming is the woodpecker's song: a fast roll on a resonant dead branch that says 'this is my wood'.",
+			"A woodpecker's tongue is so long that it wraps round the back of its skull when pulled in.",
+			"It wedges pine cones into a bark crevice, its anvil, to hammer out the seeds.",
+			"Stiff tail feathers act as a prop, bracing the bird against the trunk as it hammers.",
+			"Young great spotted woodpeckers have an all-red crown, which fools many people into thinking they are another species.",
+			"A pair takes two or three weeks to chisel out a new nest hole.",
+			"In spring it sometimes breaks into nest boxes to take the chicks of tits.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"eurasian_nuthatch"},
@@ -734,6 +824,16 @@ func ghJay() core.Species {
 			Size: "medium", Shape: "corvid", Primary: "pink", Secondary: "black",
 			Marking: "blue-barred wing patch, white rump", Bill: "stout", Flight: "buoyant",
 		},
+		Nest: ghNest("cup_fork", []string{"fork", "canopy", "shrub"}, 2, 8, ghNestSpring, 0.3,
+			"A loose platform of twigs around a neat cup of rootlets, hidden in a fork among dense foliage or ivy."),
+		Facts: []string{
+			"A single jay may bury several thousand acorns in autumn and find most of them again.",
+			"A jay can carry several acorns at once, stowed in its throat and its bill.",
+			"Jays carry acorns far from the parent trees, and the forgotten ones grow into new oaks.",
+			"Jays sometimes squat on ants' nests with wings spread, letting the ants crawl through their feathers.",
+			"Jays are fine mimics and can copy the calls of hawks and owls.",
+			"A male jay brings his mate tit-bits, and seems to choose the food she currently craves.",
+		},
 		Difficulty: 3,
 		Similar:    []string{},
 		Relations: []string{
@@ -799,6 +899,16 @@ func ghNuthatch() core.Species {
 			Size: "small", Shape: "songbird", Primary: "grey", Secondary: "buff",
 			Marking: "long black eye-stripe", Bill: "dagger", Flight: "direct",
 		},
+		Nest: ghNest("cavity", []string{"cavity"}, 2, 9, ghNestSpring, 0.12,
+			"An old woodpecker hole whose entrance the female plasters with mud until it fits her exactly, lined with loose flakes of bark."),
+		Facts: []string{
+			"The nuthatch is the only bird in Britain that regularly climbs down trees head first.",
+			"It plasters mud round its nest hole until the entrance fits a nuthatch and nothing bigger.",
+			"Its name means 'nut hacker': it wedges a nut into the bark and hammers it open.",
+			"Nuthatches line the nest with flakes of pine bark rather than moss or feathers.",
+			"In autumn it hides seeds in bark crevices and covers them with moss or lichen.",
+			"Strong feet and a long hind claw let a nuthatch hang upside down from bark.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"eurasian_treecreeper", "great_spotted_woodpecker"},
 		Relations: []string{
@@ -863,6 +973,16 @@ func ghTreecreeper() core.Species {
 		Traits: core.Traits{
 			Size: "small", Shape: "treecreeper", Primary: "brown", Secondary: "white",
 			Marking: "bark-mottled back, silky white underparts", Bill: "long curved", Flight: "undulating",
+		},
+		Nest: ghNest("cavity", []string{"trunk", "cavity"}, 0.5, 5, ghNestSpring, 0.1,
+			"A loose cup of twigs, moss and feathers wedged behind a flap of loose bark or in a crack in a trunk."),
+		Facts: []string{
+			"A treecreeper spirals up a trunk, then flutters down to the foot of the next tree and starts again.",
+			"Its stiff, pointed tail feathers work like a third leg, propping it against the bark.",
+			"On cold nights treecreepers roost in hollows they scrape into the soft bark of giant redwoods.",
+			"It usually nests behind a loose flap of bark or in a crack in a trunk.",
+			"The thin, curved bill probes crevices for spiders and insect eggs too small for woodpeckers.",
+			"In bitter weather several treecreepers may huddle together in one roosting hollow.",
 		},
 		Difficulty: 4,
 		Similar:    []string{"eurasian_nuthatch", "eurasian_wren"},
@@ -932,6 +1052,17 @@ func ghTawnyOwl() core.Species {
 			Size: "medium", Shape: "owl", Primary: "brown", Secondary: "buff",
 			Marking: "round head, dark eyes in a plain face", Bill: "hooked", Flight: "flapglide",
 		},
+		Nest: ghNest("cavity", []string{"cavity", "fork"}, 3, 9, ghNestSpring, 0.35,
+			"No nest material at all: the eggs lie on the floor of a large tree hole, an old crow's nest or a deep fork."),
+		Facts: []string{
+			"'Tu-whit, tu-whoo' is really two owls: the female calls 'ke-wick' and the male answers with his hoot.",
+			"A tawny owl's eyes are fixed in its skull, so it turns its whole head, up to about 270 degrees.",
+			"Soft, fringed edges on its flight feathers make a tawny owl's flight almost silent.",
+			"Once settled, a tawny owl never leaves its territory; young owls that find none often starve.",
+			"The female tawny owl is larger and heavier than the male, as in most birds of prey.",
+			"Tawny owls cough up pellets of fur and bone that show exactly what they have eaten.",
+			"Tawny owls nest in tree holes, old crows' nests and even chimneys.",
+		},
 		Difficulty: 4,
 		Similar:    []string{"common_buzzard", "snowy_owl"},
 		Relations: []string{
@@ -996,6 +1127,16 @@ func ghBuzzard() core.Species {
 		Traits: core.Traits{
 			Size: "large", Shape: "raptor", Primary: "brown", Secondary: "white",
 			Marking: "pale crescent across the breast", Bill: "hooked", Flight: "soaring",
+		},
+		Nest: ghNest("platform", []string{"fork", "canopy"}, 6, 20, ghNestSpringSummer, 0.9,
+			"A bulky platform of sticks in a high fork against the trunk, decorated with fresh green sprigs throughout the season."),
+		Facts: []string{
+			"The buzzard is now the commonest bird of prey in Britain, after a remarkable recovery.",
+			"Buzzards keep adding fresh green sprigs to the nest while the chicks grow, perhaps to keep it clean.",
+			"After rain buzzards often walk across fields picking up earthworms, like big brown chickens.",
+			"Buzzard plumage ranges from almost white to dark chocolate, so no two look quite alike.",
+			"Other woodland birds mimic its mewing call so well that not every 'buzzard' in the wood is one.",
+			"Buzzards often use the same territory for many years and rebuild old nests.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"golden_eagle", "western_marsh_harrier", "common_raven", "tawny_owl"},
@@ -1075,6 +1216,16 @@ func ghSongThrush() core.Species {
 			Size: "medium", Shape: "thrush", Primary: "brown", Secondary: "buff",
 			Marking: "dark arrowhead spots on a cream breast", Bill: "thin", Flight: "direct",
 		},
+		Nest: ghNest("cup_shrub", []string{"shrub", "fork"}, 0.5, 4, ghNestSpringSummer, 0.16,
+			"A cup of grass and moss lined with a smooth, hard layer of mud and wood pulp, in a dense bush, hedge or low fork."),
+		Facts: []string{
+			"The song thrush uses a favourite stone as an anvil to smash open snail shells.",
+			"It repeats each phrase two or three times, the quickest way to know its song.",
+			"The nest is lined with a smooth, hard shell of mud and wood pulp, with no soft lining at all.",
+			"Its eggs are a startling sky blue with a few black spots.",
+			"Robert Browning wrote of the wise thrush that sings each song twice over.",
+			"A song thrush may have more than a hundred different phrases in its repertoire.",
+		},
 		Difficulty: 2,
 		Similar:    []string{"redwing", "common_blackbird"},
 		Relations: []string{
@@ -1144,6 +1295,16 @@ func ghGoldcrest() core.Species {
 			Size: "tiny", Shape: "warbler", Primary: "green", Secondary: "yellow",
 			Marking: "yellow crown-stripe edged with black", Bill: "thin", Flight: "whirring",
 		},
+		Nest: ghNest("pendant", []string{"branch", "canopy"}, 2, 12, ghNestSpringSummer, 0.09,
+			"A deep, thick-walled cup of moss, lichen and spider silk slung like a hammock beneath the tip of a conifer branch."),
+		Facts: []string{
+			"The goldcrest is Europe's smallest bird, weighing about five grams, the same as a twenty-pence coin.",
+			"Old folk tales said goldcrests crossed the North Sea riding on the backs of woodcocks.",
+			"Despite weighing so little, many goldcrests fly across the North Sea every autumn.",
+			"In winter a goldcrest must feed almost every daylight minute to survive the night.",
+			"When excited, the male raises his crest to show a hidden flame of orange.",
+			"Its song is pitched so high that many older people can no longer hear it.",
+		},
 		Difficulty: 3,
 		Similar:    []string{"common_chiffchaff", "eurasian_wren"},
 		Relations: []string{
@@ -1211,6 +1372,16 @@ func ghLongTailedTit() core.Species {
 		Traits: core.Traits{
 			Size: "tiny", Shape: "tit", Primary: "white", Secondary: "black",
 			Marking: "tail longer than its body, pink shoulders", Bill: "short", Flight: "undulating",
+		},
+		Nest: ghNest("dome", []string{"shrub", "fork"}, 0.5, 4, ghNestSpring, 0.12,
+			"A stretchy oval dome of moss and spider silk with a side entrance, covered in flakes of lichen and lined with well over a thousand feathers."),
+		Facts: []string{
+			"A long-tailed tit's nest can hold more than two thousand feathers, gathered one at a time.",
+			"The nest is a stretchy dome of moss and cobwebs that grows as the chicks grow.",
+			"The tail is longer than the body, so a sitting bird folds it up over its back.",
+			"Adults whose own nest has failed often help to feed the chicks of their relatives.",
+			"On cold nights the whole flock roosts in a tight row on a branch, sharing warmth.",
+			"Long-tailed tits are not true tits at all, but belong to a family of their own.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"blue_tit"},
@@ -1283,6 +1454,16 @@ func ghBlackcap() core.Species {
 			Size: "small", Shape: "warbler", Primary: "grey", Secondary: "black",
 			Marking: "neat black cap", Bill: "thin", Flight: "darting",
 		},
+		Nest: ghNest("cup_shrub", []string{"shrub"}, 0.3, 2, ghNestSpringSummer, 0.09,
+			"A flimsy, neat cup of grass and roots slung low in bramble, nettles or a bush."),
+		Facts: []string{
+			"Some blackcaps from Germany now winter in Britain instead of Spain, a new migration route that evolved in decades.",
+			"The male wears a black cap; the female's cap is chestnut brown.",
+			"Its rich, fluting song earned the blackcap the nickname 'northern nightingale'.",
+			"Blackcaps wipe sticky mistletoe seeds off their bills onto branches, planting new mistletoe.",
+			"The male builds several flimsy trial nests, and the female may finish one or build her own.",
+			"Its alarm call is a hard 'tac', like two pebbles knocked together.",
+		},
 		Difficulty: 3,
 		Similar:    []string{"common_chiffchaff", "eurasian_reed_warbler"},
 		Relations: []string{
@@ -1343,6 +1524,17 @@ func ghChiffchaff() core.Species {
 		Traits: core.Traits{
 			Size: "tiny", Shape: "warbler", Primary: "green", Secondary: "buff",
 			Marking: "faint pale eyebrow, dark legs", Bill: "thin", Flight: "darting",
+		},
+		Nest: ghNest("dome", []string{"ground", "shrub"}, 0, 1, ghNestSpringSummer, 0.1,
+			"A small domed nest of leaves and grass with a side entrance, on or just above the ground in brambles or tall vegetation."),
+		Facts: []string{
+			"The chiffchaff is named after its song, in English and in many other languages.",
+			"It is often the first summer visitor back, singing in bare woods in March.",
+			"Its nest is a little dome with a side entrance, hidden close to the ground.",
+			"Weighing about eight grams, a chiffchaff flies to the Mediterranean or West Africa and back each year.",
+			"Chiffchaffs and willow warblers look almost identical; even experts often tell them apart by song.",
+			"Chiffchaffs dip their tails constantly as they feed, a useful clue to their identity.",
+			"More and more chiffchaffs now spend the winter in Britain, often near water.",
 		},
 		Difficulty: 3,
 		Similar:    []string{"eurasian_blackcap", "goldcrest", "eurasian_reed_warbler"},
@@ -1408,6 +1600,16 @@ func ghGreyWagtail() core.Species {
 		Traits: core.Traits{
 			Size: "small", Shape: "wagtail", Primary: "grey", Secondary: "yellow",
 			Marking: "lemon-yellow under a very long tail", Bill: "thin", Flight: "undulating",
+		},
+		Nest: ghNest("ledge", []string{"bank", "rock", "structure", "shore"}, 0, 3, ghNestSpringSummer, 0.12,
+			"A cup of moss and roots lined with hair, on a ledge or in a crevice of a stream bank, a wall or a bridge, close above running water."),
+		Facts: []string{
+			"Despite its name, the grey wagtail's most striking colour is the lemon yellow under its tail.",
+			"It has the longest tail of any wagtail in Europe.",
+			"Its sharp, metallic call cuts through the rush of a fast stream.",
+			"Grey wagtails often nest under bridges or in old walls right beside the water.",
+			"In the breeding season the male grows a black throat.",
+			"It feeds on mayflies, stoneflies and midges that hatch from fast, clean streams.",
 		},
 		Difficulty: 2,
 		Similar:    []string{"northern_wheatear"},
@@ -1476,6 +1678,17 @@ func ghKingfisher() core.Species {
 			Size: "small", Shape: "kingfisher", Primary: "blue", Secondary: "orange",
 			Marking: "electric-blue stripe down the back", Bill: "dagger", Flight: "direct",
 		},
+		Nest: ghNest("burrow", []string{"bank"}, 0.5, 3, ghNestSpringSummer, 0.12,
+			"A tunnel up to a metre long dug into a steep earth bank above water, ending in a chamber littered with fish bones."),
+		Facts: []string{
+			"A kingfisher's blue is not pigment: microscopic structures in the feathers scatter blue light.",
+			"Kingfishers dig nest tunnels up to a metre long into steep earth banks.",
+			"The nest chamber has no lining and soon fills with fish bones and droppings.",
+			"The nose of Japan's bullet train was reshaped after the kingfisher's bill, to make it quieter.",
+			"A kingfisher beats its catch against a branch, then swallows it head first.",
+			"In Greek legend the halcyon days were calm days when the kingfisher nested on the sea.",
+			"Hard winters that freeze the water can kill a large share of kingfishers.",
+		},
 		Difficulty: 4,
 		Similar:    []string{},
 		Relations: []string{
@@ -1543,6 +1756,16 @@ func ghGoldenOriole() core.Species {
 		Traits: core.Traits{
 			Size: "medium", Shape: "thrush", Primary: "yellow", Secondary: "black",
 			Marking: "golden body with black wings", Bill: "stout", Flight: "undulating",
+		},
+		Nest: ghNest("cup_fork", []string{"fork", "branch", "canopy"}, 4, 15, ghNestSpringSummer, 0.12,
+			"A hammock of grass and bark strips woven between the arms of a thin horizontal fork, high in a tall tree."),
+		Facts: []string{
+			"The oriole's nest is a hammock woven from grass and bark, slung between the arms of a thin fork.",
+			"Despite his brilliant yellow, a male oriole is remarkably hard to spot among sunlit leaves.",
+			"Golden orioles spend the winter in Africa, south of the Sahara.",
+			"Orioles eat large caterpillars, including hairy ones that most birds avoid.",
+			"Females and young orioles are greenish, a camouflage that suits the leafy canopy.",
+			"It is one of the last summer visitors to arrive, often not until May.",
 		},
 		Difficulty: 5,
 		Similar:    []string{"common_blackbird"},

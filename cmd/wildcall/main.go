@@ -86,6 +86,9 @@ func run(start time.Time, addr, seed, saveDir string, dayLen float32, dev, open,
 		return err
 	}
 	logf("[%s] world ready: seed %d, %d birds active", since(), sess.Seed(), sess.Sim().Count())
+	for _, e := range game.ValidateCatalogs(sess.HomePOIIDs()) {
+		logf("catalog: %v", e)
+	}
 
 	runner := game.NewRunner(sess)
 	srv := server.New(server.Options{Runner: runner, Dev: dev, WebDir: findWebDir(), Logf: logf})

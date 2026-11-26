@@ -481,6 +481,7 @@ func (s *Session) afterChange() {
 	if added := s.tracker.Sync(s.p); len(added) > 0 {
 		s.changed()
 	}
+	s.syncLoreRecipes()
 }
 
 // giveItems adds items to the player (backpack, overflowing into storage), equips

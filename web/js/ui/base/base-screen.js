@@ -12,7 +12,25 @@ import { renderJournal, renderPhotos, renderStorage, renderUpgrades, renderRest,
 const RENDERERS = {
   research: renderResearch, equipment: renderEquipment, journal: renderJournal,
   photos: renderPhotos, storage: renderStorage, upgrades: renderUpgrades, rest: renderRest,
+  kitchen: renderKitchen,
 };
+
+/**
+ * c-field hook: the Kitchen station. The cooking itself happens on the 'cook' screen
+ * (web/js/forage/cook.js); the station invites the player there with a short summary.
+ */
+function renderKitchen(api) {
+  const { ctx, profile } = api;
+  const recipes = ctx.state.welcome?.recipes || [];
+  const known = recipes.filter((r) => (profile?.recipes || []).includes(r.id));
+  const food = (profile?.inventory || []).filter((s) => ctx.state.items?.[s.item]?.kind === 'ingredient' || ctx.state.items?.[s.item]?.kind === 'food');
+  const open = () => { api.snd('open'); ctx.forage?.openCook ? ctx.forage.openCook('cabin') : ctx.ui.open('cook', { at: 'cabin' }); };
+  return el('div', { class: 'base-station base-kitchen' },
+    el('h3', { class: 'base-station-title' }, icon('camp', 18), 'Kitchen'),
+    el('p', { class: 'base-muted' }, 'A kettle on the hook and the old iron stove. Teas and cordials go in the kettle; tarts, flatbreads and trail mix need the stove.'),
+    el('p', `${known.length} of ${recipes.length} recipes known · ${food.reduce((n, s) => n + (s.qty | 0), 0)} ingredients and food in your pack.`),
+    button('Cook something', { variant: 'primary', icon: 'camp', disabled: !ctx.ui.has('cook'), onClick: open }));
+}
 
 export function createBaseScreen(ctx) {
   const { state, bus } = ctx;

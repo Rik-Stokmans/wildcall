@@ -121,6 +121,7 @@ export const FILTERS = [
   { id: 'gadgets', label: 'Gadgets' },
   { id: 'supplies', label: 'Supplies' },
   { id: 'keepsakes', label: 'Keepsakes' },
+  { id: 'larder', label: 'Food' }, // c-field: foraged ingredients, pantry staples and cooked food
 ];
 export const SORTS = [
   { id: 'name', label: 'Name' },
@@ -128,8 +129,8 @@ export const SORTS = [
   { id: 'tier', label: 'Tier' },
   { id: 'type', label: 'Type' },
 ];
-const KIND_FILTER = { equipment: 'equipment', gadget: 'gadgets', supply: 'supplies', keepsake: 'keepsakes' };
-const KIND_ORDER = { equipment: 0, gadget: 1, supply: 2, keepsake: 3 };
+const KIND_FILTER = { equipment: 'equipment', gadget: 'gadgets', supply: 'supplies', keepsake: 'keepsakes', ingredient: 'larder', food: 'larder' };
+const KIND_ORDER = { equipment: 0, gadget: 1, supply: 2, keepsake: 3, food: 4, ingredient: 5 };
 
 /** Filter id an item belongs to ('equipment' | 'gadgets' | 'supplies' | 'keepsakes'). */
 export function itemCategory(def) {
@@ -173,9 +174,17 @@ export function canEquip(def) {
   return !!def && def.kind === 'equipment' && !!def.slot;
 }
 
-/** Can a supply be used from the menu? */
+/** Can a supply be used from the menu? Food and edible ingredients (use "eat") too (c-field). */
 export function canUse(def) {
-  return !!def && def.kind === 'supply' && !!def.use;
+  if (!def || !def.use) return false;
+  if (def.kind === 'supply') return true;
+  return def.use === 'eat' && (def.kind === 'food' || def.kind === 'ingredient');
+}
+
+/** The button label for using an item from the pack (c-field: drinks are drunk). */
+export function useLabel(def) {
+  if (def?.use === 'eat') return def.buff?.slot === 'drink' ? 'Drink' : 'Eat';
+  return def?.use === 'film' ? 'Load film' : def?.use === 'seed' ? 'Scatter seed' : 'Use';
 }
 
 /* ------------------------------------------------------------- comparisons */

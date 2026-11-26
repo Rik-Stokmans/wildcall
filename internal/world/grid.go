@@ -42,6 +42,7 @@ type gvert struct {
 	conifer float32
 	rock    float32 // 0..1 rocky outcrop / scree
 	trail   float32 // 0..1 visible trail tread
+	htrail  float32 // 0..1 hidden trail tread
 	keep    float32 // 0..1 keep vegetation away (trail verges, pads, glades)
 	pond    float32 // 0..1 inside a carved pond's rim
 	meadow  float32 // home dressing weights
@@ -134,7 +135,7 @@ func (w *World) fillVertex(v *gvert, x, z, h, dx, dz float64, s *sample, r *ovRe
 		v.flags |= vfIce
 	}
 	v.clear, v.thicket, v.conifer, v.rock = float32(s.clear), float32(s.thicket), float32(s.conifer), float32(s.rock)
-	v.trail, v.keep, v.pond = float32(r.trail), float32(r.clear), float32(r.pond)
+	v.trail, v.htrail, v.keep, v.pond = float32(r.trail), float32(r.hidden), float32(r.clear), float32(r.pond)
 	v.meadow, v.fern = float32(s.hMeadow), float32(s.hFern)
 	v.ambient = float32(s.ambient)
 	v.riverD, v.seaDist = float32(s.riverD), float32(s.seaDist)

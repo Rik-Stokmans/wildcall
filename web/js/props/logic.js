@@ -140,6 +140,8 @@ export function interactionFor(poi, flags, npcs) {
     case 'shop': return { label, verb: 'Browse' };
     case 'sign': return { label, verb: 'Read' };
     case 'cache': return isTaken(poi.id, flags) ? null : { label, verb: 'Open' };
+    // c-field hook: a camp's fire opens the field kitchen (ctx.forage answers E on it).
+    case 'camp': return { label, verb: 'Cook' };
     default:
       if (COLLECTIBLE.has(poi.kind)) return isTaken(poi.id, flags) ? null : { label, verb: 'Pick up' };
       return null;

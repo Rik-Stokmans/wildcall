@@ -162,6 +162,7 @@ const LEAF_LIGHT = /* glsl */`
 uniform float uWrap;
 uniform float uTrans;
 uniform float uAmbient;
+uniform float uSkyFill;
 #undef RE_Direct
 #define RE_Direct RE_Direct_Leaf
 void RE_Direct_Leaf(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight) {
@@ -180,6 +181,11 @@ void RE_Direct_Leaf(const in IncidentLight directLight, const in vec3 geometryPo
 // stays soft and readable instead of going black under its own canopy.
 const AMBIENT = /* glsl */`
 reflectedLight.indirectDiffuse *= uAmbient;
+#if NUM_HEMI_LIGHTS > 0
+  // Cool sky light filling the undersides: shade reads blue-green, never black.
+  float skyFill = uSkyFill * (0.6 - 0.4 * normal.y);
+  reflectedLight.indirectDiffuse += BRDF_Lambert(diffuseColor.rgb) * hemisphereLights[0].skyColor * skyFill;
+#endif
 #include <aomap_fragment>
 `;
 
@@ -214,7 +220,8 @@ export function createTreeMaterial({ cards, map, uniforms }) {
     ...uniforms,
     uWrap: { value: cards ? 0.55 : 0.3 },
     uTrans: { value: cards ? 0.55 : 0 },
-    uAmbient: { value: cards ? 1.15 : 1.7 },
+    uAmbient: { value: cards ? 1.15 : 1.6 },
+    uSkyFill: { value: cards ? 0.55 : 0.22 },
   };
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,

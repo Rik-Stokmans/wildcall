@@ -6,22 +6,19 @@ func init() {
 	register(map[string][]string{
 		"identify.certain": {
 			"{aname}. Of course it is. How satisfying.",
-			"{aname}, without a doubt. Well spotted.",
 			"There we are, {aname}. Introductions complete.",
-			"{aname}. Every clue pointing the same way. Beautifully done.",
-			"Yes. {aname}. I'll never hear that voice quite the same way again.",
-			"{aname}. Now we know each other properly.",
 			"So that's who you are. {aname}. Delighted.",
 			"{aname}. It always feels like a small miracle, putting a name to a voice.",
 			"A name at last, and a well-earned one.",
+			"Every clue pointing the same way. Beautifully done.",
+			"Now we know each other properly.",
 		},
 		"identify.probable": {
 			"{aname}, probably. I'd want another look to be certain.",
-			"Probably {aname}. Probably. A good photograph would settle it.",
 			"I think {aname}. Not quite sure enough to swear to it.",
-			"{aname}, most likely. We'll know more next time.",
 			"Leaning towards {aname}. A little more evidence wouldn't hurt.",
 			"Very likely right. Though I'd like one more good look.",
+			"Probably. Probably. A good photograph would settle it.",
 		},
 		"identify.wrong": {
 			"Hm. I'm not sure that fits. Something doesn't quite match.",
@@ -35,8 +32,8 @@ func init() {
 		},
 		"identify.mismatch": {
 			"I'm not sure about the {mismatch}. It doesn't quite match.",
-			"The {mismatch} doesn't sit right with that, I think. Worth another look.",
-			"Hm. The {mismatch} rather argues against it.",
+			"Something about the {mismatch} doesn't sit right with that, I think. Worth another look.",
+			"Hm. I'd look again at the {mismatch}, if I were us.",
 		},
 		"identify.insufficient": {
 			"Too soon to say, really. We need to see more of it.",

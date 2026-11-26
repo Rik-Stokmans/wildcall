@@ -97,6 +97,13 @@ func (s *Session) clientView() proto.Profile {
 			r.Species = ""
 		}
 	}
+	// A nest's owner is kept in the save (like Mystery.Species) and shown only once
+	// the player has identified that species.
+	for _, n := range v.Journal.Nests {
+		if n != nil && !known(n.Species) {
+			n.Species = ""
+		}
+	}
 	return v
 }
 

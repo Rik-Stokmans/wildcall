@@ -35,6 +35,9 @@ func maraSpeaker() *speaker {
 			{id: "t_cabin", title: "What is the cabin for?", lines: maraCabin},
 			{id: "t_why", title: "Why won't you just tell me the answer?", lines: maraWhy},
 			{id: "t_seed", title: "Can I coax birds closer?", lines: maraSeed, acts: maraSeedGift},
+			{id: "t_forage", title: "Is it all right to eat what grows out here?", lines: maraForage, follow: maraForageFollow},
+			{id: "t_kettle", title: "What do I do with the kettle?", lines: maraKettle},
+			{id: "t_elder", title: "What do I do with elderberries?", lines: maraElder, acts: teachRecipe("elderberry_syrup")},
 			// The rest of the tutorial chain: reachable only through t_move.
 			{id: "t_welcome", hidden: true, lines: tutWelcome, follow: tutFollow("t_move", "Go on, then.")},
 			{id: "t_listen", hidden: true, lines: tutListen, follow: tutFollow("t_bino", "And the binoculars?"), acts: setFlags("tutorial:listen")},
@@ -263,5 +266,40 @@ func maraSeedGift(c *dctx) []Action {
 	return []Action{
 		{Kind: ActionGiveItem, Item: itemSeed, Qty: 1},
 		{Kind: ActionSetFlag, Flag: "gift:mara_seed", Value: true},
+	}
+}
+
+func maraForage(*dctx) []string {
+	return []string{
+		"Yes, some of it, and gladly. I have been eating this valley for forty years: nettles in spring, bilberries in summer, hazelnuts when the jays have had theirs. A forager's day is a naturalist's day with a basket.",
+		"Press E on a plant that has something to give. A bramble has fruit only in late summer and autumn, and a plant you have just picked will not bear again for a few days, so do not stand and wait.",
+		"There is one rule and it is the only one that matters: pick nothing you cannot identify with certainty. The plant has a page in your journal, in the Herbarium, with how to tell it from its lookalikes. The mushrooms most of all. If you are in any doubt, you leave it where it is.",
+	}
+}
+
+func maraForageFollow(c *dctx) []proto.DialogChoice {
+	for _, q := range []struct{ id, text string }{
+		{"tea_at_the_cabin", "You said something about an errand with a kettle?"},
+		{"a_meal_from_the_wood", "Is there more to cook?"},
+	} {
+		if ch := offerIfAvailable(q.id, q.text)(c); len(ch) > 0 {
+			return ch
+		}
+	}
+	return nil
+}
+
+func maraKettle(*dctx) []string {
+	return []string{
+		"The kettle at the cabin is yours, and so is every camp's fire in the wild: stand near either, press E, and see what you know how to make. The stove is at the cabin only, and some things need its oven.",
+		"You already know pine-tip tea, mint tea and oat bars. Pick a new plant for the first time and you will usually learn something to do with it. And a hot drink in the field does more for the hands than you would think.",
+		"Food and drink give you a little help for a few hours, one of each sort at a time: a drink, a snack and a meal. A new cup of something replaces the last one, so there is no use in drinking two. Do not expect miracles. It is tea.",
+	}
+}
+
+func maraElder(*dctx) []string {
+	return []string{
+		"Elder. The flowers in spring and the berries in autumn. Flowers go into a cordial, which is easy. The berries, now: never raw. Raw elderberries will give you a very bad afternoon. Cooked slowly with honey, they make the best syrup there is, and I will show you how.",
+		"Simmer them gently until they burst, strain through a cloth, and add honey. I have written it into your recipes. Take the stalks off first, and leave a fair share on the bush for the birds.",
 	}
 }

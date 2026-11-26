@@ -311,24 +311,23 @@ func TestSpeciesLinesForAll40(t *testing.T) {
 	}
 }
 
-var knownSlotNames = map[string]bool{"sound": true, "where": true, "dist": true, "elev": true, "dir": true,
-	"act": true, "size": true, "shape": true, "colours": true, "marking": true, "bill": true, "flight": true,
-	"habitat": true, "subj": true, "name": true, "aname": true, "place": true, "region": true, "title": true,
-	"mismatch": true}
+var knownSlotNames = map[string]bool{"sound": true, "pitch": true, "where": true, "dist": true, "elev": true,
+	"dir": true, "act": true, "size": true, "shape": true, "colours": true, "bill": true, "flight": true,
+	"habitat": true, "subj": true, "name": true, "aname": true, "title": true, "mismatch": true}
 
 // Every template: literal text speakable, slots known, and fillable within 25 words
-// with realistic (long-ish) values.
+// with the longest value of every slot vocabulary.
 func TestEveryTemplate(t *testing.T) {
-	n := New(3)
-	f := loadFixture(t)[25] // western_marsh_harrier: long marking
-	sl := n.knownSlots(&f.sp, perceive(richClue(f, 1), fullEvidence(f), "foraging", ""))
-	sl["place"] = "Greywater Heron Station"
-	sl["region"] = "Windpeak Highlands"
-	sl["title"] = "Field Specialist"
-	sl["mismatch"] = "colouring"
-	sl["sound"] = "a very high, insistent phrase"
-	sl["where"] = "somewhere up in the canopy"
-	sl["dist"] = "only a few yards away"
+	sl := slots{}
+	for k := range knownSlotNames {
+		for _, v := range slotDomain(k) {
+			if len(v) > len(sl[k]) {
+				sl[k] = v
+			}
+		}
+	}
+	long := core.Species{ID: "great_spotted_woodpecker", Name: "Great Spotted Woodpecker"}
+	nameSlots(sl, &long)
 	total := 0
 	for pool, lines := range bank {
 		if len(lines) == 0 {
@@ -508,11 +507,11 @@ func TestPoolNoRepeatUntilMostUsed(t *testing.T) {
 	limit := size * 3 / 4
 	var idx []int
 	for i := 0; i < 60; i++ {
-		c, ok := n.pick([]string{pool}, slots{})
+		c, ok := n.pick([]string{pool}, plan{slots: slots{}})
 		if !ok {
 			t.Fatal("no candidate")
 		}
-		n.commit(c)
+		n.commit(c, plan{})
 		n.st.LastText = c.text
 		idx = append(idx, c.idx)
 	}
@@ -632,7 +631,7 @@ func TestEnvTransitions(t *testing.T) {
 func TestLineCountReasonable(t *testing.T) {
 	c := LineCount()
 	t.Logf("line bank: %d lines", c)
-	if c < 450 || c > 800 {
+	if c < 700 || c > 1100 {
 		t.Errorf("line bank has %d lines", c)
 	}
 }

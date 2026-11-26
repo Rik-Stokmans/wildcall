@@ -214,10 +214,8 @@ func (s *Sim) arrive(b *bird, p *profile) {
 	case thenBathe:
 		b.mode, b.act = mBathe, core.ActBathing
 		b.timer = s.rnd(6, 14)
-	case thenNestPick, thenNestBuild:
-		b.mode, b.act = mNest, core.ActNesting
-		b.stage = uint8(b.then)
-		b.sub = s.rnd(1.5, 4)
+	case thenNestPick, thenNestBuild, thenNestSit, thenNestVisit:
+		s.nestArrive(b, p)
 	case thenSocial:
 		s.rest(b, p, s.rnd(5, 12))
 		b.act = core.ActSocial

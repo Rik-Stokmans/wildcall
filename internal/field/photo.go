@@ -95,6 +95,11 @@ type PhotoScore struct {
 	// Birds is parallel to Meta.Subjects (best subject first): the truth the
 	// session needs for journal, quest and XP bookkeeping.
 	Birds []PhotoBird
+	// Nests are the nests clearly in the frame, best first (server truth: never
+	// send Species). A photo of a nest alone has no Subjects but does score stars.
+	Nests []PhotoNest
+	// NestSubject: the main subject of the photo is a nest (Nests[0]), not a bird.
+	NestSubject bool
 	// Rare: the main subject is a rare species, an out-of-range visitor or has
 	// unusual plumage. The "rare" tag itself is only added to Meta.Tags when the
 	// player has identified the species (rarity is never announced early); the
@@ -104,11 +109,19 @@ type PhotoScore struct {
 	Capped bool
 }
 
-// ScorePhoto scores a shutter press against the true world state: which birds are
-// in the frustum and visible, and for the best subject how sharp, well composed,
-// close, well lit and unobstructed the shot is. birds should be Ecosystem.Near(eye,
-// MaxSightRange). A photo with no visible bird scores 0 stars — and is still a photo.
+// ScorePhoto scores a shutter press without nests (see ScorePhotoWith).
 func ScorePhoto(c *Context, ph proto.Photo, birds []core.BirdState) PhotoScore {
+	return ScorePhotoWith(c, ph, birds, nil)
+}
+
+// ScorePhotoWith scores a shutter press against the true world state: which birds
+// and nests are in the frustum and visible, and for the best subject how sharp, well
+// composed, close, well lit and unobstructed the shot is. birds should be
+// Ecosystem.Near(eye, MaxSightRange), nests Ecosystem.Nests(eye, MaxSightRange). A
+// nest in the frame and reasonably clear adds the tags "nest" and
+// "nest:<old|building|eggs|chicks>" and a small bonus; a nest on its own is a valid
+// subject. A photo with neither scores 0 stars - and is still a photo.
+func ScorePhotoWith(c *Context, ph proto.Photo, birds []core.BirdState, nests []core.Nest) PhotoScore {
 	st, env := c.Stats, c.Env
 	eye := core.V(ph.X, ph.Y, ph.Z)
 	fov, aspect := ph.FOV, ph.Aspect
@@ -161,7 +174,8 @@ func ScorePhoto(c *Context, ph proto.Photo, birds []core.BirdState) PhotoScore {
 			rank:      distanceScore(size) * vis * (1 - 0.5*off),
 		})
 	}
-	if len(subs) == 0 {
+	out.Nests = photoNests(c, cam, eye, nests)
+	if len(subs) == 0 && len(out.Nests) == 0 {
 		out.Notes = []string{"No bird in the frame - but a pleasant view all the same."}
 		return out
 	}
@@ -185,24 +199,38 @@ func ScorePhoto(c *Context, ph proto.Photo, birds []core.BirdState) PhotoScore {
 		out.Meta.Subjects = append(out.Meta.Subjects, ps)
 		out.Birds = append(out.Birds, s.PhotoBird)
 	}
-	main := subs[0]
+	// The main subject: the best bird, unless a nest makes the better picture.
+	var mX, mY, mSize, mVis, mMotion float32
+	var mainBird subject
+	if len(subs) > 0 {
+		mainBird = subs[0]
+		mX, mY, mSize, mVis = mainBird.X, mainBird.Y, mainBird.Size, mainBird.Visibility
+		mMotion = actMotion[mainBird.Act%core.ActCount]
+	}
+	if len(out.Nests) > 0 {
+		n := out.Nests[0]
+		if nr := distanceScore(n.Size) * n.Visibility * (1 - 0.5*maxf(absf(n.X), absf(n.Y))) * nestOnlyFactor; len(subs) == 0 || nr > mainBird.rank {
+			out.NestSubject = true
+			mX, mY, mSize, mVis, mMotion = n.X, n.Y, n.Size, n.Visibility, 0
+		}
+	}
 
 	// --- Focus: optical sharpness, camera shake, a subject moving through the frame.
 	shake := clamp01(ph.Shake)
-	focus := 100 * clamp01(ph.Sharp) * (1 - shakeBlur*shake) * (1 - actMotion[main.Act%core.ActCount]*0.5)
+	focus := 100 * clamp01(ph.Sharp) * (1 - shakeBlur*shake) * (1 - mMotion*0.5)
 
 	// --- Composition: placement and size in frame.
-	centre := clamp01(1 - sqrt32(main.X*main.X+main.Y*main.Y))
-	tx, ty := absf(main.X)-1.0/3, absf(main.Y)-1.0/3
+	centre := clamp01(1 - sqrt32(mX*mX+mY*mY))
+	tx, ty := absf(mX)-1.0/3, absf(mY)-1.0/3
 	thirds := clamp01(1 - sqrt32(tx*tx+ty*ty)/thirdsReach)
 	place := maxf(centre*(1-thirdsBonus), thirds)
-	if off := maxf(absf(main.X), absf(main.Y)); off > edgeStart {
+	if off := maxf(absf(mX), absf(mY)); off > edgeStart {
 		place *= 1 - edgeCut*clamp01((off-edgeStart)/(1-edgeStart))
 	}
-	comp := 100*(placeShare*place+sizeShare*idealSize(main.Size)) + compStatBonus*clamp01(st.Composition)
+	comp := 100*(placeShare*place+sizeShare*idealSize(mSize)) + compStatBonus*clamp01(st.Composition)
 
-	// --- Distance: how much of the frame the bird fills.
-	distance := 100 * distanceScore(main.Size)
+	// --- Distance: how much of the frame the subject fills.
+	distance := 100 * distanceScore(mSize)
 
 	// --- Lighting.
 	light := 100*(lightBase+(1-lightBase)*pow32(clamp01(env.Light), lightGamma)) -
@@ -213,7 +241,7 @@ func ScorePhoto(c *Context, ph proto.Photo, birds []core.BirdState) PhotoScore {
 	}
 
 	// --- Visibility.
-	vis := 100 * main.Visibility
+	vis := 100 * mVis
 
 	m := &out.Meta
 	m.Focus, m.Composition, m.Distance = pct(focus), pct(comp), pct(distance)
@@ -222,9 +250,12 @@ func ScorePhoto(c *Context, ph proto.Photo, birds []core.BirdState) PhotoScore {
 	score := weightFocus*float32(m.Focus) + weightComposition*float32(m.Composition) +
 		weightDistance*float32(m.Distance) + weightLighting*float32(m.Lighting) +
 		weightVisibility*float32(m.Visibility)
-	moment := main.Act.UncommonBehaviour()
+	moment := !out.NestSubject && mainBird.Act.UncommonBehaviour()
 	if moment {
 		score += behaviorBonus + momentPoints*clamp01(st.MomentBonus)
+	}
+	if len(out.Nests) > 0 {
+		score += nestPhotoBonus
 	}
 	weak := float32(m.Focus)
 	if m.Visibility < m.Focus {
@@ -238,22 +269,29 @@ func ScorePhoto(c *Context, ph proto.Photo, birds []core.BirdState) PhotoScore {
 	m.Stars = starsFor(m.Score)
 
 	// --- Tags.
-	m.Tags = append(m.Tags, "behavior:"+main.Act.Key())
-	if main.Act.Airborne() {
-		m.Tags = append(m.Tags, "flight")
+	if !out.NestSubject {
+		m.Tags = append(m.Tags, "behavior:"+mainBird.Act.Key())
+		if mainBird.Act.Airborne() {
+			m.Tags = append(m.Tags, "flight")
+		}
+	}
+	if len(out.Nests) > 0 {
+		m.Tags = append(m.Tags, "nest", "nest:"+NestStageKey(out.Nests[0].Stage))
 	}
 	if golden {
 		m.Tags = append(m.Tags, "golden hour")
 	}
-	out.Rare = isUnusual(main.sp, main.Flags)
-	if out.Rare && know.Identified(main.sp.ID) {
-		m.Tags = append(m.Tags, "rare")
+	if !out.NestSubject {
+		out.Rare = isUnusual(mainBird.sp, mainBird.Flags)
+		if out.Rare && know.Identified(mainBird.sp.ID) {
+			m.Tags = append(m.Tags, "rare")
+		}
 	}
 	if m.Score >= exceptionalScore {
 		m.Tags = append(m.Tags, "exceptional")
 	}
 
-	out.Notes = photoNotes(out, ph, env, main.Act, golden, moment)
+	out.Notes = photoNotes(out, ph, env, mainBird.Act, golden, moment)
 	return out
 }
 
@@ -331,6 +369,9 @@ func photoNotes(s PhotoScore, ph proto.Photo, env core.Env, act core.BirdAct, go
 		add("The subject sits awkwardly in the frame")
 	} else if m.Composition >= 85 && m.Focus >= 70 {
 		add("Nicely framed")
+	}
+	if len(s.Nests) > 0 {
+		add(nestNote(s.Nests[0].Stage))
 	}
 	if moment {
 		add("A real moment: " + act.Key())

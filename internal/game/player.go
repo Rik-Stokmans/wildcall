@@ -85,6 +85,10 @@ func (s *Session) applyPose(p proto.Pose) {
 		s.narrate(narrator.Event{Kind: narrator.FocusBegin})
 	}
 	s.lastFocus = p.Focus
+	if p.Sit && !s.lastSit {
+		s.narrate(narrator.Event{Kind: narrator.SatDown})
+	}
+	s.lastSit = p.Sit
 
 	s.explore(feet)
 	s.checkRegion(feet)

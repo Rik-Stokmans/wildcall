@@ -34,11 +34,14 @@ const (
 	KindReturn   = "return"   // return to the cabin
 	KindResearch = "research" // desk research: study | analyze | submit
 	KindRare     = "rare"     // log a rare discovery
+	KindForage   = "forage"   // pick from a wild plant
+	KindCook     = "cook"     // cook a recipe
+	KindEat      = "eat"      // eat or drink something
 )
 
 var objectiveKinds = []string{
 	KindHear, KindObserve, KindIdentify, KindPhoto, KindRecord, KindDiscover,
-	KindCollect, KindTalk, KindReturn, KindResearch, KindRare,
+	KindCollect, KindTalk, KindReturn, KindResearch, KindRare, KindForage, KindCook, KindEat,
 }
 
 // ObjectiveKinds returns the objective / event kind vocabulary.
@@ -50,6 +53,11 @@ const (
 	TargetUnknown = "unknown" // hear: a voice the player has not identified yet
 	TargetKind    = "kind:"   // prefix: discover kind:<poi kind>, collect kind:<feather|page|relic|cache>
 )
+
+// The larder objectives (contract §12): forage takes a plant id (or "any") as its
+// target, cook a recipe id (or "any"), eat an item id (or "any"). The "distinct"
+// parameter counts each plant / recipe / item once; "slot" narrows cook and eat to
+// food of that buff slot; "region" and "habitat" apply to forage.
 
 // Objective parameter keys. The first six are pinned by proto.ObjectiveDef; phase,
 // distinct, species and what are this package's additions (see Event for what each
@@ -65,6 +73,7 @@ const (
 	ParamDistinct = "distinct" // "true": each counted event must have a different target (species, place…)
 	ParamSpecies  = "species"  // research: the species studied / analysed / submitted
 	ParamWhat     = "what"     // research submit: photo | recording
+	ParamSlot     = "slot"     // cook | eat: drink | meal | snack
 )
 
 // Event-only parameter keys (set by the constructors in events.go).

@@ -10,9 +10,30 @@ import (
 // Perches (contract §2.4) are derived per chunk from its vegetation, terrain and
 // structures, cached, and searched chunk by chunk.
 
-func (w *World) chunkPerches(cx, cz int) []core.Perch {
-	return w.perches.get(chunkKey{cx, cz}, func() []core.Perch { return w.buildPerches(cx, cz) })
+// perchSet is a chunk's perches with their XZ bounding box: tree perches can
+// overhang the chunk (a limb reaching over the border), so searches prune by the
+// box rather than by the chunk square.
+type perchSet struct {
+	ps             []core.Perch
+	x0, z0, x1, z1 float64
 }
+
+// perchOverhang bounds how far outside its chunk a perch can lie (the widest
+// crown of the largest tree).
+const perchOverhang = occReach
+
+func (w *World) chunkPerchSet(cx, cz int) *perchSet {
+	return w.perches.get(chunkKey{cx, cz}, func() *perchSet {
+		s := &perchSet{ps: w.buildPerches(cx, cz), x0: math.Inf(1), z0: math.Inf(1), x1: math.Inf(-1), z1: math.Inf(-1)}
+		for _, p := range s.ps {
+			s.x0, s.x1 = math.Min(s.x0, float64(p.Pos.X)), math.Max(s.x1, float64(p.Pos.X))
+			s.z0, s.z1 = math.Min(s.z0, float64(p.Pos.Z)), math.Max(s.z1, float64(p.Pos.Z))
+		}
+		return s
+	})
+}
+
+func (w *World) chunkPerches(cx, cz int) []core.Perch { return w.chunkPerchSet(cx, cz).ps }
 
 func (w *World) buildPerches(cx, cz int) []core.Perch {
 	gr := w.grid(cx, cz)
@@ -32,38 +53,25 @@ func (w *World) buildPerches(cx, cz int) []core.Perch {
 		out = append(out, core.Perch{Pos: vec(x, y, z), Kind: k, Cover: float32(clamp01(cover))})
 	}
 
+	// Tree perches sit on the drawn wood: one below the ground (a low limb on a
+	// slope) is dropped rather than moved off its limb.
+	treeEmit := func(p v3, k core.PerchKind, cover float64) bool {
+		if p.y < groundAt(p.x, p.z)+0.05 || p.y < 0 {
+			return false
+		}
+		out = append(out, core.Perch{Pos: vec(p.x, p.y, p.z), Kind: k, Cover: float32(clamp01(cover))})
+		return true
+	}
 	for i := range vs.veg {
 		v := &vs.veg[i]
 		x, y, z, s := float64(v.Pos.X), float64(v.Pos.Y), float64(v.Pos.Z), float64(v.Scale)
 		sh := shapes[v.Kind]
 		switch {
-		case sh.isTree:
-			H := sh.height * s
-			cy := y + H*sh.crownY
-			rx, ry := sh.rx*s, sh.ry*s
-			// Inside the crown: hard to see.
-			for k := 0; k < 3; k++ {
-				py := y + H*r.Range(0.55, 0.9)
-				edge := rx * math.Sqrt(math.Max(0, 1-sq((py-cy)/ry)))
-				f := r.Range(0.2, 0.7)
-				dx, dz := headingDir(r.Range(0, 2*math.Pi))
-				add(core.PerchCanopy, x+dx*edge*f, py, z+dz*edge*f, 0.6+0.3*(1-f)/0.8)
-			}
-			// An outer branch and the very top: exposed.
-			py := y + H*r.Range(0.66, 0.86)
-			edge := rx * math.Sqrt(math.Max(0, 1-sq((py-cy)/ry)))
-			dx, dz := headingDir(r.Range(0, 2*math.Pi))
-			add(core.PerchBranch, x+dx*edge*0.95, py, z+dz*edge*0.95, r.Range(0.15, 0.35))
-			add(core.PerchBranch, x, cy+ry*0.95, z, r.Range(0.1, 0.18))
-			// The trunk, for climbers.
-			ty := y + math.Min(r.Range(2, 8), H*0.5)
-			dx, dz = headingDir(r.Range(0, 2*math.Pi))
-			add(core.PerchTrunk, x+dx*0.3*s, ty, z+dz*0.3*s, 0.3)
-		case sh.snag:
-			H := sh.height * s
-			add(core.PerchSnag, x, y+H*0.96, z, 0)
-			dx, dz := headingDir(r.Range(0, 2*math.Pi))
-			add(core.PerchSnag, x+dx*1.1*s, y+H*0.72, z+dz*1.1*s, 0)
+		case v.Kind.IsTree():
+			treePerches(v, &r, treeEmit)
+		case isForage(v.Kind) && sh.rx > 0:
+			// Bramble, elder, dog rose, hazel and sea buckthorn are bushes too.
+			add(core.PerchShrub, x+r.Range(-0.3, 0.3)*s, y+sh.height*s*r.Range(0.45, 0.8), z+r.Range(-0.3, 0.3)*s, r.Range(0.5, 0.8))
 		case v.Kind == core.VegShrub:
 			add(core.PerchShrub, x+r.Range(-0.3, 0.3)*s, y+1.6*s*r.Range(0.45, 0.8), z+r.Range(-0.3, 0.3)*s, r.Range(0.5, 0.8))
 		case v.Kind == core.VegReeds:
@@ -86,12 +94,21 @@ func (w *World) buildPerches(cx, cz int) []core.Perch {
 	// Terrain: open ground and ledges every 6 m, water every 8 m, the water's edge
 	// every 4 m.
 	bx, bz := float64(cx*core.ChunkSize), float64(cz*core.ChunkSize)
+	rt := noise.NewRNG(noise.Hash2(uint64(w.seed)^0xba4c1ed, int64(cx), int64(cz)))
 	for iz := 0; iz < gridN-1; iz++ {
 		for ix := 0; ix < gridN-1; ix++ {
 			k := iz*gridN + ix
 			v := &gr.v[k]
 			h := float64(v.h)
 			x, z := bx+float64(ix)*gridStep, bz+float64(iz)*gridStep
+			// Banks: steep earth just above the water (kingfisher burrows).
+			if ix%2 == 1 && iz%2 == 1 && h >= 0.4 && h <= 2.0 && v.slope >= bankSlope && bankGround(v) && waterNear(gr, ix, iz, 2) && rt.Chance(0.75) {
+				add(core.PerchBank, x, h, z, 0.15)
+			}
+			// Ledges: cliff and crag faces, sea stacks.
+			if ix%3 == 0 && iz%3 == 0 && ledgeGround(v, h) && rt.Chance(0.6) {
+				add(core.PerchLedge, x, h+0.05, z, 0.05)
+			}
 			switch {
 			case ix%4 == 1 && iz%4 == 1 && h < -0.3:
 				jx, jz := x+r.Range(-1.5, 1.5), z+r.Range(-1.5, 1.5)
@@ -139,6 +156,45 @@ func (w *World) buildPerches(cx, cz int) []core.Perch {
 
 func sq(v float64) float64 { return v * v }
 
+// bankSlope is the steepness (rise over run) that makes a waterside slope a bank.
+const bankSlope = 0.3
+
+// bankGround reports whether a vertex is earth a bird could dig into: not sand,
+// rock, snow or ice.
+func bankGround(v *gvert) bool {
+	switch core.Habitat(v.hab) {
+	case core.HabBeach, core.HabCliff, core.HabSnow, core.HabOcean:
+		return false
+	}
+	return v.flags&(vfIce|vfSea) == 0 && v.rock < 0.45 && v.reg != uint8(core.RegionNone) &&
+		!(v.reg == uint8(core.RegionWhisperingCoast) && v.seaDist < 40)
+}
+
+// waterNear reports whether open water lies within d vertices of (ix, iz).
+func waterNear(gr *grid, ix, iz, d int) bool {
+	for jz := max(iz-d, 0); jz <= min(iz+d, gridN-1); jz++ {
+		for jx := max(ix-d, 0); jx <= min(ix+d, gridN-1); jx++ {
+			if u := &gr.v[jz*gridN+jx]; u.h < -0.05 && u.flags&vfIce == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ledgeGround reports whether a vertex is a cliff or crag face in the highlands
+// or on the coast, or the rock of a sea stack.
+func ledgeGround(v *gvert, h float64) bool {
+	if h < 0.4 {
+		return false
+	}
+	reg := core.RegionID(v.reg)
+	if reg != core.RegionWindpeak && reg != core.RegionWhisperingCoast {
+		return false
+	}
+	return v.hab == uint8(core.HabCliff) || v.slope > 0.85
+}
+
 // edgeVertex reports whether a vertex lies on a shoreline (water on one side,
 // land on another).
 func edgeVertex(gr *grid, ix, iz int) bool {
@@ -180,14 +236,20 @@ func groundCover(h core.Habitat, v *gvert) float64 {
 func (w *World) PerchesNear(x, z, radius float32, buf []core.Perch) []core.Perch {
 	fx, fz, r := float64(x), float64(z), float64(radius)
 	r2 := r * r
-	for cz := chunkOf(fz - r); cz <= chunkOf(fz+r); cz++ {
-		for cx := chunkOf(fx - r); cx <= chunkOf(fx+r); cx++ {
-			nx := clamp(fx, float64(cx*core.ChunkSize), float64((cx+1)*core.ChunkSize))
-			nz := clamp(fz, float64(cz*core.ChunkSize), float64((cz+1)*core.ChunkSize))
+	const m = perchOverhang
+	for cz := chunkOf(fz - r - m); cz <= chunkOf(fz+r+m); cz++ {
+		for cx := chunkOf(fx - r - m); cx <= chunkOf(fx+r+m); cx++ {
+			nx := clamp(fx, float64(cx*core.ChunkSize)-m, float64((cx+1)*core.ChunkSize)+m)
+			nz := clamp(fz, float64(cz*core.ChunkSize)-m, float64((cz+1)*core.ChunkSize)+m)
 			if sq(nx-fx)+sq(nz-fz) > r2 {
 				continue
 			}
-			ps := w.chunkPerches(cx, cz)
+			set := w.chunkPerchSet(cx, cz)
+			nx, nz = clamp(fx, set.x0, set.x1), clamp(fz, set.z0, set.z1)
+			if sq(nx-fx)+sq(nz-fz) > r2 {
+				continue
+			}
+			ps := set.ps
 			for i := range ps {
 				dx, dz := float64(ps[i].Pos.X)-fx, float64(ps[i].Pos.Z)-fz
 				if dx*dx+dz*dz <= r2 {
@@ -203,7 +265,7 @@ func (w *World) PerchesNear(x, z, radius float32, buf []core.Perch) []core.Perch
 // reeds whose footprint covers it, combined as independent layers.
 func (w *World) Cover(x, z float32) float32 {
 	fx, fz := float64(x), float64(z)
-	const reach = 12 // the widest crown footprint
+	const reach = occReach // the widest crown footprint
 	open := 1.0
 	for cz := chunkOf(fz - reach); cz <= chunkOf(fz+reach); cz++ {
 		for cx := chunkOf(fx - reach); cx <= chunkOf(fx+reach); cx++ {

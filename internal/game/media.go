@@ -23,6 +23,7 @@ func (s *Session) msgPhoto(d []byte) {
 	}
 	if progress.FilmLeft(s.p) <= 0 {
 		s.send(proto.SPhoto, proto.PhotoResult{NoFilm: true, FilmLeft: 0, Notes: []string{"Out of film. Load a roll, or head back to the cabin to develop this one."}})
+		s.narrate(narrator.Event{Kind: narrator.OutOfFilm})
 		return
 	}
 	if _, err := save.DecodePhoto(ph.Img); err != nil {
@@ -51,8 +52,10 @@ func (s *Session) msgPhoto(d []byte) {
 	}
 
 	ctx := s.fieldCtx()
-	birds := s.sim.Near(core.V(ph.X, ph.Y, ph.Z), field.MaxSightRange, nil)
-	sc := field.ScorePhoto(ctx, ph, birds)
+	cam := core.V(ph.X, ph.Y, ph.Z)
+	birds := s.sim.Near(cam, field.MaxSightRange, nil)
+	nests := s.sim.Nests(cam, field.MaxSightRange, nil)
+	sc := field.ScorePhotoWith(ctx, ph, birds, nests)
 	meta := sc.Meta
 	meta.ID, meta.URL = id, "/photos/"+id+".jpg"
 	if meta.Subjects == nil {
@@ -106,11 +109,19 @@ func (s *Session) msgPhoto(d []byte) {
 			}
 		}
 	}
+	// Nests in the frame: found (journal, XP once per species), and the first nest
+	// photo of each species pays the photo XP again.
+	if len(sc.Nests) > 0 {
+		res.XP += s.photoNests(sc, nests, id, meta.Stars)
+	}
 	if res.XP > 0 {
 		s.toast("xp", "Photograph", starsText(meta.Stars), res.XP, "camera")
 	}
 	s.send(proto.SPhoto, res)
 	s.narrate(narrator.Event{Kind: narrator.Photographed, Stars: meta.Stars, Tags: meta.Tags, Known: known})
+	if progress.FilmLeft(s.p) == 0 {
+		s.narrate(narrator.Event{Kind: narrator.OutOfFilm})
+	}
 }
 
 func birdPos(birds []core.BirdState, id uint32, meta proto.PhotoMeta) core.Vec3 {

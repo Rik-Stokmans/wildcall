@@ -21,7 +21,23 @@ const (
 	KindGadget    = "gadget"    // works passively while carried in the backpack
 	KindSupply    = "supply"    // consumable, stackable
 	KindKeepsake  = "keepsake"  // story item; its mods apply while carried
+
+	KindIngredient = "ingredient" // foraged or pantry, stackable; some are edible as they are
+	KindFood       = "food"       // cooked, stackable; eaten for a timed Buff
 )
+
+// Buff slots (proto.BuffDef.Slot, proto.Buff.Slot): one active buff per slot, a new
+// drink replacing the current drink and so on.
+const (
+	SlotDrink = "drink"
+	SlotMeal  = "meal"
+	SlotSnack = "snack"
+)
+
+var buffSlots = []string{SlotDrink, SlotMeal, SlotSnack}
+
+// BuffSlots returns the three buff slots in display order.
+func BuffSlots() []string { return append([]string(nil), buffSlots...) }
 
 // Equipment slots (proto.ItemDef.Slot, keys of proto.Profile.Equipped).
 const (
@@ -56,6 +72,7 @@ func Factions() []string { return append([]string(nil), factions...) }
 const (
 	UseFilm = "film" // load an extra roll: +FilmPerRoll shots this expedition
 	UseSeed = "seed" // scatter seed: the session places a lure
+	UseEat  = "eat"  // eat or drink it: Eat applies its Buff (needs the game clock, so not UseItem)
 )
 
 // Cabin upgrade ids (pinned by the contract).

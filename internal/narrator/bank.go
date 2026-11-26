@@ -21,9 +21,13 @@ import (
 //	call.*  focus  observe.*  evidence.*  behaviour.*  flush  settle  rare.*
 //	identify.*  photo.*  rec.*  place.*  region.*  time.*  weather.*  season.*
 //	stillness  walking  cabin  rest  welcome  resume  rank  idle.*
-//	sp.<species id>.hear|watch|note   shape.<shape>      (identified birds only)
+//	forage.*  cook.*  eat.*  pack.full  collect.*  climb.*  wade  shelter  sit
+//	binoculars.empty  film.out  nest.<site>  nest.stage.*  nest.any
+//	sp.<species id>.hear|watch|note   shape.<shape>   nest.known   (identified birds only)
 //
 // Only sp.* and shape.* pools, and templates using {name} or {aname}, may name a bird.
+// Slots come from closed vocabularies (slots.go) and each template uses few of them,
+// so every sentence is enumerable (AllLines, lines.go) and can be voiced ahead of time.
 var bank = map[string][]string{}
 
 func register(pools map[string][]string) {

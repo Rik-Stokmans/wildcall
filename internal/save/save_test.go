@@ -164,3 +164,32 @@ func TestPhotos(t *testing.T) {
 		t.Fatal("ClearPhotos left a photo")
 	}
 }
+
+// TestVersion1SaveStillLoads: a save from before phase 2 (format 1, no buffs, forage
+// records, recipes, herbarium or nests) loads, and is written back in the current
+// format.
+func TestVersion1SaveStillLoads(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := `{"version":1,"seed":7,"seedText":"seven","profile":{"name":"Old Hand","level":3,"journal":{"lore":["page_0"]}},"clock":{},"seq":{"photo":2}}`
+	if err := os.WriteFile(st.Path(), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, s, aside, err := st.Load()
+	if s != Loaded || f == nil || aside != "" || err != nil {
+		t.Fatalf("version 1 save: %v %v %q", s, err, aside)
+	}
+	if f.Profile.Name != "Old Hand" || f.Seed != 7 || f.Seq.Photo != 2 {
+		t.Fatalf("content lost: %+v", f)
+	}
+	if err := st.Save(f); err != nil {
+		t.Fatal(err)
+	}
+	g, s, _, _ := st.Load()
+	if s != Loaded || g.Version != Version || Version < 2 {
+		t.Fatalf("rewritten as version %d (%v)", g.Version, s)
+	}
+}

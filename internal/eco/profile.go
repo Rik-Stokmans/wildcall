@@ -60,13 +60,14 @@ type profile struct {
 	flight flightKind
 	ground groundKind
 
-	flock, pair                                bool
-	flockMin, flockMax                         int
-	lureEater                                  bool // comes to seed
-	waterBird                                  bool // may live and rest on open water
-	soarer                                     bool // spends foraging time circling
-	hoverer                                    bool // hunts by hovering
-	specBathe, specSocial, specNest, specPreen bool
+	flock, pair                      bool
+	flockMin, flockMax               int
+	lureEater                        bool // comes to seed
+	waterBird                        bool // may live and rest on open water
+	soarer                           bool // spends foraging time circling
+	hoverer                          bool // hunts by hovering
+	specBathe, specSocial, specPreen bool
+	nest                             nestProfile // how and when it breeds (nest.go)
 
 	// Rare and legendary species only show themselves under strict conditions.
 	gated     bool
@@ -266,7 +267,6 @@ func buildProfile(sp *core.Species) profile {
 
 	p.specBathe = has(b.Specials, "bathing")
 	p.specSocial = has(b.Specials, "social")
-	p.specNest = has(b.Specials, "nesting")
 	p.specPreen = has(b.Specials, "preening")
 	p.soarer = p.flight == flySoaring || has(b.Specials, "soaring")
 	p.hoverer = p.flight == flyHover || has(b.Specials, "hovering")
@@ -324,6 +324,7 @@ func buildProfile(sp *core.Species) profile {
 	hr := min32(3*p.shy+20, 60)
 	p.habitR2 = hr * hr
 	p.fleeDist = clamp(p.shy*3.5, 22, 140)
+	p.nest = buildNestProfile(sp, p.shy)
 
 	switch p.ground {
 	case groundWalk, groundWade:

@@ -53,8 +53,14 @@ func TestPinnedIDsPresent(t *testing.T) {
 	if n := len(Ranks()); n != 5 {
 		t.Errorf("want 5 ranks, got %d", n)
 	}
-	if n := len(Items()); n < 36 || n > 44 {
-		t.Errorf("item count %d outside 36..44", n)
+	kit := 0
+	for _, it := range Items() {
+		if it.Kind != KindIngredient && it.Kind != KindFood {
+			kit++
+		}
+	}
+	if kit < 36 || kit > 44 {
+		t.Errorf("item count %d (without ingredients and food) outside 36..44", kit)
 	}
 	for _, id := range []string{"keen_ears", "sound_direction", "acoustic_memory", "frequency_awareness", "deep_listening",
 		"echo_reading", "natural_recognition", "sharp_eyes", "movement_recognition", "patience", "habitat_reading",

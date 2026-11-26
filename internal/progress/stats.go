@@ -215,17 +215,32 @@ var rankPerks = map[int]map[string]float32{
 // ComputeStats derives the player's capabilities: core.BaseStats() + equipped item
 // mods + the purchased upgrades of those items + mods of gadgets and keepsakes
 // carried in the backpack (once per item, not per stack; nothing in cabin storage
-// counts) + skill mods × rank + cabin upgrade mods + the rank-5 standing perk +
-// Finn's reputation discount, clamped to the ranges of StatLimits.
-func ComputeStats(p *proto.Profile) core.Stats { return statsWith(p, p.Equipped) }
+// counts) + skill mods × rank + cabin upgrade mods + active food and drink buffs
+// (one per slot) + the rank-5 standing perk + Finn's reputation discount, clamped
+// to the ranges of StatLimits.
+//
+// Food and drink: every buff in Profile.Buffs counts. Profile.Buffs only ever holds
+// buffs that are active — the session calls ExpireBuffs on its tick, which removes
+// the ones that have run out and recomputes — so the clock never enters this
+// function and it stays a pure function of the profile. Use ComputeStatsAt when you
+// hold a clock and want to ignore buffs that ran out since the last tick.
+func ComputeStats(p *proto.Profile) core.Stats { return statsWith(p, p.Equipped, p.Buffs) }
+
+// ComputeStatsAt is ComputeStats counting only the buffs still running at the game
+// clock now (absolute hours, (day-1)*24 + time). It does not change the profile.
+func ComputeStatsAt(p *proto.Profile, now float64) core.Stats {
+	return statsWith(p, p.Equipped, ActiveBuffs(p, now))
+}
 
 // StatsFor is ComputeStats with a hypothetical equipment map (slot → item id; a
 // missing or empty slot is bare hands). Everything else — skills, carried gadgets,
 // cabin, purchased upgrades of the hypothetical items — comes from the profile. Use
 // it to preview a swap or a purchase; it changes nothing.
-func StatsFor(p *proto.Profile, equip map[string]string) core.Stats { return statsWith(p, equip) }
+func StatsFor(p *proto.Profile, equip map[string]string) core.Stats {
+	return statsWith(p, equip, p.Buffs)
+}
 
-func statsWith(p *proto.Profile, equip map[string]string) core.Stats {
+func statsWith(p *proto.Profile, equip map[string]string, buffs []proto.Buff) core.Stats {
 	a := newAccum()
 
 	addItem := func(def *proto.ItemDef) {
@@ -273,10 +288,28 @@ func statsWith(p *proto.Profile, equip map[string]string) core.Stats {
 			a.add(cabinUpgrades[i].Mods, 1)
 		}
 	}
+	// Buffs add last. One per slot: a hand-edited save holding two drinks counts the
+	// one that lasts longest, not both.
+	for _, slot := range buffSlots {
+		if b := bestBuff(buffs, slot); b != nil {
+			a.add(b.Mods, 1)
+		}
+	}
 	a.add(rankPerks[p.Rank], 1)
 	a[statIndex["discount"]] += float64(RepDiscount(p.Rep[FactionOutfitters]))
 
 	return a.stats()
+}
+
+// bestBuff is the buff of a slot that lasts longest (nil if there is none).
+func bestBuff(buffs []proto.Buff, slot string) *proto.Buff {
+	var best *proto.Buff
+	for i := range buffs {
+		if buffs[i].Slot == slot && (best == nil || buffs[i].Until > best.Until) {
+			best = &buffs[i]
+		}
+	}
+	return best
 }
 
 // Recompute refreshes everything derived in the profile: Stats, XPNext, and

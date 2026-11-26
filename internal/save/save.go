@@ -7,9 +7,11 @@
 //     renamed over save.json; the previous save.json is kept as save.json.bak.
 //   - Loading never fails the game. A missing file is a new game. A file that cannot
 //     be decoded, or that does not hold a usable profile, is moved aside as
-//     save.corrupt-<n>.json and the game starts fresh. A file written by an older (or
-//     newer) save format is moved aside as save.v<version>-<n>.json and the game
-//     starts fresh.
+//     save.corrupt-<n>.json and the game starts fresh. A file written by a save format
+//     this build cannot read (older than MinVersion, or newer than Version) is moved
+//     aside as save.v<version>-<n>.json and the game starts fresh. Older formats from
+//     MinVersion on load as they are: the session migrates the profile
+//     (progress.Normalize), and the next save is written in the current format.
 package save
 
 import (
@@ -31,8 +33,16 @@ import (
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
 )
 
-// Version is the save-format version. Bump it whenever File changes incompatibly.
-const Version = 1
+// Version is the save-format version. Bump it whenever File changes.
+//
+//	1  the first playable build
+//	2  phase 2: buffs, forage records, recipes, herbarium and nest journal in the
+//	   profile; species facts in the narrator state (all additive: a version 1 file
+//	   loads and is migrated by progress.MigrateLarder)
+const Version = 2
+
+// MinVersion is the oldest save format this build still loads.
+const MinVersion = 1
 
 // MaxPhotoBytes is the largest photo (decoded JPEG) the store accepts.
 const MaxPhotoBytes = 400 * 1024
@@ -121,7 +131,7 @@ func (s *Store) Load() (f *File, st Status, aside string, err error) {
 		aside, _ = s.moveAside("corrupt")
 		return nil, Corrupt, aside, fmt.Errorf("save: decode: %w", err)
 	}
-	if probe.Version != Version {
+	if probe.Version < MinVersion || probe.Version > Version {
 		aside, _ = s.moveAside(fmt.Sprintf("v%d", probe.Version))
 		return nil, Old, aside, fmt.Errorf("save: format version %d, want %d", probe.Version, Version)
 	}

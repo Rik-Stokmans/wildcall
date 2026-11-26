@@ -134,6 +134,23 @@ func Researched(action, speciesID, what string, stars int) Event {
 	return Event{Kind: KindResearch, Target: action, Params: p}
 }
 
+// Foraged: the player picked from the wild plant plantID (a PlantDef id). Each pick
+// counts once, however many ingredients it gave.
+func Foraged(plantID string, at At) Event {
+	return Event{Kind: KindForage, Target: plantID, Params: at.params()}
+}
+
+// Cooked: the player cooked batches batches of recipeID. slot is the buff slot of
+// the food made (drink | meal | snack), "" if unknown.
+func Cooked(recipeID, slot string, batches int) Event {
+	return Event{Kind: KindCook, Target: recipeID, Params: map[string]string{ParamSlot: slot}, Count: batches}
+}
+
+// Eaten: the player ate or drank itemID (an item id); slot is its buff slot.
+func Eaten(itemID, slot string) Event {
+	return Event{Kind: KindEat, Target: itemID, Params: map[string]string{ParamSlot: slot}}
+}
+
 // RareFound: a proto.RareDiscovery of the given kind was logged.
 func RareFound(rareKind, speciesID string, at At) Event {
 	return Event{Kind: KindRare, Target: rareKind, Params: at.params(ParamSpecies, speciesID)}

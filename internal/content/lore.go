@@ -15,6 +15,8 @@ const (
 //	page_<n>              a Forgotten Field Journal page is picked up
 //	relic_<n>             a relic is picked up
 //	identify:<species id> the species is identified for the first time
+//	forage:<plant id>     the plant is picked for the first time (the session also
+//	                      teaches the recipes of RecipesLearnedBy("plant:<id>"))
 //	cache                 the "modest find" of a cache (see ModestFind)
 //
 // Quest rewards name their entries directly in proto.Reward.Lore.
@@ -23,7 +25,7 @@ var loreUnlocks = map[string][]string{
 	"page_1": {"quiet_water"},
 	"page_2": {"rising_air"},
 	"page_3": {"the_trappers"},
-	"page_4": {"night_in_the_pines"},
+	"page_4": {"night_in_the_pines", "keepers_stew"},
 	"page_5": {"canopy_singers"},
 	"page_6": {"listening_houses"},
 	"page_7": {"the_white_country"},
@@ -34,6 +36,14 @@ var loreUnlocks = map[string][]string{
 	"relic_3": {"pressed_plants"},
 	"relic_4": {"survey_pins"},
 	"relic_5": {"carved_decoy"},
+
+	"forage:bramble":     {"pick_with_care"},
+	"forage:dog_rose":    {"fair_share"},
+	"forage:elder":       {"elder_year"},
+	"forage:chanterelle": {"mushroom_rule"},
+	"forage:penny_bun":   {"mushroom_rule"},
+	"forage:nettle":      {"nettle_nursery"},
+	"forage:samphire":    {"salt_marsh_greens"},
 
 	"identify:eurasian_wren":     {"small_and_loud"},
 	"identify:golden_oriole":     {"flute_in_the_crown"},
@@ -131,6 +141,22 @@ func Lore() []proto.LoreDef {
 			"Surveyors drove brass pins into the ground to mark where a line began. Naturalists borrowed the habit, to return to the same count point year after year."),
 		e("carved_decoy", LoreHistory, "A Carved Decoy",
 			"A decoy is a carved bird set where a real one might land. Whoever carved this one knew the bird's shape by heart."),
+		e("keepers_stew", LoreHistory, "The Keeper's Stew",
+			"The keepers who lived out in the wood ate what it gave them, and the margins of their logbooks are full of it: a penny bun and a handful of chestnuts, thyme from the bank, and oats for body, all in one pot over a low fire. Nobody ever wrote down an amount. Start with less than you think, and taste."),
+
+		// --- the wild larder
+		e("pick_with_care", LoreFieldcraft, "Pick With Care",
+			"The first rule of foraging is certainty: pick nothing you cannot identify beyond doubt, and when a plant has a poisonous lookalike, check every feature the book gives, not just the one you hope for. The second rule is moderation: take a little from many plants rather than a lot from one, leave the best for seed, and never pick a plant to its last leaf. A forager is a visitor with a basket."),
+		e("fair_share", LoreEcology, "A Fair Share",
+			"Hedgerow berries are not decoration. A bramble, a dog rose or an elder in fruit is a larder for thrushes, blackbirds, waxwings and the winter visitors that arrive hungry. Take what you need for one meal, leave at least two berries out of three, and never strip a bush bare; a bush stripped in October means hungry birds in January."),
+		e("elder_year", LoreSpecies, "The Elder's Year",
+			"Elder flowers in late spring, in flat heads that smell of muscat and hay, and fruits in early autumn in heavy purple-black bunches that birds strip within a fortnight. People have made cordial from the flowers and syrup from the berries for as long as there have been kitchens, but the berries are for cooking only: raw they are mildly poisonous, and so are the leaves, bark and stalks."),
+		e("mushroom_rule", LoreFieldcraft, "Mushrooms: Be Certain",
+			"Many of the best-loved wild mushrooms have a poisonous double, and the difference is often a single small feature: ridges where there should be gills, a pink pore where there should be white, a ring on the stem. Experienced foragers learn a few species well, check each one against several features, and take nothing with them they are not sure of. The mushroom you walk past does no harm. The one you are wrong about might."),
+		e("nettle_nursery", LoreEcology, "Nettles and Butterflies",
+			"Stinging nettles are not just a weed. Small tortoiseshell, peacock, red admiral and comma butterflies all lay their eggs on nettle leaves and their caterpillars eat nothing else. Take the top few leaves from a young plant in spring, wear a glove, and leave the older patches alone in summer, when the caterpillars are feeding."),
+		e("salt_marsh_greens", LoreEcology, "Where the Land Meets the Salt",
+			"A salt marsh floods twice a day, and the plants that live there can drink seawater. Samphire stores the salt in its fat, jointed stems, which is why it tastes of the sea. The marsh is also a nursery for fish and a feeding ground for waders; walk on the firm creek edges, take samphire by cutting the tips, and the plants regrow within weeks."),
 
 		// --- species
 		e("why_woodpeckers_drum", LoreSpecies, "Why Woodpeckers Drum",

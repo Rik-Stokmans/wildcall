@@ -1,5 +1,9 @@
 // Procedural low-poly models for every core.VegKind. Pure: no three.js, no DOM.
 //
+// Trees and shrubs are normally drawn from branching models by ./trees/ (the
+// server's tree models, contract §11); the tree builders here are the fallback used
+// until welcome.trees has arrived (or when a server does not send it).
+//
 // Each model is built at scale 1 with its base at the origin (sizes follow the nominal
 // sizes documented on core.Veg) in up to three levels of detail:
 //   detail 2  near  (lod-0 chunks)   full shape: lobed crowns, branches, undersides
@@ -24,7 +28,8 @@ const PINE_BARK = { low: hex(0x4a3527), high: hex(0x6a4a35) };
 const BIRCH_BARK = { pale: hex(0xdcd7c6), mark: hex(0x3d372f), base: hex(0x8d8676) };
 const DEADWOOD = { low: hex(0x6f675d), high: hex(0xa39a8d) };
 const CUT_WOOD = hex(0xb99b6b);
-const MOSS = hex(0x5f7d45);
+const MOSS = hex(0x5a7a3e);
+const MOSS_LIGHT = hex(0x86a552);
 
 const OAK_LEAF = [{ low: hex(0x2c5527), high: hex(0x5f9440) }];
 const BIRCH_LEAF = [{ low: hex(0x4a7a30), high: hex(0x8bb552) }];
@@ -41,14 +46,14 @@ const PINE_NEEDLE = { rim: hex(0x1d4635), tip: hex(0x3f7250), under: hex(0x12301
 const SNOW_NEEDLE = { rim: hex(0x2a5443), tip: hex(0xf2f6fa), under: hex(0x16372a) };
 const SHRUB_LEAF = { low: hex(0x2b5a30), high: hex(0x5d8f44) };
 const REED = { low: hex(0x55713a), tip: hex(0xb1ac6c), head: hex(0x5b3d27) };
-const ROCK = { low: hex(0x6d6b65), high: hex(0x9d9a91) };
+const ROCK = { low: hex(0x6e6a63), high: hex(0xb3aea2) };
 const GRASS = { low: hex(0x44692d), tip: hex(0x93b259) };
-const FERN = { low: hex(0x2a6431), tip: hex(0x66a04a) };
+const FERN = { low: hex(0x2d6a30), tip: hex(0x78b452) };
 const STEM = hex(0x4c7737);
 const PETAL = { centre: hex(0xfff0a8), rim: hex(0xffffff) };
 const DRIFT = { low: hex(0xa79c8a), high: hex(0xd4cbb9) };
 const SHROOM = { stem: hex(0xe9e1cd), rim: hex(0xd9d2c4), top: hex(0xffffff), gill: hex(0xcfc3a8) };
-const PAD = { centre: hex(0x6aa458), rim: hex(0x3b7443), bloom: hex(0xfbeef2) };
+const PAD = { centre: hex(0x6aa458), rim: hex(0x3b7443), bloom: hex(0xfdf3f5), bloomBase: hex(0xf2c6d4) };
 
 // --- helpers -------------------------------------------------------------------
 /** Trees bend from just above the root flare; the top moves the most. */
@@ -257,27 +262,33 @@ function shrub(detail) {
 function reeds(detail) {
   const b = new MeshBuilder();
   const R = rng(1501);
-  b.swayAt = plantSway(2, 2);
+  b.swayAt = plantSway(2.1, 2);
   b.season = 1;
   b.tint = 1;
-  const count = detail === 2 ? 18 : 7;
+  // A clump of slender, arching blades of mixed height; some lean right over.
+  const count = detail === 2 ? 20 : 8;
   for (let i = 0; i < count; i++) {
-    const a = R() * TAU, d = Math.sqrt(R()) * 0.45;
-    const h = 1.25 + R() * 0.75;
+    const a = R() * TAU, d = Math.sqrt(R()) * 0.42;
+    const h = 1.1 + R() * 0.95;
     // Blades start under the surface: reeds usually stand in water.
     const base = [Math.cos(a) * d, -0.35, Math.sin(a) * d];
-    const width = detail === 2 ? 0.08 + R() * 0.05 : 0.17;
-    b.blade(base, R() * TAU, h + 0.35, width, 0.12 + R() * 0.4, detail === 2 && i % 3 === 0 ? 2 : 1, REED.low, REED.tip);
+    const width = detail === 2 ? 0.06 + R() * 0.04 : 0.17;
+    const lean = 0.1 + Math.pow(R(), 2) * 0.75;
+    b.blade(base, a + (R() - 0.5) * 1.2, h + 0.35, width, lean, detail === 2 ? 2 : 1, REED.low, REED.tip, { arch: lean * 0.35 });
   }
   if (detail === 2) {
-    b.season = 0;
-    b.tint = 0.3;
-    for (let i = 0; i < 3; i++) { // cattail heads
-      const a = i * 2.1 + 0.4, d = 0.12 + i * 0.07;
+    // Cattails: a stiff stem, the brown velvet head and a thin spike above it.
+    for (let i = 0; i < 4; i++) {
+      const a = i * 1.9 + 0.4, d = 0.08 + i * 0.07;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
-      const top = 1.62 + i * 0.14;
-      b.blade([x, -0.35, z], a, top + 0.2, 0.03, 0.05, 1, REED.low, REED.tip);
-      b.tube([[x, top - 0.34, z, 0.012], [x, top - 0.3, z, 0.04], [x, top - 0.04, z, 0.04], [x, top, z, 0.012]], 4, () => REED.head);
+      const top = 1.55 + (i % 3) * 0.17;
+      b.season = 1;
+      b.tint = 1;
+      b.blade([x, -0.35, z], a, top + 0.5, 0.026, 0.04, 2, REED.low, REED.tip);
+      b.season = 0;
+      b.tint = 0.3;
+      b.tube([[x, top - 0.3, z, 0.016], [x, top - 0.27, z, 0.042], [x, top - 0.02, z, 0.044], [x, top + 0.02, z, 0.016]], 6, (t) => scale(REED.head, 0.85 + t * 0.3));
+      b.tube([[x, top + 0.02, z, 0.008], [x, top + 0.2, z, 0.003]], 3, () => REED.tip);
     }
   }
   return b.build();
@@ -287,12 +298,17 @@ function rock(detail) {
   const b = new MeshBuilder();
   b.season = 0;
   b.tint = 1;
-  b.blob([0, 0.3, 0], [0.6, 0.64, 0.52], detail === 2 ? 1 : 0, (x, y, z, up) => {
-    // Facets differ a little in tone; upward faces weather lighter and gather moss.
-    const tone = 0.92 + (Math.sin(x * 37.1 + y * 17.3 + z * 29.7) * 0.5 + 0.5) * 0.16;
-    const lit = mix(ROCK.low, ROCK.high, clamp01(up * 0.5 + 0.5));
-    return scale(up > 0.55 ? mix(lit, MOSS, 0.22) : lit, tone);
-  }, { lump: 0.17, seed: 1601, flat: true, floor: -0.15 });
+  // A rounded, weathered boulder: soft shading, a lighter sun-bleached top and a
+  // cushion of moss where rain and leaf litter collect, darker cracks low down.
+  b.blob([0, 0.3, 0], [0.62, 0.62, 0.54], detail === 2 ? 2 : 1, (x, y, z, up) => {
+    const n = Math.sin(x * 9.1 + z * 7.3) * Math.sin(y * 8.7 - x * 5.1) * 0.5 + 0.5;
+    const tone = 0.88 + n * 0.2;
+    let c = mix(ROCK.low, ROCK.high, clamp01(up * 0.55 + 0.45));
+    if (up < -0.1) c = scale(c, 0.85);
+    const moss = clamp01((up - 0.25 + (n - 0.5) * 0.5) * 2.2);
+    if (moss > 0) c = mix(c, mix(MOSS, MOSS_LIGHT, n), moss * 0.85);
+    return scale(c, tone);
+  }, { lump: 0.13, seed: 1601, floor: -0.15 });
   return b.build();
 }
 
@@ -339,12 +355,15 @@ function log() {
   b.season = 0;
   b.tint = 0.4;
   const bark = (t) => mix(BARK.low, BARK.high, 0.3 + 0.5 * Math.sin(t * Math.PI));
-  b.tube([[-1.3, 0.2, 0, 0.26], [-0.4, 0.23, 0.03, 0.26], [0.5, 0.21, 0, 0.24], [1.3, 0.18, -0.03, 0.22]], 7, bark, { capStart: CUT_WOOD, capEnd: CUT_WOOD });
-  b.tube([[0.3, 0.32, 0.1, 0.07], [0.42, 0.5, 0.3, 0.05], [0.5, 0.62, 0.44, 0.035]], 4, bark, { capEnd: CUT_WOOD });
-  // A cushion of moss along the top.
+  b.tube([[-1.3, 0.2, 0, 0.26], [-0.85, 0.22, 0.02, 0.27], [-0.4, 0.23, 0.03, 0.26], [0.1, 0.22, 0.01, 0.25], [0.5, 0.21, 0, 0.24], [1.3, 0.18, -0.03, 0.22]], 9, bark, { capStart: CUT_WOOD, capEnd: CUT_WOOD });
+  b.tube([[0.3, 0.32, 0.1, 0.07], [0.42, 0.5, 0.3, 0.05], [0.5, 0.62, 0.44, 0.035]], 5, bark, { capEnd: CUT_WOOD });
+  // Thick moss along the top, a few cushions spilling down the side.
   b.season = 1;
   b.tint = 0.6;
-  b.blob([-0.45, 0.42, 0.02], [0.55, 0.09, 0.2], 0, (x, y, z, up) => scale(MOSS, 0.85 + up * 0.2), { lump: 0.12, seed: 1901 });
+  const moss = (x, y, z, up) => scale(mix(MOSS, MOSS_LIGHT, clamp01(up * 0.6 + 0.3)), 0.9 + up * 0.1);
+  b.blob([-0.55, 0.42, 0.02], [0.6, 0.1, 0.2], 1, moss, { lump: 0.18, seed: 1901 });
+  b.blob([0.35, 0.39, -0.04], [0.32, 0.08, 0.16], 1, moss, { lump: 0.2, seed: 1902 });
+  b.blob([-1.0, 0.3, 0.2], [0.2, 0.1, 0.14], 0, moss, { lump: 0.2, seed: 1903 });
   return b.build();
 }
 
@@ -352,11 +371,66 @@ function stump() {
   const b = new MeshBuilder();
   b.season = 0;
   b.tint = 0.4;
-  b.tube([[0, -0.3, 0, 0.54], [0, 0.08, 0, 0.42], [0.01, 0.6, 0, 0.36]], 8, (t) => mix(BARK.low, BARK.high, t), { capEnd: CUT_WOOD });
+  // A flared stump with root buttresses, a ragged cut and growth rings on top.
+  b.tube([[0, -0.3, 0, 0.58], [0, 0.0, 0, 0.47], [0, 0.18, 0, 0.4], [0.01, 0.62, 0, 0.36]], 11, (t) => mix(BARK.low, BARK.high, 0.2 + t * 0.6));
+  for (let k = 0; k < 4; k++) {
+    const a = k * TAU / 4 + 0.5;
+    b.tube([[Math.cos(a) * 0.25, 0.25, Math.sin(a) * 0.25, 0.11], [Math.cos(a) * 0.55, -0.02, Math.sin(a) * 0.55, 0.07], [Math.cos(a) * 0.8, -0.18, Math.sin(a) * 0.8, 0.03]], 5, (t) => mix(BARK.low, BARK.high, 0.3 - t * 0.2));
+  }
+  // The cut: concentric rings, lighter at the heart.
+  b.disc([0.01, 0.625, 0], 0.36, 11, mix(CUT_WOOD, [1, 0.9, 0.7], 0.25), scale(CUT_WOOD, 0.8), {});
+  b.disc([0.01, 0.628, 0], 0.22, 9, scale(CUT_WOOD, 1.05), scale(CUT_WOOD, 0.88), { turn: 0.3 });
   b.season = 1;
   b.tint = 0.6;
-  b.blob([0.26, 0.06, 0.2], [0.24, 0.1, 0.2], 0, (x, y, z, up) => scale(MOSS, 0.85 + up * 0.2), { lump: 0.1, seed: 2001 });
+  const moss = (x, y, z, up) => scale(mix(MOSS, MOSS_LIGHT, clamp01(up * 0.6 + 0.3)), 0.9 + up * 0.1);
+  b.blob([0.26, 0.08, 0.2], [0.26, 0.12, 0.22], 1, moss, { lump: 0.15, seed: 2001 });
+  b.blob([-0.18, 0.62, -0.1], [0.14, 0.05, 0.12], 0, moss, { lump: 0.2, seed: 2003 });
   return b.build();
+}
+
+/**
+ * One fern frond: a rachis that rises, arches out and droops, with pairs of tapering
+ * leaflets (pinnae) along it, longest in the middle. Two-sided.
+ */
+function frond(b, R, heading, length, width) {
+  const dx = Math.sin(heading), dz = -Math.cos(heading);
+  const sx = -dz, sz = dx;
+  const N = 8;
+  const at = (t) => [dx * length * 0.85 * t, length * (0.75 * t - 0.8 * t * t) + 0.02, dz * length * 0.85 * t];
+  let prev = null;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const p = at(t);
+    const col = mix(FERN.low, FERN.tip, 0.25 + t * 0.6);
+    if (prev && i < N) {
+      const w = width * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.08)), 0.8) * (0.85 + R() * 0.3);
+      const fwd = [p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]];
+      for (const side of [-1, 1]) {
+        // A leaflet: base on the rachis, tip out to the side, swept forward, drooping.
+        const tip = [p[0] + side * sx * w + fwd[0] * 0.6, p[1] - w * 0.25, p[2] + side * sz * w + fwd[2] * 0.6];
+        const mid = [p[0] + side * sx * w * 0.5 + fwd[0] * 0.55, p[1] - w * 0.05, p[2] + side * sz * w * 0.5 + fwd[2] * 0.55];
+        const back = [p[0] + side * sx * w * 0.45 - fwd[0] * 0.25, p[1] - w * 0.08, p[2] + side * sz * w * 0.45 - fwd[2] * 0.25];
+        const tipCol = mix(col, FERN.tip, 0.4);
+        const i0 = b.vertex(p[0], p[1], p[2], 0, 1, 0, col);
+        const i1 = b.vertex(mid[0], mid[1], mid[2], 0, 1, 0, tipCol);
+        const i2 = b.vertex(tip[0], tip[1], tip[2], 0, 1, 0, tipCol);
+        const i3 = b.vertex(back[0], back[1], back[2], 0, 1, 0, col);
+        b.tri(i0, i1, i2); b.tri(i0, i2, i1);
+        b.tri(i0, i2, i3); b.tri(i0, i3, i2);
+      }
+    }
+    prev = p;
+  }
+  // The rachis itself: a thin two-sided ribbon.
+  for (let i = 0; i < N; i++) {
+    const p = at(i / N), q = at((i + 1) / N);
+    const r = 0.008 * (1 - i / N) + 0.003;
+    const a = b.vertex(p[0] - sx * r, p[1], p[2] - sz * r, 0, 1, 0, FERN.low);
+    const c = b.vertex(p[0] + sx * r, p[1], p[2] + sz * r, 0, 1, 0, FERN.low);
+    const d = b.vertex(q[0] - sx * r, q[1], q[2] - sz * r, 0, 1, 0, FERN.low);
+    const e = b.vertex(q[0] + sx * r, q[1], q[2] + sz * r, 0, 1, 0, FERN.low);
+    b.tri(a, c, e); b.tri(a, e, c); b.tri(a, e, d); b.tri(a, d, e);
+  }
 }
 
 function fern() {
@@ -365,10 +439,10 @@ function fern() {
   b.swayAt = plantSway(0.75, 1.4);
   b.season = 1;
   b.tint = 1;
-  for (let i = 0; i < 8; i++) {
-    const a = i / 8 * TAU + (R() - 0.5) * 0.4;
-    // Fronds rise, arch outwards and droop at the tip.
-    b.blade([Math.sin(a) * 0.04, -0.03, -Math.cos(a) * 0.04], a, 0.5 + R() * 0.3, 0.2 + R() * 0.06, 0.5 + R() * 0.25, 3, FERN.low, FERN.tip, { belly: 0.45, arch: 0.2 + R() * 0.12 });
+  // A shuttlecock of 6 arching fronds.
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * TAU + (R() - 0.5) * 0.4;
+    frond(b, R, a, 0.75 + R() * 0.3, 0.13 + R() * 0.04);
   }
   return b.build();
 }
@@ -397,20 +471,42 @@ function mushroom() {
   return b.build();
 }
 
+/** Lily pads, and now and then a water-lily flower (an optional part: see vegetation.js). */
 function lilyPads() {
   const b = new MeshBuilder();
   const R = rng(2301);
   b.season = 1;
   b.tint = 0.7;
-  const pads = [[0, 0, 0.3], [0.52, 0.2, 0.24], [-0.4, 0.42, 0.26], [0.18, -0.55, 0.2], [-0.5, -0.32, 0.17]];
+  const pads = [[0, 0, 0.3], [0.52, 0.2, 0.24], [-0.4, 0.42, 0.26], [0.18, -0.55, 0.2], [-0.5, -0.32, 0.17], [0.62, -0.38, 0.15]];
   pads.forEach(([x, z, r], i) => {
     // Slightly different heights stop overlapping pads from z-fighting.
-    b.disc([x, i * 0.004, z], r, 9, PAD.centre, PAD.rim, { notch: 1, turn: R() * TAU });
+    const shade = 0.9 + R() * 0.2;
+    b.disc([x, i * 0.004, z], r, 12, scale(PAD.centre, shade), scale(PAD.rim, shade), { notch: 1, turn: R() * TAU });
   });
+  // The flower: two rings of pointed petals around a golden heart.
+  const first = b.vertexCount;
   b.season = 0;
   b.tint = 0;
-  b.disc([0.5, 0.05, 0.22], 0.085, 6, PETAL.centre, PAD.bloom, { cup: 0.05, twoSided: true });
-  return b.build();
+  const fx = 0.3, fz = 0.12, fy = 0.03;
+  for (let ring = 0; ring < 2; ring++) {
+    const n = 8, len = ring ? 0.075 : 0.105, rise = ring ? 0.07 : 0.035;
+    for (let k = 0; k < n; k++) {
+      const a = (k + ring * 0.5) / n * TAU;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const w = 0.028;
+      const c0 = b.vertex(fx, fy + 0.01, fz, 0, 1, 0, PAD.bloomBase);
+      const l = b.vertex(fx + ca * len * 0.45 - sa * w, fy + rise * 0.5, fz + sa * len * 0.45 + ca * w, 0, 1, 0, PAD.bloom);
+      const t = b.vertex(fx + ca * len, fy + rise, fz + sa * len, 0, 1, 0, PAD.bloom);
+      const r = b.vertex(fx + ca * len * 0.45 + sa * w, fy + rise * 0.5, fz + sa * len * 0.45 - ca * w, 0, 1, 0, PAD.bloom);
+      b.tri(c0, l, t); b.tri(c0, t, l); b.tri(c0, t, r); b.tri(c0, r, t);
+    }
+  }
+  b.disc([fx, fy + 0.035, fz], 0.022, 6, PETAL.centre, PETAL.centre, { twoSided: true });
+  const m = b.build();
+  // About one patch in three is in flower.
+  m.part = new Float32Array(m.vertexCount).fill(1);
+  m.part.fill(0.35, first);
+  return m;
 }
 
 // --- registry --------------------------------------------------------------------

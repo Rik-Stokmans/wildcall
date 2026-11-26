@@ -88,37 +88,44 @@ function paintNeedles(size) {
     const R = rng(577 + k * 97);
     const ox = (k & 1) * cell, oy = (k >> 1) * cell;
     const cx = ox + cell / 2, cy = oy + cell / 2;
-    // A few twigs radiating from near the centre.
-    const twigs = 4 + (k % 2);
-    for (let t = 0; t < twigs; t++) {
-      const a = (t / twigs) * TAU + R() * 0.8;
-      const L = cell * (0.3 + R() * 0.1);
-      for (let s = 0; s < 34; s++) {
-        const f = s / 34;
-        const px = cx + Math.cos(a) * L * f, py = cy + Math.sin(a) * L * f;
-        for (const side of [-1, 1]) {
-          const na = a + side * (0.65 + R() * 0.35) - side * f * 0.2;
-          const nl = cell * (0.075 + R() * 0.03) * (1 - f * 0.35);
-          const ex = px + Math.cos(na) * nl, ey = py + Math.sin(na) * nl;
-          if (ex < ox + 2 || ex > ox + cell - 2 || ey < oy + 2 || ey > oy + cell - 2) continue;
-          const grad = 0.6 + f * 0.25 + R() * 0.12;
-          g.strokeStyle = grey(grad);
-          g.lineWidth = 1.6 + R() * 0.8;
-          g.beginPath();
-          g.moveTo(px, py);
-          g.lineTo(ex, ey);
-          g.stroke();
+    // Several overlapping sprays: twigs with tufts of needles brushed forwards, so a
+    // card reads as soft layered foliage rather than as a single star.
+    for (let sp = 0; sp < 3; sp++) {
+      const sx = cx + (R() - 0.5) * cell * 0.22, sy = cy + (R() - 0.5) * cell * 0.22;
+      const twigs = 3 + Math.floor(R() * 2);
+      const turn = R() * TAU;
+      for (let t = 0; t < twigs; t++) {
+        const a = turn + (t / twigs) * TAU + (R() - 0.5) * 0.6;
+        const L = cell * (0.22 + R() * 0.12);
+        const bend = (R() - 0.5) * 0.6;
+        for (let s2 = 0; s2 < 26; s2++) {
+          const f = s2 / 26;
+          const ta = a + bend * f;
+          const px = sx + Math.cos(ta) * L * f, py = sy + Math.sin(ta) * L * f;
+          for (const side of [-1, 1]) {
+            const na = ta + side * (0.5 + R() * 0.35);
+            const nl = cell * (0.06 + R() * 0.03) * (1 - f * 0.3);
+            const ex = px + Math.cos(na) * nl, ey = py + Math.sin(na) * nl;
+            if (ex < ox + 3 || ex > ox + cell - 3 || ey < oy + 3 || ey > oy + cell - 3) continue;
+            g.strokeStyle = grey(0.66 + f * 0.22 + sp * 0.03 + R() * 0.1);
+            g.lineWidth = 1.8 + R() * 1.2;
+            g.beginPath();
+            g.moveTo(px, py);
+            g.lineTo(ex, ey);
+            g.stroke();
+          }
         }
       }
     }
-    // Fill the heart of the spray so it hides what is behind it.
-    for (let i = 0; i < 40; i++) {
-      const a = R() * TAU, d = Math.pow(R(), 0.8) * cell * 0.17;
-      g.strokeStyle = grey(0.55 + R() * 0.15);
-      g.lineWidth = 2;
+    // Fill the heart of the card so it hides what is behind it.
+    for (let i = 0; i < 120; i++) {
+      const a = R() * TAU, d = Math.pow(R(), 0.7) * cell * 0.24;
+      const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d, l = cell * (0.05 + R() * 0.04), b = a + (R() - 0.5) * 2;
+      g.strokeStyle = grey(0.6 + R() * 0.16);
+      g.lineWidth = 2.2;
       g.beginPath();
-      g.moveTo(cx + Math.cos(a) * d, cy + Math.sin(a) * d);
-      g.lineTo(cx + Math.cos(a) * (d + cell * 0.08), cy + Math.sin(a) * (d + cell * 0.08));
+      g.moveTo(x, y);
+      g.lineTo(x + Math.cos(b) * l, y + Math.sin(b) * l);
       g.stroke();
     }
   }
@@ -134,9 +141,9 @@ function paintBark(kind, size) {
     g.fillStyle = grey(0.97);
     g.fillRect(0, 0, size, size);
     // Faint warm horizontal banding and the dark lenticel dashes birch is known for.
-    for (let i = 0; i < 26; i++) {
-      const y = R() * size, w = size * (0.06 + R() * 0.22), x = R() * size, h = 1.5 + R() * 3.5;
-      g.fillStyle = grey(0.18 + R() * 0.15, 0.9);
+    for (let i = 0; i < 22; i++) {
+      const y = R() * size, w = size * (0.05 + R() * 0.16), x = R() * size, h = 1 + R() * 2.5;
+      g.fillStyle = grey(0.25 + R() * 0.2, 0.85);
       for (const dx of [0, -size, size]) g.fillRect(x + dx, y, w, h);
     }
     for (let i = 0; i < 6; i++) { // a few bigger dark scars
@@ -154,14 +161,20 @@ function paintBark(kind, size) {
   g.fillRect(0, 0, size, size);
   if (kind === 'plates') {
     // Irregular plates separated by dark cracks.
-    for (let i = 0; i < 70; i++) {
-      const x = R() * size, y = R() * size, w = size * (0.08 + R() * 0.1), h = size * (0.12 + R() * 0.16);
-      g.fillStyle = grey(0.8 + R() * 0.2);
-      for (const dx of [0, -size, size]) for (const dy of [0, -size, size]) g.fillRect(x + dx, y + dy, w, h);
+    for (let i = 0; i < 220; i++) {
+      const x = R() * size, y = R() * size, w = size * (0.03 + R() * 0.04), h = size * (0.05 + R() * 0.07);
+      g.fillStyle = grey(0.78 + R() * 0.22, 0.85);
+      for (const dx of [0, -size, size]) {
+        for (const dy of [0, -size, size]) {
+          g.beginPath();
+          g.ellipse(x + dx, y + dy, w, h, 0, 0, TAU);
+          g.fill();
+        }
+      }
     }
-    g.strokeStyle = grey(0.35, 0.8);
-    g.lineWidth = 2;
-    for (let i = 0; i < 40; i++) {
+    g.strokeStyle = grey(0.45, 0.7);
+    g.lineWidth = 1.5;
+    for (let i = 0; i < 60; i++) {
       const x = R() * size, y = R() * size;
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - 0.5) * 14, y + size * 0.15); g.stroke();
     }
@@ -174,8 +187,8 @@ function paintBark(kind, size) {
   const furrows = twist ? 17 : 34;
   for (let i = 0; i < furrows; i++) {
     const x0 = (i / furrows) * period + R() * 6;
-    g.strokeStyle = grey(0.42 + R() * 0.18, 0.9);
-    g.lineWidth = 2 + R() * 3;
+    g.strokeStyle = grey(0.55 + R() * 0.15, 0.8);
+    g.lineWidth = 1.5 + R() * 2.5;
     // Drawn three times, a tile apart, so the furrows wrap around the stem seamlessly.
     for (let dx = -size; dx <= size; dx += period) {
       g.beginPath();

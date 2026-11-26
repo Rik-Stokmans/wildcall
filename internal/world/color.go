@@ -39,9 +39,15 @@ var (
 	cIce       = rgb{196, 222, 240}
 	cEarth     = rgb{156, 122, 84} // trodden trail
 	cYard      = rgb{146, 120, 88} // trodden pads
-	cDamp      = rgb{92, 80, 60}   // damp earth at the water's edge
-	cBed       = rgb{104, 100, 78} // stream / pond bed
+	cDamp      = rgb{96, 84, 54}   // damp earth up the bank
+	cEarthBank = rgb{110, 102, 62} // mossy loam on steep earth banks
+	cWetEarth  = rgb{70, 54, 36}   // dark, rich wet loam right at the water line
+	cWetSand   = rgb{164, 136, 92} // wet sand at the sea's edge
+	cBed       = rgb{112, 94, 64}  // stream / pond bed: warm brown gravel
+	cBedDeep   = rgb{66, 72, 54}   // deeper bed: dark, a little weedy
 	cSeaBed    = rgb{178, 166, 126}
+	cWarmWash  = rgb{1.1, 1.03, 0.8} // multipliers for the large-scale colour drift
+	cCoolWash  = rgb{0.86, 1.0, 1.06}
 )
 
 // regionColor is a region type's ground colour before the shared layers.
@@ -109,20 +115,33 @@ func (g *gen) vertexColor(x, z, h, slope float64, hab core.Habitat, s *sample, r
 	if frost > 0.5 {
 		rockC = rockC.mix(cSnowBlue, 0.35)
 	}
-	c = c.mix(rockC, math.Max(smoothstep(0.6, 0.95, slope), s.rock*0.7*(1-frost*0.5)))
-	// The water's edge: darker damp earth, then the bed below the surface.
+	// In the lowland forests and the marsh a steep slope that is not an outcrop
+	// is an earth bank (pond rims, creek banks, hollows): mossy loam, not rock.
+	soft := (s.w[core.RegionGreenhollow] + s.w[core.RegionAmberwood] + s.w[core.RegionMurmurMarsh]) * (1 - smoothstep(0.2, 0.5, s.rock))
+	steep := rockC.mix(cEarthBank, soft*0.85)
+	c = c.mix(steep, smoothstep(0.6, 0.95, slope))
+	c = c.mix(rockC, s.rock*0.7*(1-frost*0.5))
+	// The water's edge: damp earth fading up the bank, dark wet loam (or wet
+	// sand) at the water line, then the bed below the surface - warm gravel in
+	// the shallows, darker and a little weedy deeper down.
 	if s.ice > 0.5 {
 		c = c.mix(cIce, smoothstep(0.5, 0.8, s.ice))
 	} else {
-		damp := (1 - smoothstep(0.15, 0.85, h)) * (1 - frost)
-		bed := cBed
+		sandy := 0.0
 		if s.seaDist < 40 || s.sea {
-			bed = cSeaBed
-			damp *= 0.4 // sand is damp too, but stays light
+			sandy = 1 - smoothstep(25, 40, s.seaDist)
+			if s.sea {
+				sandy = 1
+			}
 		}
-		c = c.mix(cDamp, damp*0.75)
+		sandy *= 1 - smoothstep(0.3, 0.6, slope) // steep banks stay earthen
+		damp := (1 - smoothstep(0.2, 1.1, h)) * (1 - frost)
+		wet := (1 - smoothstep(-0.05, 0.4, h)) * (1 - frost)
+		c = c.mix(cDamp.mix(cWetSand, sandy), damp*0.55)
+		c = c.mix(cWetEarth.mix(cWetSand, sandy), wet*0.85)
 		if h < 0 {
-			c = c.mix(bed, smoothstep(0, -0.8, h)).scale(1 - 0.25*smoothstep(-0.5, -6, h))
+			bed := cBed.mix(cBedDeep, smoothstep(-0.3, -1.6, h)).mix(cSeaBed, sandy)
+			c = c.mix(bed, smoothstep(0, -0.5, h)).scale(1 - 0.25*smoothstep(-1.5, -6, h))
 		}
 	}
 	// Trails and pads.
@@ -138,6 +157,14 @@ func (g *gen) vertexColor(x, z, h, slope float64, hab core.Habitat, s *sample, r
 	}
 	if r.pad > 0 {
 		c = c.mix(cYard, 0.7*r.pad*(1-frost*0.5))
+	}
+	// Large-scale drift over a few hundred metres: golden, sunnier patches and
+	// cooler, lusher ones, so meadows and forest floors are never one flat tone.
+	if hab == core.HabMeadow || hab == core.HabWoodland || hab == core.HabConifer || hab == core.HabShrub || hab == core.HabAlpine || hab == core.HabMarsh {
+		nl := g.n[lColor].Eval(x/230+41, z/230-17) + 0.35*g.n[lGrain].Eval(x/95-8, z/95+23)
+		k := (1 - frost) * (1 - r.trail) * (1 - r.pad)
+		c = c.mix(rgb{c.r * cWarmWash.r, c.g * cWarmWash.g, c.b * cWarmWash.b}, smoothstep(0.05, 0.6, nl)*0.7*k)
+		c = c.mix(rgb{c.r * cCoolWash.r, c.g * cCoolWash.g, c.b * cCoolWash.b}, smoothstep(-0.05, -0.6, nl)*0.7*k)
 	}
 	// Painterly variation: a broad brightness wash and a fine hue shimmer.
 	n1 := g.n[lColor].Eval(x/27, z/27)

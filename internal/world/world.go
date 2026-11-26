@@ -20,6 +20,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 )
@@ -53,9 +54,12 @@ type World struct {
 	pois    *lru[cellKey, []core.POI]
 	grids   *lru[chunkKey, *grid]
 	veg     *lru[chunkKey, *vegSet]
-	perches *lru[chunkKey, []core.Perch]
+	perches *lru[chunkKey, *perchSet]
 	chunks  *lru[lodKey, []byte]
 	tiles   *lru[cellKey, []byte]
+
+	homeForageOnce sync.Once
+	homeForageVeg  []core.Veg // guaranteed forage patches in the home valley
 }
 
 var _ core.Terrain = (*World)(nil)
@@ -75,7 +79,7 @@ func New(seed int64) *World {
 		pois:    newLRU[cellKey, []core.POI](capPOIs),
 		grids:   newLRU[chunkKey, *grid](capGrids),
 		veg:     newLRU[chunkKey, *vegSet](capVeg),
-		perches: newLRU[chunkKey, []core.Perch](capPerches),
+		perches: newLRU[chunkKey, *perchSet](capPerches),
 		chunks:  newLRU[lodKey, []byte](capChunks),
 		tiles:   newLRU[cellKey, []byte](capTiles),
 	}
@@ -186,8 +190,8 @@ func (w *World) finishHome() {
 		p.Pos.Y = float32(height(float64(p.Pos.X), float64(p.Pos.Z)))
 	}
 	hl.spawn.Y = float32(height(float64(hl.spawn.X), float64(hl.spawn.Z)))
-	hl.special = append(hl.special, core.Veg{Kind: core.VegOak, Variant: 7, Pos: vec(hl.oakX, height(hl.oakX, hl.oakZ), hl.oakZ), Scale: 2.6, Rot: 0.8})
+	hl.special = append(hl.special, core.Veg{Kind: core.VegOak, Variant: 6, Pos: vec(hl.oakX, height(hl.oakX, hl.oakZ), hl.oakZ), Scale: 2.6, Rot: quantRot(0.8)})
 	for i, st := range hl.stones {
-		hl.special = append(hl.special, core.Veg{Kind: core.VegRock, Variant: uint8(40 + i*37), Pos: vec(st[0], height(st[0], st[1]), st[1]), Scale: 0.65, Rot: float32(i) * 1.3})
+		hl.special = append(hl.special, core.Veg{Kind: core.VegRock, Variant: uint8(40 + i*37), Pos: vec(st[0], height(st[0], st[1]), st[1]), Scale: 0.65, Rot: quantRot(float64(i) * 1.3)})
 	}
 }

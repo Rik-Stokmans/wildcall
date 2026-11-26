@@ -35,8 +35,10 @@ var (
 
 var knownParams = []string{
 	ParamBehavior, ParamMinStars, ParamMethod, ParamRegion, ParamHabitat, ParamRarity,
-	ParamPhase, ParamDistinct, ParamSpecies, ParamWhat,
+	ParamPhase, ParamDistinct, ParamSpecies, ParamWhat, ParamSlot,
 }
+
+var slotKeys = []string{"drink", "meal", "snack"}
 
 // paramValues returns the alternatives of a parameter value ("a|b").
 func paramValues(v string) []string { return strings.Split(v, "|") }
@@ -129,6 +131,11 @@ func Validate(speciesIDs, itemIDs, poiIDs, skillIDs []string) []error {
 				bad("lore trigger %s: unknown entry %q", trig, id)
 			}
 		}
+		if p, ok := strings.CutPrefix(trig, "forage:"); ok {
+			if _, known := Plant(p); !known {
+				bad("lore trigger %s: unknown plant", trig)
+			}
+		}
 		if strings.HasPrefix(trig, "identify:") && !species[strings.TrimPrefix(trig, "identify:")] {
 			bad("lore trigger %s: unknown species", trig)
 		}
@@ -162,6 +169,10 @@ func Validate(speciesIDs, itemIDs, poiIDs, skillIDs []string) []error {
 			bad("cache find item %q is not a known item", it)
 		}
 	}
+
+	// The field kitchen: plants, recipes and the items they reference.
+	larder := larderRefs{plants: map[string]bool{}, recipes: map[string]bool{}, items: items}
+	errs = append(errs, validateLarder(items, lore, npcs, larder.plants, larder.recipes)...)
 
 	// Quests.
 	quests := Quests()
@@ -206,7 +217,7 @@ func Validate(speciesIDs, itemIDs, poiIDs, skillIDs []string) []error {
 				bad("%s: objective id %q empty or duplicate", w, ob.ID)
 			}
 			seen[ob.ID] = true
-			for _, e := range validateObjective(ob, species, pois, collectibles, npcs, regionKeys) {
+			for _, e := range validateObjective(ob, species, pois, collectibles, npcs, regionKeys, larder) {
 				bad("%s objective %s: %s", w, ob.ID, e)
 			}
 		}
@@ -231,7 +242,10 @@ func Validate(speciesIDs, itemIDs, poiIDs, skillIDs []string) []error {
 	return errs
 }
 
-func validateObjective(ob proto.ObjectiveDef, species, pois, collectibles, npcs, regions map[string]bool) []string {
+// larderRefs are the ids a forage, cook or eat objective may name.
+type larderRefs struct{ plants, recipes, items map[string]bool }
+
+func validateObjective(ob proto.ObjectiveDef, species, pois, collectibles, npcs, regions map[string]bool, larder larderRefs) []string {
 	var out []string
 	add := func(f string, a ...any) { out = append(out, fmt.Sprintf(f, a...)) }
 	if ob.Text == "" {
@@ -285,6 +299,21 @@ func validateObjective(ob proto.ObjectiveDef, species, pois, collectibles, npcs,
 		if ob.Target != TargetAny && !oneOf(ob.Target, rareKinds...) {
 			add("unknown rare kind %q", ob.Target)
 		}
+	case KindForage:
+		if ob.Target != TargetAny && !larder.plants[ob.Target] {
+			add("unknown plant %q", ob.Target)
+		}
+	case KindCook:
+		if ob.Target != TargetAny && !larder.recipes[ob.Target] {
+			add("unknown recipe %q", ob.Target)
+		}
+	case KindEat:
+		if ob.Target != TargetAny && !larder.items[ob.Target] {
+			add("unknown item %q", ob.Target)
+		}
+	}
+	if ob.Kind != KindCook && ob.Kind != KindEat && ob.Params[ParamSlot] != "" {
+		add("slot applies only to cook and eat objectives")
 	}
 	for k, v := range ob.Params {
 		if !oneOf(k, knownParams...) {
@@ -328,6 +357,10 @@ func validateObjective(ob proto.ObjectiveDef, species, pois, collectibles, npcs,
 			case ParamWhat:
 				if !oneOf(one, researchWhat...) {
 					add("what %q", one)
+				}
+			case ParamSlot:
+				if !oneOf(one, slotKeys...) {
+					add("slot %q", one)
 				}
 			case ParamDistinct:
 				if one != "true" {
@@ -403,4 +436,106 @@ func set(list []string) map[string]bool {
 		m[s] = true
 	}
 	return m
+}
+
+// validateLarder checks the plant and recipe catalogs and fills plants and recipes
+// with their ids for the quests to check against. items are the real item ids the
+// server passes in: every yield, input and output must be among them.
+func validateLarder(items, lore, npcs, plants, recipes map[string]bool) []error {
+	var errs []error
+	bad := func(format string, a ...any) { errs = append(errs, fmt.Errorf("content: "+format, a...)) }
+
+	for _, p := range Plants() {
+		w := "plant " + p.ID
+		if p.ID == "" || plants[p.ID] {
+			bad("%s: empty or duplicate id", w)
+		}
+		plants[p.ID] = true
+		if p.Veg < int(core.FirstForageKind) || p.Veg >= int(core.VegKindCount) {
+			bad("%s: veg kind %d is not a forage kind", w, p.Veg)
+		}
+		if p.Name == "" || p.Sci == "" || len(p.Desc) < 80 || len(p.Uses) < 20 || p.Habitat == "" || p.Icon == "" {
+			bad("%s: incomplete text", w)
+		}
+		if p.Regrow < 3 || p.Regrow > 8 {
+			bad("%s: regrow %d days, want 3..8", w, p.Regrow)
+		}
+		if len(p.Regions) == 0 {
+			bad("%s: grows nowhere", w)
+		}
+		for _, r := range p.Regions {
+			if r < 0 || r >= int(core.RegionCount) {
+				bad("%s: region %d", w, r)
+			}
+		}
+		if len(p.Yields) == 0 {
+			bad("%s: yields nothing", w)
+		}
+		for _, y := range p.Yields {
+			if !items[y.Item] {
+				bad("%s: yield item %q is not a known item", w, y.Item)
+			}
+			if y.Min < 1 || y.Max < y.Min || y.Max > 3 || y.Seasons == [4]bool{} {
+				bad("%s: yield %s has bad amounts or seasons", w, y.Item)
+			}
+		}
+	}
+	seenVeg := map[int]bool{}
+	for _, p := range Plants() {
+		if seenVeg[p.Veg] {
+			bad("plant %s: veg kind %d is used twice", p.ID, p.Veg)
+		}
+		seenVeg[p.Veg] = true
+	}
+	if n := len(Plants()); n != int(core.VegKindCount-core.FirstForageKind) {
+		bad("plants: %d, want one per forage veg kind (%d)", n, core.VegKindCount-core.FirstForageKind)
+	}
+
+	for _, r := range Recipes() {
+		w := "recipe " + r.ID
+		if r.ID == "" || recipes[r.ID] {
+			bad("%s: empty or duplicate id", w)
+		}
+		recipes[r.ID] = true
+		if r.Name == "" || r.Desc == "" {
+			bad("%s: incomplete text", w)
+		}
+		if !oneOf(r.Station, StationKettle, StationStove) {
+			bad("%s: station %q", w, r.Station)
+		}
+		if !items[r.Output] {
+			bad("%s: output %q is not a known item", w, r.Output)
+		}
+		if r.Qty < 1 || len(r.Inputs) == 0 {
+			bad("%s: makes %d from %d inputs", w, r.Qty, len(r.Inputs))
+		}
+		for _, in := range r.Inputs {
+			if !items[in.Item] || in.Qty < 1 {
+				bad("%s: input %s x%d is not valid", w, in.Item, in.Qty)
+			}
+		}
+		kind, arg, _ := strings.Cut(r.Learn, ":")
+		switch {
+		case r.Learn == LearnStart:
+		case kind+":" == LearnPlant:
+			if !plants[arg] {
+				// Plants are all registered above, so this is a real mistake.
+				bad("%s: learned from unknown plant %q", w, arg)
+			}
+		case kind+":" == LearnNPC:
+			if !npcs[arg] {
+				bad("%s: learned from unknown npc %q", w, arg)
+			}
+			if !npcTeaches(arg, r.ID) {
+				bad("%s: npc %s has no dialogue that teaches it", w, arg)
+			}
+		case kind+":" == LearnLore:
+			if !lore[arg] {
+				bad("%s: learned from unknown lore entry %q", w, arg)
+			}
+		default:
+			bad("%s: learn rule %q", w, r.Learn)
+		}
+	}
+	return errs
 }

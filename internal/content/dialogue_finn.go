@@ -27,6 +27,8 @@ func finnSpeaker() *speaker {
 			{id: "f_pack", title: "How much can I carry?", lines: finnPack},
 			{id: "f_upgrades", title: "Can I improve what I already have?", lines: finnUpgrades},
 			{id: "f_credits", title: "How do I earn Field Credits?", lines: finnCredits},
+			{id: "f_pantry", title: "Do you sell anything to cook with?", lines: finnPantry},
+			{id: "f_flatbread", title: "Do you know a good trail bread?", lines: finnFlatbread, acts: teachRecipe("wild_garlic_flatbread")},
 		},
 		taken: map[string][]string{
 			"perfect_moment": {
@@ -100,5 +102,19 @@ func finnCredits(*dctx) []string {
 	return []string{
 		"Field Credits come from work, not from wandering. Quests and research contracts pay, and so do discoveries, and so does a photograph or a recording submitted at your Research Desk, once each. Seeing the same robin twice earns you nothing, which is as it should be.",
 		"Look at the board in your cabin for contracts. They are small and they pay properly.",
+	}
+}
+
+func finnPantry(*dctx) []string {
+	return []string{
+		"I do, actually, and do not look so surprised. Oats, honey from the hives down the valley, and flour. Plain stuff. The wild plants bring the flavour and I bring the bits that keep.",
+		"Put your own in the pack and cook it at the cabin or a camp fire. And do mind the pack: ingredients stack, but they still take up room, and a full pack means a picked mushroom has nowhere to go.",
+	}
+}
+
+func finnFlatbread(*dctx) []string {
+	return []string{
+		"Wild garlic flatbread. Flour, a few crushed ramsons leaves, water, a hot dry pan. Nothing to it. I put one in my pocket every spring when the woods smell like a kitchen and I swear I walk further on it.",
+		"I have written it down for you. You will need the stove at the cabin: a camp fire is not flat enough, and I speak from experience.",
 	}
 }

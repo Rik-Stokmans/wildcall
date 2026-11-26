@@ -16,6 +16,7 @@ const (
 	ActionGiveItem    = "give_item"     // Item x Qty into the inventory (the session announces it)
 	ActionSetFlag     = "set_flag"      // Flag = Value in Profile.Flags
 	ActionClose       = "close"         // end the conversation (send a dialog with no lines and no choices)
+	ActionLearnRecipe = "learn_recipe"  // Recipe: progress.LearnRecipe(p, Recipe); the session announces it if it was new
 )
 
 // Action is one thing the session must do as the result of a dialogue choice.
@@ -26,6 +27,8 @@ type Action struct {
 	Qty   int    `json:"qty,omitempty"`
 	Flag  string `json:"flag,omitempty"`
 	Value bool   `json:"value,omitempty"`
+	// Recipe is the recipe id of a learn_recipe action.
+	Recipe string `json:"recipe,omitempty"`
 }
 
 // Dialogue choice kinds (proto.DialogChoice.Kind).
@@ -488,4 +491,48 @@ func speciesWord(n int) string {
 		return "one species"
 	}
 	return strconv.Itoa(n) + " species"
+}
+
+// offerIfAvailable is a topic follow-up that leads on to a quest pitch when the NPC
+// has that quest and the player could take it up now: a conversation about
+// foraging can end in the errand about foraging, even when the hub's two pitch
+// slots are taken.
+func offerIfAvailable(questID, text string) func(*dctx) []proto.DialogChoice {
+	return func(c *dctx) []proto.DialogChoice {
+		q, ok := c.ownQuest(questID)
+		if !ok {
+			return nil
+		}
+		if okAcc, _ := c.t.canAccept(c.p, q); !okAcc {
+			return nil
+		}
+		return []proto.DialogChoice{next(pfxOffer+questID, text)}
+	}
+}
+
+// teachRecipe is a topic action that teaches a recipe. LearnRecipe is idempotent, so
+// the topic can be asked again.
+func teachRecipe(id string) func(*dctx) []Action {
+	return func(*dctx) []Action { return []Action{{Kind: ActionLearnRecipe, Recipe: id}} }
+}
+
+// npcTeaches reports whether one of the NPC's topics fires a learn_recipe action for
+// the recipe (Validate uses it to check "npc:<id>" learn rules).
+func npcTeaches(npcID, recipeID string) bool {
+	sp := speakers[npcID]
+	if sp == nil {
+		return false
+	}
+	c := &dctx{p: &proto.Profile{}, t: defaultTracker(), sp: sp}
+	for _, tp := range sp.topics {
+		if tp.acts == nil {
+			continue
+		}
+		for _, a := range tp.acts(c) {
+			if a.Kind == ActionLearnRecipe && a.Recipe == recipeID {
+				return true
+			}
+		}
+	}
+	return false
 }

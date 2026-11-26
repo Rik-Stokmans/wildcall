@@ -20,6 +20,8 @@ var (
 	ErrSkillPoints  = errors.New("not enough skill points") // cannot afford the skill
 	ErrMaxed        = errors.New("already at maximum")      // skill fully learned
 	ErrPackFull     = errors.New("pack full")               // no room in the backpack
+	ErrRecipe       = errors.New("recipe not known")        // the player has not learned that recipe
+	ErrIngredients  = errors.New("missing ingredients")     // not enough of the inputs in the pack
 )
 
 // RuleError is a rule violation with a gentle, player-facing message. The game stays

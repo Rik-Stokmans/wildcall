@@ -48,6 +48,8 @@ export const STATIONS = [
   { id: 'storage', label: 'Storage', icon: 'storage' },
   { id: 'upgrades', label: 'Cabin Upgrades', icon: 'upgrade' },
   { id: 'rest', label: 'Rest', icon: 'moon' },
+  // c-field hook: the kitchen opens the field-kitchen screen ('cook', web/js/forage).
+  { id: 'kitchen', label: 'Kitchen', icon: 'camp' },
 ];
 export const STATION_IDS = STATIONS.map((s) => s.id);
 

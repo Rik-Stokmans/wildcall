@@ -51,15 +51,23 @@ var shapes = [core.VegKindCount]treeShape{
 	core.VegPine:       {height: 14, crownY: 0.56, rx: 2.9, ry: 5.4, occ: 0.35, cover: 0.8, isTree: true},
 	core.VegSnowPine:   {height: 14, crownY: 0.56, rx: 2.9, ry: 5.4, occ: 0.35, cover: 0.8, isTree: true},
 	core.VegSnag:       {height: 8, snag: true},
-	core.VegShrub:      {height: 1.6, crownY: 0.5, rx: 1.15, ry: 0.85, occ: 0.25, cover: 0.75},
-	core.VegReeds:      {height: 2, crownY: 0.5, rx: 0.85, ry: 1.0, occ: 0.2, cover: 0.6},
+	core.VegChestnut:   {height: 13, crownY: 0.62, rx: 4.6, ry: 3.6, occ: 0.38, cover: 0.85, isTree: true},
+	// Forage bushes: soft occluders and shrub perches (nominal sizes at scale 1).
+	core.VegBramble:      {height: 1.3, crownY: 0.5, rx: 1.1, ry: 0.65, occ: 0.25, cover: 0.75},
+	core.VegElder:        {height: 3.4, crownY: 0.6, rx: 1.5, ry: 1.3, occ: 0.25, cover: 0.6},
+	core.VegDogRose:      {height: 1.9, crownY: 0.55, rx: 1.0, ry: 0.85, occ: 0.2, cover: 0.55},
+	core.VegHazel:        {height: 4.2, crownY: 0.55, rx: 1.8, ry: 1.8, occ: 0.28, cover: 0.65},
+	core.VegSeaBuckthorn: {height: 2.2, crownY: 0.55, rx: 1.2, ry: 1.0, occ: 0.25, cover: 0.6},
+	core.VegShrub:        {height: 1.6, crownY: 0.5, rx: 1.15, ry: 0.85, occ: 0.25, cover: 0.75},
+	core.VegReeds:        {height: 2, crownY: 0.5, rx: 0.85, ry: 1.0, occ: 0.2, cover: 0.6},
 }
 
 func vegLOD(k core.VegKind) uint8 {
-	switch k {
-	case core.VegOak, core.VegBirch, core.VegPine, core.VegSnag, core.VegAmberOak, core.VegAmberBirch, core.VegSnowPine:
+	switch {
+	case k.IsTree():
 		return lodTrees
-	case core.VegShrub, core.VegRock, core.VegReeds:
+	case k == core.VegShrub || k == core.VegRock || k == core.VegReeds || isForage(k):
+		// Forage plants are in the lists at LOD 0 and 1 (contract §12).
 		return lodMid
 	}
 	return lodDecor
@@ -81,7 +89,8 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 	bx, bz := float64(cx*core.ChunkSize), float64(cz*core.ChunkSize)
 
 	add := func(k core.VegKind, x, y, z, scale float64) {
-		vs.veg = append(vs.veg, core.Veg{Kind: k, Variant: uint8(r.Intn(256)), Pos: vec(x, y, z), Scale: float32(scale), Rot: float32(r.Range(0, 2*math.Pi))})
+		// 252 = 42 x 6: the variant selects a tree model (variant % 6) uniformly.
+		vs.veg = append(vs.veg, core.Veg{Kind: k, Variant: uint8(r.Intn(252)), Pos: vec(x, y, z), Scale: float32(scale), Rot: quantRot(r.Range(0, 2*math.Pi))})
 		vs.lod = append(vs.lod, vegLOD(k))
 	}
 	lookup := func(x, z float64) (*gvert, float64) {
@@ -95,6 +104,7 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 	}
 	for _, v := range w.hl.special {
 		if inChunk(v.Pos) {
+			v.Rot = quantRot(float64(v.Rot))
 			vs.veg = append(vs.veg, v)
 			vs.lod = append(vs.lod, vegLOD(v.Kind))
 		}
@@ -106,11 +116,18 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 				if inChunk(v.Pos) {
 					fx, fz := gr.local(float64(v.Pos.X), float64(v.Pos.Z))
 					v.Pos.Y = float32(gr.heightAt(fx, fz))
+					v.Rot = quantRot(float64(v.Rot))
 					vs.veg = append(vs.veg, v)
 					vs.lod = append(vs.lod, vegLOD(v.Kind))
 				}
 			}
 		}
+	}
+
+	// The home valley's guaranteed forage patches keep the trees off themselves.
+	var home []core.Veg
+	if hypot(bx+32, bz+32) < core.HomeRadius+150 {
+		home = w.homeForage()
 	}
 
 	// --- trees -----------------------------------------------------------------
@@ -123,7 +140,7 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 			roll, pick, sc := r.Float64(), r.Float64(), r.Float64()
 			v, h := lookup(x, z)
 			p := treeDensity(v, h)
-			if roll >= p {
+			if roll >= p || (home != nil && nearHomeForage(home, x, z, forageHomeKeep)) {
 				continue
 			}
 			k, lo, hi := treeKind(core.RegionID(v.reg), core.Habitat(v.hab), v, pick)
@@ -146,6 +163,9 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 			n := groundOptions(v, h, opts[:0])
 			for _, o := range n {
 				if roll < o.p {
+					if home != nil && nearHomeForage(home, x, z, 1.1) {
+						break
+					}
 					lo, hi := decorScale(o.k)
 					add(o.k, x, h, z, lerp(lo, hi, sc))
 					break
@@ -189,7 +209,10 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 		}
 	}
 
-	// Foliage shapes for occlusion and cover.
+	// --- forage plants (last, so their indices never move other records) -------
+	w.placeForage(cx, cz, gr, vs, home)
+
+	// Foliage shapes for occlusion and cover: tree crowns from their models.
 	for i := range vs.veg {
 		v := &vs.veg[i]
 		sh := shapes[v.Kind]
@@ -197,6 +220,16 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 			continue
 		}
 		s := float64(v.Scale)
+		if v.Kind.IsTree() {
+			m := treeModelFor(v.Kind, v.Variant)
+			x := instanceXform(v)
+			c := x.apply(m.crown)
+			vs.shapes = append(vs.shapes, foliage{
+				x: c.x, y: c.y, z: c.z,
+				rx: math.Min(m.crownR*s, occReach), ry: m.crownH * s, occ: sh.occ, cover: sh.cover,
+			})
+			continue
+		}
 		vs.shapes = append(vs.shapes, foliage{
 			x: float64(v.Pos.X), y: float64(v.Pos.Y) + sh.height*sh.crownY*s, z: float64(v.Pos.Z),
 			rx: sh.rx * s, ry: sh.ry * s, occ: sh.occ, cover: sh.cover,
@@ -257,6 +290,9 @@ func treeKind(reg core.RegionID, hab core.Habitat, v *gvert, u float64) (core.Ve
 			return core.VegPine, 0.8, 1.2
 		case u < 0.15:
 			return core.VegSnag, 0.8, 1.15
+		case u < 0.21 && hab == core.HabWoodland:
+			// Sweet chestnuts among the oaks (forage: nuts in autumn).
+			return core.VegChestnut, 0.85, 1.2
 		case u < 0.62:
 			return core.VegAmberOak, 0.8, 1.3
 		}

@@ -263,6 +263,7 @@ func TestRegionalSeasons(t *testing.T) {
 		"redwing":               winter,
 		"brambling":             winter,
 		"snowy_owl":             {false, false, false, true},
+		"ring_ouzel":            {true, true, true, false},
 	}
 	for _, sp := range regionalSpecies() {
 		w, ok := want[sp.ID]

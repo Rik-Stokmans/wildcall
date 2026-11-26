@@ -91,6 +91,39 @@ const (
 	NewAdventure Kind = "welcome"
 	// Resumed: a saved adventure was continued.
 	Resumed Kind = "resume"
+
+	// Activity mumbles (§13). Item names what was involved; see each kind.
+
+	// Foraged: the player picked a forage plant. Item = plant id (§12, e.g. "bramble");
+	// Yield = the ingredient id received, optional (tells elderflower from elderberry);
+	// First = the plant is new to the herbarium.
+	Foraged Kind = "forage"
+	// Cooked: a recipe was prepared. Item = food id (§12); First = first time cooking it.
+	Cooked Kind = "cook"
+	// Ate: the player ate or drank something. Item = food id, or an ingredient id when
+	// eaten raw (berries, nuts).
+	Ate Kind = "eat"
+	// PackFull: a pick or pick-up failed because the pack is full.
+	PackFull Kind = "packfull"
+	// Collected: a collectible was picked up or opened. Item = feather|page|relic|cache
+	// (POI kinds; "journal_page" and "old_cache" are accepted too).
+	Collected Kind = "collect"
+	// Climbed: the player climbed something. Item = "watchtower" (or another POI kind).
+	Climbed Kind = "climb"
+	// Waded: the player stepped into water deep enough to wade.
+	Waded Kind = "wade"
+	// Sheltered: the player took shelter from rain (under a roof or dense canopy).
+	Sheltered Kind = "shelter"
+	// SatDown: the player sat down to wait.
+	SatDown Kind = "sit"
+	// EmptyView: the binoculars were raised and held on nothing in particular.
+	EmptyView Kind = "emptyview"
+	// OutOfFilm: the camera was fired with no film left.
+	OutOfFilm Kind = "nofilm"
+	// NestFound: the player found a nest. Item = core.NestInfo.Site (cavity, cup_shrub…);
+	// Stage = old|building|eggs|chicks (optional); Subject = the nest id (cooldown);
+	// Known = the owner species ONLY if the player has identified it.
+	NestFound Kind = "nest"
 )
 
 // aboutBird reports whether the event concerns one particular bird.
@@ -144,6 +177,12 @@ type Event struct {
 	RareKind string
 	Rank     int
 	RankName string
+
+	// Activities (Foraged, Cooked, Ate, Collected, Climbed, NestFound).
+	Item  string // plant, food, ingredient, collectible or nest-site id
+	Yield string // Foraged: the ingredient received (optional)
+	Stage string // NestFound: old|building|eggs|chicks (optional)
+	First bool   // Foraged/Cooked: the first time ever
 
 	// Where is optional flavour (region, weather) for a few templates.
 	Where *Context
@@ -203,6 +242,10 @@ type State struct {
 	Env      EnvMemo            `json:"env"`
 	Pending  []Pending          `json:"pending"`
 	Welcomed bool               `json:"welcomed"`
+	// Facts: species id → indices of its Species.Facts said in the current round.
+	// FactRounds: species id → completed rounds through all of its facts.
+	Facts      map[string][]int `json:"facts,omitempty"`
+	FactRounds map[string]int   `json:"factRounds,omitempty"`
 }
 
 // EnvMemo remembers the environment so Idle can notice transitions.
@@ -229,7 +272,7 @@ type Pending struct {
 func New(seed int64) *Narrator {
 	pcg := rand.NewPCG(uint64(seed), uint64(seed)^0x9e3779b97f4a7c15)
 	return &Narrator{
-		st:  State{Cool: map[string]float64{}, Recent: map[string][]int{}},
+		st:  State{Cool: map[string]float64{}, Recent: map[string][]int{}, Facts: map[string][]int{}, FactRounds: map[string]int{}},
 		pcg: pcg,
 		rng: rand.New(pcg),
 	}
@@ -249,6 +292,14 @@ func (n *Narrator) State() State {
 	for k, v := range n.st.Recent {
 		s.Recent[k] = append([]int(nil), v...)
 	}
+	s.Facts = make(map[string][]int, len(n.st.Facts))
+	for k, v := range n.st.Facts {
+		s.Facts[k] = append([]int(nil), v...)
+	}
+	s.FactRounds = make(map[string]int, len(n.st.FactRounds))
+	for k, v := range n.st.FactRounds {
+		s.FactRounds[k] = v
+	}
 	return s
 }
 
@@ -264,6 +315,12 @@ func (n *Narrator) Restore(s State) {
 	}
 	if s.Recent == nil {
 		s.Recent = map[string][]int{}
+	}
+	if s.Facts == nil {
+		s.Facts = map[string][]int{}
+	}
+	if s.FactRounds == nil {
+		s.FactRounds = map[string]int{}
 	}
 	n.st = s
 	n.rebase = true
@@ -375,6 +432,9 @@ type plan struct {
 	topics []topic    // cooldown keys checked before and set after speaking
 	groups [][]string // pool groups, tried in order until one yields a line
 	slots  slots
+	// facts are the species facts behind the factPool pseudo-pool (identified birds).
+	facts  []string
+	factSp string
 }
 
 // Offer considers an event and returns a line if one is worth saying now.
@@ -406,11 +466,11 @@ func (n *Narrator) attempt(p plan, now float64) (proto.Narration, bool) {
 		n.cool(p.topics, now, 45)
 		return proto.Narration{}, false
 	}
-	c, ok := n.pickGroups(p.groups, p.slots)
+	c, ok := n.pickGroups(p)
 	if !ok {
 		return proto.Narration{}, false
 	}
-	n.commit(c)
+	n.commit(c, p)
 	n.cool(p.topics, now, 0)
 	return n.speak(c.text, p, now), true
 }
@@ -544,8 +604,22 @@ func (n *Narrator) planEvent(ev Event) (plan, bool) {
 			if r() < 0.25 {
 				g = [][]string{{"observe.known"}, {"sp." + spID + ".watch"}}
 			}
-			return plan{prio: 1, kind: "sighting", chance: 0.6, slots: sl, groups: g,
-				topics: []topic{{"k:watch", 90}, {about + ":watch", 600}}}, true
+			p := plan{prio: 1, kind: "sighting", chance: 0.6, slots: sl,
+				topics: []topic{{"k:watch", 90}, {about + ":watch", 600}}}
+			// Facts first, while there are facts not yet said; after a full round
+			// they mix in with the watch lines.
+			if facts := SpeciesFacts(ev.Known); len(facts) > 0 {
+				ch := 0.85
+				if n.st.FactRounds[spID] > 0 {
+					ch = 0.35
+				}
+				if r() < ch {
+					g = append([][]string{{factPool}}, g...)
+				}
+				p.facts, p.factSp = facts, spID
+			}
+			p.groups = g
+			return p, true
 		}
 		return plan{prio: 1, kind: "sighting", chance: 0.7, slots: sl,
 			groups: [][]string{{"observe.unknown"}},
@@ -666,9 +740,6 @@ func (n *Narrator) planEvent(ev Event) (plan, bool) {
 		case "npc", "sign", "shop", "cabin", "":
 			return plan{}, false
 		}
-		if name := cleanName(ev.POIName); name != "" {
-			sl["place"] = name
-		}
 		key := ev.Subject
 		if key == "" {
 			key = kind + ":" + ev.POIName
@@ -711,7 +782,7 @@ func (n *Narrator) planEvent(ev Event) (plan, bool) {
 			topics: []topic{{"k:rare", 45}, {about + ":rare:" + rk, 1800}}}, true
 
 	case RankReached:
-		if t := cleanName(ev.RankName); t != "" {
+		if t := rankTitle(ev.RankName); t != "" {
 			sl["title"] = t
 		}
 		return plan{prio: 3, kind: "quest", chance: 1, slots: sl, groups: [][]string{{"rank"}}}, true
@@ -723,7 +794,7 @@ func (n *Narrator) planEvent(ev Event) (plan, bool) {
 		return plan{prio: 2, kind: "ambient", chance: 1, ttl: 30, slots: sl,
 			groups: [][]string{{"resume"}}, topics: []topic{{"k:resume", 600}}}, true
 	}
-	return plan{}, false
+	return n.planActivity(ev, sl)
 }
 
 // ---------------------------------------------------------------------------
@@ -901,11 +972,14 @@ type cand struct {
 	text string
 }
 
+// factPool is the pseudo-pool of the identified species' own facts (plan.facts).
+const factPool = "fact"
+
 // pickGroups tries each group of pools in turn and returns a line from the first
 // group that has any line whose slots can all be filled.
-func (n *Narrator) pickGroups(groups [][]string, sl slots) (cand, bool) {
-	for _, g := range groups {
-		if c, ok := n.pick(g, sl); ok {
+func (n *Narrator) pickGroups(p plan) (cand, bool) {
+	for _, g := range p.groups {
+		if c, ok := n.pick(g, p); ok {
 			return c, true
 		}
 	}
@@ -913,18 +987,29 @@ func (n *Narrator) pickGroups(groups [][]string, sl slots) (cand, bool) {
 }
 
 // pick chooses a line from the pools: never one used recently (until most of its
-// pool has been used), never the line just spoken, uniformly among the rest.
-func (n *Narrator) pick(pools []string, sl slots) (cand, bool) {
+// pool has been used), never the line just spoken, uniformly among the rest. Facts
+// rotate: none is repeated until all of the species' facts have been said.
+func (n *Narrator) pick(pools []string, p plan) (cand, bool) {
 	var fresh, stale []cand
 	var staleAge []int
 	for _, pool := range pools {
+		if pool == factPool {
+			said := n.st.Facts[p.factSp]
+			for i, text := range p.facts {
+				if text == n.st.LastText || indexOf(said, i) >= 0 {
+					continue
+				}
+				fresh = append(fresh, cand{pool, i, text})
+			}
+			continue
+		}
 		lines := bank[pool]
 		if len(lines) == 0 {
 			continue
 		}
 		recent := n.st.Recent[pool]
 		for i, tpl := range lines {
-			text, ok := fill(tpl, sl)
+			text, ok := fill(tpl, p.slots)
 			if !ok || text == n.st.LastText {
 				continue
 			}
@@ -952,7 +1037,25 @@ func (n *Narrator) pick(pools []string, sl slots) (cand, bool) {
 	return cand{}, false
 }
 
-func (n *Narrator) commit(c cand) {
+func (n *Narrator) commit(c cand, p plan) {
+	if c.pool == factPool {
+		said := n.st.Facts[p.factSp]
+		// Drop indices that no longer exist (the species data may have changed).
+		kept := said[:0]
+		for _, i := range said {
+			if i < len(p.facts) {
+				kept = append(kept, i)
+			}
+		}
+		kept = append(kept, c.idx)
+		if len(kept) >= len(p.facts) {
+			delete(n.st.Facts, p.factSp)
+			n.st.FactRounds[p.factSp]++
+		} else {
+			n.st.Facts[p.factSp] = kept
+		}
+		return
+	}
 	limit := len(bank[c.pool]) * 3 / 4
 	if limit < 1 {
 		limit = 1

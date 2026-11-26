@@ -49,6 +49,7 @@ func Quests() []proto.QuestDef {
 	var q []proto.QuestDef
 	q = append(q, valleyQuests()...)
 	q = append(q, regionQuests()...)
+	q = append(q, larderQuests()...)
 	q = append(q, boardContracts()...)
 	return q
 }

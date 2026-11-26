@@ -67,9 +67,11 @@ test('interaction rules per kind and taken flags', () => {
   assert.equal(interactionFor(P('page_0', 'page'), flags), null);
   assert.equal(interactionFor(P('feather@2,3', 'feather'), flags).verb, 'Pick up');
   assert.equal(interactionFor(P('relic@2,3', 'relic', { hidden: true }), flags).verb, 'Pick up');
-  for (const k of ['landmark', 'watchtower', 'pond', 'viewpoint', 'hide', 'camp', 'ranger_station']) {
+  for (const k of ['landmark', 'watchtower', 'pond', 'viewpoint', 'hide', 'ranger_station']) {
     assert.equal(interactionFor(P('x', k), flags), null, k);
   }
+  // c-field: a camp's fire opens the field kitchen.
+  assert.equal(interactionFor(P('camp_survey', 'camp'), flags).verb, 'Cook');
   assert.equal(interactionFor(P('feather@0,0', 'feather'), undefined).verb, 'Pick up', 'no profile yet');
 });
 

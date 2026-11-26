@@ -68,6 +68,12 @@ type cell struct {
 	perches []core.Perch // every usable perch in and around the cell
 	roster  []resident
 	vagTry  int // last (day*6 + 4-hour block) for which a vagrant was rolled
+
+	// The breeding pairs' nests (nest.go), built lazily for one breeding year.
+	nests    []nestRec
+	nestYear int32
+	nestOK   bool // nests holds the nests of nestYear
+	alarms   int  // nests currently disturbed by the observer
 }
 
 type sample struct {
@@ -178,6 +184,7 @@ func (s *Sim) activate(k cellKey) *cell {
 	}
 	c.key, c.vagTry = k, -1
 	c.roster = c.roster[:0]
+	c.nests, c.nestOK, c.alarms = c.nests[:0], false, 0
 	s.buildCell(c)
 	s.cells[k] = c
 	s.cellList = append(s.cellList, c)
@@ -216,6 +223,7 @@ func (s *Sim) retire(c *cell) {
 	if len(s.cellPool) < maxPooled {
 		c.roster = c.roster[:0]
 		c.perches = c.perches[:0]
+		c.nests, c.nestOK, c.alarms = c.nests[:0], false, 0
 		s.cellPool = append(s.cellPool, c)
 	}
 }
@@ -471,6 +479,15 @@ func (s *Sim) reindex(c *cell, from int) {
 		}
 		if r.bird >= 0 {
 			s.birds[r.bird].res = int16(j)
+		}
+	}
+	for i := range c.nests {
+		for m, ri := range c.nests[i].mates {
+			if ri > int16(from) {
+				c.nests[i].mates[m]--
+			} else if ri == int16(from) {
+				c.nests[i].mates[m] = -1
+			}
 		}
 	}
 }

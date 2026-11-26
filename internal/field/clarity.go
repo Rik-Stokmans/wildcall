@@ -111,27 +111,35 @@ func Clarity(c *Context, b core.BirdState, p proto.Pose) View {
 	if sp == nil {
 		return View{}
 	}
+	eye := Eye(p)
+	extent := sp.Look.Length
+	if b.Act.Airborne() && sp.Look.Wingspan*wingspanShare > extent {
+		extent = sp.Look.Wingspan * wingspanShare
+	}
+	// Foliage, cover and camouflage.
+	foliage := sightline(c, eye, b, sp) * (1 - camoCut*clamp01(sp.Behavior.Camo)*stillness(b.Act))
+	return viewOf(c, p, b.Pos, extent, foliage, actMotion[b.Act%core.ActCount])
+}
+
+// viewOf is the clarity model shared by birds and nests: an object of the given
+// extent (metres) at pos, with its foliage factor already worked out, moving with
+// the given motion penalty (fraction of clarity lost at 1x), seen from pose p.
+func viewOf(c *Context, p proto.Pose, pos core.Vec3, extent, foliage, motion float32) View {
 	st, env := c.Stats, c.Env
 	eye := Eye(p)
 	o := opticsOf(p, st)
-	airborne := b.Act.Airborne()
 
-	v := View{Dist: eye.Dist(b.Pos)}
-	v.Angle = angleBetween(core.LookDir(p.Yaw, p.Pitch), b.Pos.Sub(eye))
+	v := View{Dist: eye.Dist(pos)}
+	v.Angle = angleBetween(core.LookDir(p.Yaw, p.Pitch), pos.Sub(eye))
 
 	// Apparent size.
-	extent := sp.Look.Length
-	if airborne && sp.Look.Wingspan*wingspanShare > extent {
-		extent = sp.Look.Wingspan * wingspanShare
-	}
 	reach := nakedEyeRange * pow32(maxf(extent, 0.02)/refLength, sizeCurve) * maxf(o.zoom+(st.NakedEye-1), 0.1)
 	v.Size = clamp01(sizeFull - v.Dist/reach)
 	if v.Dist > MaxSightRange {
 		v.Size = 0
 	}
 
-	// Foliage, cover and camouflage.
-	v.Foliage = sightline(c, eye, b, sp) * (1 - camoCut*clamp01(sp.Behavior.Camo)*stillness(b.Act))
+	v.Foliage = clamp01(foliage)
 
 	// Light.
 	v.Light = lightFloor + (1-lightFloor)*pow32(clamp01(env.Light), lightCurve)
@@ -146,9 +154,9 @@ func Clarity(c *Context, b core.BirdState, p proto.Pose) View {
 		(1 - mistCut*clamp01(env.Mist)*clamp01(v.Dist/mistDist))
 
 	// Motion.
-	birdMove := clamp01(actMotion[b.Act%core.ActCount] * (1 + trackPerZoom*(o.zoom-1)))
+	objMove := clamp01(motion * (1 + trackPerZoom*(o.zoom-1)))
 	ownMove := clamp01((p.Speed-ownStillSpeed)/ownMoveSpan) * ownMoveCut * (1 + ownPerZoom*(o.zoom-1))
-	v.Motion = (1 - birdMove) * (1 - minf(ownMove, ownMoveMax))
+	v.Motion = (1 - objMove) * (1 - minf(ownMove, ownMoveMax))
 
 	// Optics.
 	focus := float32(1)

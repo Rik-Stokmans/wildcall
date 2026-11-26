@@ -31,6 +31,7 @@ func juneSpeaker() *speaker {
 			{id: "j_hidden", title: "Are there places off the trail?", lines: juneHidden},
 			{id: "j_care", title: "How should I behave around the birds?", lines: juneCare},
 			{id: "j_map", title: "How do I find my way?", lines: juneMap},
+			{id: "j_forage", title: "Is it all right to pick plants in the park?", lines: juneForage, follow: offerIfAvailable("a_fair_share", "Is there something I can do about it?")},
 		},
 		taken: map[string][]string{
 			"old_watchtower": {
@@ -134,5 +135,12 @@ func juneMap(*dctx) []string {
 	return []string{
 		"Press M for the map. It fills in as you walk and never shows where a bird is. Trails appear as you find them; hidden ones only show when you have found them. The compass strip at the top of your screen shows direction.",
 		"Climb the towers to get your bearings, and follow my signposts when you are far from home. If you are properly lost, the cabin's bearing is on the map.",
+	}
+}
+
+func juneForage(*dctx) []string {
+	return []string{
+		"A little, for yourself, from things that are common, yes. Berries, nuts, leaves, a few mushrooms. Never roots, never a whole plant, and never from anything rare. A few of the things that grow here are protected, and the herbarium in your journal will tell you which are fair game.",
+		"The fair share rule is simple: the birds were here first. Leave at least two of every three berries, and the high ones for the thrushes. Pick for one meal, not a stockpile. Then everyone eats again next year.",
 	}
 }

@@ -233,7 +233,7 @@ export function buildWood(model, style, detail) {
     for (let i = 0; i < n - 1; i++) dirs.push(norm(sub(pts[i + 1], pts[i])));
     const sides = sidesFor(first.ra, detail);
     // Mean of the inscribed and circumscribed polygon: the drawn surface averages r.
-    const polyK = 1 + 0.5 * (1 / Math.cos(Math.PI / sides) - 1);
+    const polyK = 1 + 0.35 * (1 / Math.cos(Math.PI / sides) - 1);
     // Bark texture: around the limb it repeats every ~1.2 m of circumference.
     const around = Math.max(1, Math.round((TAU * first.ra) / 1.2));
     let u0 = null;
@@ -372,15 +372,18 @@ export function buildFoliage(model, style, detail) {
         const top = clamp01(((p[1] - leaf.c[1]) / leaf.r[1] + 0.15) * 1.6);
         col = mix(col, SNOW, Math.min(0.92, top * 0.95));
       }
-      const ang = R() * TAU;
+      // Needle sprays stay roughly level and flattened, so a pine's pads read as
+      // layered horizontal sprays; broad leaf clumps turn any way.
+      const ang = flat ? (R() - 0.5) * 0.5 : R() * TAU;
       const ca = Math.cos(ang) * size * 0.5, sa = Math.sin(ang) * size * 0.5;
+      const squash = flat ? 0.62 : 1;
       const cell = Math.floor(R() * 4);
       const cu = (cell & 1) * 0.5, cv = (cell >> 1) * 0.5;
       const rand = R();
       const tree = [swayAt(p[1], H), 1, phase, rand];
       const base = m.count;
       // Corners (-1,-1) (1,-1) (1,1) (-1,1), rotated by `ang` in card space.
-      const corner = (x, y) => [x * ca - y * sa, x * sa + y * ca];
+      const corner = (x, y) => [x * ca - y * sa, (x * sa + y * ca) * squash];
       m.v(p, n, col, cu, cv, tree, corner(-1, -1));
       m.v(p, n, col, cu + 0.5, cv, tree, corner(1, -1));
       m.v(p, n, col, cu + 0.5, cv + 0.5, tree, corner(1, 1));
@@ -390,4 +393,29 @@ export function buildFoliage(model, style, detail) {
     masses.push({ c: leaf.c, r: leaf.r, start, count });
   });
   return m.build({ masses });
+}
+
+/**
+ * Signed distance from a model-space point to the wood surface (negative inside a
+ * limb): the distance to the nearest segment axis minus the radius there.
+ * @returns {{d:number, seg:number}}
+ */
+export function woodDistance(model, p) {
+  let best = Infinity, seg = -1;
+  model.branches.forEach((b, i) => {
+    const ab = sub(b.b, b.a), ap = sub(p, b.a);
+    const L2 = dot(ab, ab);
+    const t = L2 > 0 ? clamp01(dot(ap, ab) / L2) : 0;
+    const q = add(b.a, mul(ab, t));
+    const d = len(sub(p, q)) - (b.ra + (b.rb - b.ra) * t);
+    if (d < best) { best = d; seg = i; }
+  });
+  return { d: best, seg };
+}
+
+/** The inverse of placePoint: a world point in an instance's model space. */
+export function unplacePoint(w, inst) {
+  const c = Math.cos(inst.rot), s = Math.sin(inst.rot), k = inst.scale;
+  const dx = (w[0] - inst.x) / k, dy = (w[1] - inst.y) / k, dz = (w[2] - inst.z) / k;
+  return [c * dx - s * dz, dy, s * dx + c * dz];
 }

@@ -190,12 +190,122 @@ func Validate(list []core.Species) []error {
 		if sp.Difficulty < 1 || sp.Difficulty > 5 {
 			bad(sp, "difficulty must be 1..5")
 		}
+		for _, e := range validateNest(sp) {
+			bad(sp, "%s", e)
+		}
+		for _, e := range validateFacts(sp) {
+			bad(sp, "%s", e)
+		}
 	}
 	for i := range list {
 		for _, s := range list[i].Similar {
 			if !seen[s] {
 				errs = append(errs, fmt.Errorf("%s: similar species %q not in catalog", list[i].ID, s))
 			}
+		}
+	}
+	return errs
+}
+
+// NestSites is the vocabulary of core.NestInfo.Site ("none": the species does not
+// breed in the game's regions).
+var NestSites = []string{"cavity", "cup_shrub", "cup_fork", "platform", "dome", "pendant", "ground", "scrape", "reed", "floating", "burrow", "ledge", "none"}
+
+// Fact limits (contract §13): at least MinFacts per species, each one spoken
+// sentence of at most MaxFactWords words.
+const (
+	MinFacts     = 6
+	MaxFactWords = 22
+)
+
+// validateNest checks a species' NestInfo: a known site; for a breeding species
+// valid perch kinds, a sane height range and size, nest seasons in which the bird is
+// actually present; for a non-breeder no perches and no seasons.
+func validateNest(sp *core.Species) []string {
+	n := sp.Nest
+	var errs []string
+	known := false
+	for _, s := range NestSites {
+		if s == n.Site {
+			known = true
+		}
+	}
+	if !known {
+		return append(errs, fmt.Sprintf("bad nest site %q", n.Site))
+	}
+	if strings.TrimSpace(n.Desc) == "" {
+		errs = append(errs, "nest needs a description")
+	}
+	if n.Site == "none" {
+		if len(n.Perches) > 0 || n.Seasons != [4]bool{} || n.Size != 0 {
+			errs = append(errs, "a species that does not nest must have no nest perches, seasons or size")
+		}
+		return errs
+	}
+	if len(n.Perches) == 0 {
+		errs = append(errs, "nest has no perch kinds")
+	}
+	seen := map[string]bool{}
+	for _, p := range n.Perches {
+		if _, ok := core.PerchKindFromKey(p); !ok || seen[p] {
+			errs = append(errs, fmt.Sprintf("bad or duplicate nest perch %q", p))
+		}
+		seen[p] = true
+	}
+	if n.HeightMin < 0 || n.HeightMax < n.HeightMin || n.HeightMax > 80 {
+		errs = append(errs, fmt.Sprintf("bad nest height range %.1f..%.1f", n.HeightMin, n.HeightMax))
+	}
+	if n.Size < 0.05 || n.Size > 2 {
+		errs = append(errs, fmt.Sprintf("implausible nest size %.2f", n.Size))
+	}
+	active := false
+	for s, on := range n.Seasons {
+		if on {
+			active = true
+			if !sp.Seasons[s] {
+				errs = append(errs, fmt.Sprintf("nests in %s but is absent then", core.Season(s)))
+			}
+		}
+	}
+	if !active {
+		errs = append(errs, "nest is active in no season (use site \"none\" for non-breeders)")
+	}
+	return errs
+}
+
+// validateFacts checks the narrator facts: enough of them, each a single, complete,
+// speakable sentence of at most MaxFactWords words, no duplicates.
+func validateFacts(sp *core.Species) []string {
+	var errs []string
+	if len(sp.Facts) < MinFacts {
+		errs = append(errs, fmt.Sprintf("%d facts, need at least %d", len(sp.Facts), MinFacts))
+	}
+	seen := map[string]bool{}
+	for i, f := range sp.Facts {
+		t := strings.TrimSpace(f)
+		switch {
+		case t == "" || t != f:
+			errs = append(errs, fmt.Sprintf("fact %d is empty or has stray whitespace", i))
+			continue
+		case seen[t]:
+			errs = append(errs, fmt.Sprintf("fact %d is a duplicate", i))
+		}
+		seen[t] = true
+		if w := len(strings.Fields(t)); w > MaxFactWords {
+			errs = append(errs, fmt.Sprintf("fact %d has %d words (max %d)", i, w, MaxFactWords))
+		}
+		if !strings.ContainsAny(t[len(t)-1:], ".!?") {
+			errs = append(errs, fmt.Sprintf("fact %d does not end a sentence", i))
+		}
+		body := t[:len(t)-1]
+		for _, stop := range []string{". ", "! ", "? "} {
+			if strings.Contains(body, stop) {
+				errs = append(errs, fmt.Sprintf("fact %d is more than one sentence", i))
+				break
+			}
+		}
+		if c := t[0]; !(c >= 'A' && c <= 'Z' || c == '\'' || c >= '0' && c <= '9') {
+			errs = append(errs, fmt.Sprintf("fact %d does not start a sentence", i))
 		}
 	}
 	return errs

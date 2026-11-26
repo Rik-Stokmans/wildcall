@@ -10,6 +10,7 @@ import (
 	"github.com/Rik-Stokmans/wildcall/internal/field"
 	"github.com/Rik-Stokmans/wildcall/internal/progress"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
+	"github.com/Rik-Stokmans/wildcall/internal/world"
 )
 
 // msgDebug runs a developer command (only with -dev).
@@ -196,8 +197,159 @@ func (s *Session) Debug(cmd string, args ...string) (string, error) {
 		v := progress.AddRep(s.p, args[0], argInt(args, 1, 25))
 		s.changed()
 		return args[0] + " " + itoa(v), nil
+	case "forage":
+		return s.debugForage(args)
+	case "nest":
+		return s.debugNest(args)
+	case "nests":
+		return s.debugNests()
+	case "buff":
+		if len(args) == 0 || !edible(args[0]) {
+			return "", gentleErr("usage: buff <food or edible ingredient id>")
+		}
+		if _, err := progress.AddItem(s.p, args[0], 1); err != nil {
+			return "", err
+		}
+		if err := s.eat(args[0]); err != nil {
+			return "", err
+		}
+		return "buff " + args[0], nil
+	case "clearbuffs":
+		s.p.Buffs = []proto.Buff{}
+		progress.Recompute(s.p)
+		s.changed()
+		return "buffs cleared", nil
+	case "learn":
+		if len(args) == 0 || args[0] == "all" {
+			n := 0
+			for _, r := range content.Recipes() {
+				if s.learnRecipe(r.ID) {
+					n++
+				}
+			}
+			return "learned " + itoa(n) + " recipes", nil
+		}
+		if _, ok := content.Recipe(args[0]); !ok {
+			return "", gentleErr("usage: learn <recipe id>|all")
+		}
+		s.learnRecipe(args[0])
+		return "learned " + args[0], nil
+	case "regrow":
+		s.p.Forage = map[string]int{}
+		s.changed()
+		return "every plant bears again", nil
+	case "pantry":
+		// A little of every ingredient, for testing the kitchen.
+		for _, id := range progress.PantryIngredients() {
+			_, _ = progress.AddItem(s.p, id, 3)
+		}
+		for _, id := range progress.ForagedIngredients() {
+			_, _ = progress.AddItem(s.p, id, 3)
+		}
+		s.changed()
+		return "pantry stocked (overflow went to storage)", nil
 	}
 	return "", gentleErr("unknown debug command")
+}
+
+// debugForage teleports next to the nearest forage plant of a plant id (or of any
+// plant) and reports whether it can be picked now.
+func (s *Session) debugForage(args []string) (string, error) {
+	want := ""
+	if len(args) > 0 && args[0] != "any" {
+		pl, ok := content.Plant(args[0])
+		if !ok {
+			return "", gentleErr("usage: forage <plant id>|any")
+		}
+		want = pl.ID
+	}
+	for _, r := range []float32{60, 200, 500} {
+		var best world.ForagePlant
+		bestD := float32(math.MaxFloat32)
+		for _, fp := range s.world.ForageNear(s.feet.X, s.feet.Z, r) {
+			pl, ok := content.PlantByVeg(int(fp.Veg.Kind))
+			if !ok || (want != "" && pl.ID != want) {
+				continue
+			}
+			if d := fp.Veg.Pos.DistXZ(s.feet); d < bestD {
+				best, bestD = fp, d
+			}
+		}
+		if best.ID == "" {
+			continue
+		}
+		pl, _ := content.PlantByVeg(int(best.Veg.Kind))
+		// Stand 1.5 m from the plant, on dry ground, facing it.
+		to := best.Veg.Pos
+		for a := 0; a < 8; a++ {
+			p := best.Veg.Pos.Add(core.HeadingDir(float32(a) * math.Pi / 4).Scale(1.5))
+			p.Y = s.world.HeightAt(p.X, p.Z)
+			if p.Y > 0 {
+				to = p
+				break
+			}
+		}
+		s.Teleport(to, core.HeadingTo(to, best.Veg.Pos))
+		env := s.clock.Env()
+		state := "in season"
+		if len(content.YieldsIn(pl.ID, int(env.Season))) == 0 {
+			state = "nothing to pick in " + env.Season.String()
+		} else if !progress.ForageReady(s.p, best.ID, env.Day, pl.Regrow) {
+			state = "already picked"
+		}
+		return pl.ID + " " + best.ID + ": " + state, nil
+	}
+	return "", gentleErr("no such plant within 500 m")
+}
+
+// debugNest teleports near the nearest nest (optionally of a site type or stage)
+// and reports its id, site and stage. It never names the owner.
+func (s *Session) debugNest(args []string) (string, error) {
+	var best core.Nest
+	bestD := float32(math.MaxFloat32)
+	for _, n := range s.sim.Nests(s.feet, 600, nil) {
+		if len(args) > 0 && args[0] != n.Site && args[0] != field.NestStageKey(n.Stage) {
+			continue
+		}
+		if d := n.Pos.DistXZ(s.feet); d < bestD {
+			best, bestD = n, d
+		}
+	}
+	if best.ID == 0 {
+		return "", gentleErr("no nest within 600 m (nests are in the breeding season, old ones until spring)")
+	}
+	// Stand on dry ground about 7 m away (outside most alarm radii is further; this
+	// is for looking), facing the nest.
+	to := best.Pos
+	for _, r := range []float32{7, 10, 4, 14} {
+		found := false
+		for a := 0; a < 12; a++ {
+			p := best.Pos.Add(core.HeadingDir(float32(a) * math.Pi / 6).Scale(r))
+			p.Y = s.world.HeightAt(p.X, p.Z)
+			if p.Y > 0.1 {
+				to, found = p, true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	to.Y = max(to.Y, 0)
+	s.Teleport(to, core.HeadingTo(to, best.Pos))
+	h := best.Pos.Y - s.world.HeightAt(best.Pos.X, best.Pos.Z)
+	return nestKey(best.ID) + " " + best.Site + " " + field.NestStageKey(best.Stage) +
+		" at " + strconv.FormatFloat(float64(h), 'f', 1, 32) + " m", nil
+}
+
+// debugNests counts the nests around the player by stage and site.
+func (s *Session) debugNests() (string, error) {
+	ns := s.sim.Nests(s.feet, nestStreamR, nil)
+	stages := map[string]int{}
+	for _, n := range ns {
+		stages[field.NestStageKey(n.Stage)]++
+	}
+	return itoa(len(ns)) + " nests within " + itoa(nestStreamR) + " m: " + mustJSON(stages), nil
 }
 
 // SpawnAhead puts a bird of a species about dist metres in front of the player.
@@ -249,6 +401,7 @@ func (s *Session) Teleport(feet core.Vec3, yaw float32) {
 	s.havePose = false // no distance for the jump
 	s.applyPose(p)
 	s.watch.Reset()
+	s.nestWatch.Reset()
 	s.board.Reset()
 }
 
@@ -269,5 +422,3 @@ func (s *Session) findRegion(r core.RegionID) (core.Vec3, bool) {
 	}
 	return core.Vec3{}, false
 }
-
-var _ = field.MaxSightRange

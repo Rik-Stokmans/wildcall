@@ -69,6 +69,9 @@ func extraSpecies() []core.Species {
 	warbler.Behavior.Feeding = "glean"
 	warbler.Behavior.Perches = []string{"canopy", "branch"}
 	warbler.Behavior.Specials = []string{"nesting", "preening"}
+	// Nesting comes from the species' nest habit: a cup in a fork of the canopy.
+	warbler.Nest = core.NestInfo{Site: "cup_fork", Perches: []string{"fork", "canopy"}, HeightMin: 2, HeightMax: 9,
+		Seasons: [4]bool{true, true, false, false}, Size: 0.1, Desc: "A cup in a fork."}
 
 	finch := robin
 	finch.ID, finch.Name = "test_finch", "Test Finch"
