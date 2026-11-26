@@ -229,8 +229,45 @@ const (
 	VegSnowPine                  // snow-laden conifer (Frostveil)
 	VegMushroom                  // woodland floor decor
 	VegLilyPads                  // pond surface decor
+
+	// --- Forage plants (kinds 18+). Placed by the world like any vegetation; the
+	// client's forage module renders them and lets the player pick from them.
+	VegBramble      // 18 blackberry thicket (woodland edges, clearings)
+	VegStrawberry   // 19 wild strawberry patch (sunny woodland floor)
+	VegBilberry     // 20 bilberry shrublets (pine woods, highland heath)
+	VegElder        // 21 elder shrub: flowers in spring, berries in autumn
+	VegDogRose      // 22 dog rose: rosehips in autumn and winter
+	VegHazel        // 23 hazel coppice: nuts in autumn
+	VegChestnut     // 24 sweet chestnut tree: nuts on the ground in autumn (Amberwood)
+	VegNettle       // 25 nettle bed (damp, rich ground)
+	VegWildGarlic   // 26 ramsons carpet (damp woodland, spring)
+	VegWaterMint    // 27 water mint (creek and marsh edges)
+	VegChamomile    // 28 chamomile (meadows)
+	VegYoungPine    // 29 young pine with fresh tips in reach
+	VegChanterelle  // 30 chanterelles (mossy woodland, late summer and autumn)
+	VegPorcini      // 31 penny bun (woodland, autumn)
+	VegSeaBuckthorn // 32 sea buckthorn (coast)
+	VegSamphire     // 33 marsh samphire (salt marsh, shore)
+	VegCloudberry   // 34 cloudberry (Frostveil bogs)
+	VegWildThyme    // 35 wild thyme (Windpeak, dry banks)
 	VegKindCount
 )
+
+// FirstForageKind is the first VegKind that is a forage plant.
+const FirstForageKind = VegBramble
+
+// TreeVariants is the number of distinct tree models per tree kind. A vegetation
+// instance uses model (Variant % TreeVariants); see proto.TreeModel.
+const TreeVariants = 6
+
+// IsTree reports whether a kind is drawn from a branching tree model (proto.TreeModel).
+func (k VegKind) IsTree() bool {
+	switch k {
+	case VegOak, VegBirch, VegPine, VegSnag, VegAmberOak, VegAmberBirch, VegSnowPine, VegChestnut:
+		return true
+	}
+	return false
+}
 
 // Veg is one scenery instance. Scale 1.0 is the kind's nominal size
 // (oak ~11 m tall, birch ~10 m, pine ~14 m, snag ~8 m, shrub ~1.6 m, reeds ~2 m, rock ~1 m).
@@ -257,10 +294,14 @@ const (
 	PerchShore                      // water's edge: mud, sand, shallows
 	PerchTrunk                      // clinging to a trunk (woodpeckers, nuthatch)
 	PerchStructure                  // roof, tower rail, signpost
+	PerchCavity                     // hole in a trunk or large limb (nest site for tits, nuthatch, woodpeckers, owls)
+	PerchFork                       // sturdy fork where limbs meet (nest site for thrushes, finches, crows, raptors)
+	PerchBank                       // steep earth bank beside water (kingfisher burrow)
+	PerchLedge                      // cliff or crag ledge (seabirds, eagle, raven)
 	PerchKindCount
 )
 
-var perchKeys = [...]string{"canopy", "branch", "snag", "shrub", "reed", "ground", "rock", "water", "shore", "trunk", "structure"}
+var perchKeys = [...]string{"canopy", "branch", "snag", "shrub", "reed", "ground", "rock", "water", "shore", "trunk", "structure", "cavity", "fork", "bank", "ledge"}
 
 func (p PerchKind) Key() string {
 	if int(p) < len(perchKeys) {

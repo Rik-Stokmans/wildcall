@@ -499,3 +499,7 @@ func (s *Sim) setObserver(o core.Observer) {
 	}
 	s.oDecay = fearDecay * stillBonus * s.obs.Settle
 }
+
+// Nests appends every nest within radius of center to buf.
+// STUB: replaced by the nests task (docs/contract.md §10).
+func (s *Sim) Nests(center core.Vec3, radius float32, buf []core.Nest) []core.Nest { return buf }

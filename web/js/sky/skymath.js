@@ -270,15 +270,17 @@ export function skyColors(p) {
   // Lights. Never pitch black: the hemisphere keeps a cool floor at night.
   const sunUp = smoothstep(-3 * DEG, 8 * DEG, sun.elevation);
   const sunIntensity = sunUp * lerp(0.6, 2.6, smoothstep(0, 35 * DEG, sun.elevation)) * (1 - 0.62 * overcast);
-  const hemiIntensity = lerp(0.55, 1.15, day) * (1 - 0.15 * overcast) + 0.25 * overcast * day;
+  // Generous sky/bounce fill: faces turned away from the sun must stay readable and
+  // soft (the look is cozy and stylised, never black).
+  const hemiIntensity = lerp(0.9, 1.7, day) * (1 - 0.12 * overcast) + 0.3 * overcast * day;
   const hemiSky = mix3(rgb(0x51628f), mix3(zenith, horizon, 0.45, [0, 0, 0]), smoothstep(0, 0.4, day), [0, 0, 0]);
   mix3(hemiSky, rgb(0xffffff), 0.12, hemiSky);
-  const hemiGround = mix3(rgb(0x2a2f3a), mix3(rgb(0x5a5436), ground, 0.3, [0, 0, 0]), day, [0, 0, 0]);
+  const hemiGround = mix3(rgb(0x3d4556), mix3(rgb(0x9a9870), ground, 0.3, [0, 0, 0]), day, [0, 0, 0]);
   const moon = moonPosition(hour, p.season);
   const moonIntensity = (1 - sunUp) * smoothstep(-2 * DEG, 15 * DEG, moon.elevation) * 0.55 * (1 - 0.6 * overcast);
   const moonLight = mix3(rgb(0x9fb4e6), atmo.haze, atmo.cold * 0.2, [0, 0, 0]);
   // Lift exposure at night so it stays readable and cozy.
-  const exposure = lerp(1.32, 1.0, smoothstep(0, 0.6, day)) * (1 + 0.06 * overcast);
+  const exposure = lerp(1.4, 1.1, smoothstep(0, 0.6, day)) * (1 + 0.06 * overcast);
 
   return {
     zenith, horizon, fog, sun: sunCol, glow, ground, hemiSky, hemiGround,

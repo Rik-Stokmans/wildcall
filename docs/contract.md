@@ -867,3 +867,277 @@ ever doing the player's work for them.
   the player is focus-listening, recording, or in a dialogue. `ctx.narrator = { say(text,
   opts), stop(), voices() }`. The voice backend is isolated behind one small function
   so a recorded or neural voice pack can replace it later.
+
+---
+
+# Phase 2 — lush world, living trees, foraging, a real voice
+
+Everything below was added after the first playable build. The rules for parallel
+work at the top still apply. New ownership:
+
+| Task | Owns |
+|---|---|
+| `world2` | `internal/world` (tree models, perches on real branches, nest-site perches, forage plant placement) |
+| `nests` | `internal/species`, `internal/eco`, `internal/field` (nest data, nesting behaviour, nest photos) |
+| `larder` | `internal/progress`, `internal/content` (plants, ingredients, food, recipes, buffs) |
+| `voice` | `internal/narrator`, `web/js/narrator/`, `web/css/narrator.css`, `tools/voice/`, `web/voice/` |
+| `birdsong` | `web/js/audio/`, `tools/birdsong/`, `web/birdsong/` |
+| `c-ground` | `web/js/world/` except the three files below (terrain material, grass, ground cover, water, streaming) |
+| `c-trees` | `web/js/world/vegModels.js`, `vegetation.js`, `season.js`, new `web/js/world/trees/` |
+| `c-skyfx` | `web/js/sky/`, `web/js/fx/` |
+| `session2` (stage 2) | `internal/game`, `internal/save`, `internal/server`, `cmd/wildcall` |
+| `c-field` (stage 2) | `web/js/forage/`, `web/js/nests/`, `web/css/forage.css`, plus the small hooks it needs in `web/js/ui/journal`, `web/js/ui/base`, `web/js/ui/hud`, `web/js/birds`, `web/js/props` |
+
+## 9. Seeing your own work — the screenshot harness
+
+`tools/shot/shot.cjs` (read its header) renders the running game in a hidden window
+and writes PNGs, so visual work can and must be checked by eye:
+
+```
+# 1. your own engine (pick your own port and a throwaway save dir; -dev serves web/ from disk)
+go build -o /tmp/wc-<you> ./cmd/wildcall && /tmp/wc-<you> -dev -addr 127.0.0.1:<port> -save "$(mktemp -d)" -seed scenic &
+# 2. screenshots (default tour of the home valley at several times of day, or your own --plan)
+ELECTRON_DISABLE_SECURITY_WARNINGS=1 desktop/node_modules/.bin/electron tools/shot/shot.cjs \
+    --url http://127.0.0.1:<port> --out /tmp/shots-<you> [--plan my-plan.json]
+# 3. look at the PNGs with your image-reading tool, change code, repeat (the page reloads from disk each run)
+```
+
+The harness prints console errors and a frame-rate reading. Stop your engine when you
+finish. Never open a visible window or a browser.
+
+## 10. Art direction: lush, scenic, stylised
+
+The target is the look of a hand-painted stylised world — think of the meadows and
+forests of a Ghibli film or the best stylised Unreal scenes: **bright, lush, soft and
+inviting**. Concretely:
+
+- **Lush ground.** Dense, soft, wind-rippled grass that covers meadows and clearings
+  (thousands of blades near the camera, fading smoothly into the terrain colour with
+  distance — no visible end), wildflowers in drifts, ferns and leaf litter under
+  trees, moss, reeds at the water. The bare flat green carpet must be gone.
+- **Trees with real structure** (§11): visible trunks, limbs and branches carrying
+  soft, full, layered foliage; believable species silhouettes (spreading oak, slender
+  white-barked birch, layered pine); foliage shaded as soft masses (gradient from a
+  warm lit top to a cool shaded underside, never faceted black), a little light
+  through the leaves at the edges, gentle wind.
+- **Light.** Warm golden sunlight, cool sky-blue shade, soft shadows on the ground
+  under trees (dappled), long light at dawn and dusk, visible light shafts through
+  the canopy and mist in the morning, a soft bloom on the brightest things, a gentle
+  filmic grade (rich greens, warm highlights, slightly lifted blacks — never grey,
+  never neon). Night is deep blue and readable, with moonlight, stars and fireflies.
+- **Depth.** Strong atmospheric perspective: each ridge and tree line a step paler
+  and bluer; distant hills readable as layered silhouettes; big soft cumulus clouds
+  with lit tops and shaded bases; a real sun and moon.
+- **Water.** Clear near the bank with the bed showing, deepening to a rich teal/blue,
+  a soft foam line and darker wet edge at the shore, moving highlights, sky colour
+  reflected at grazing angles, lily pads and reeds. No milky slabs, no white bands.
+- **Shape and colour.** Chunky, rounded, slightly exaggerated shapes; colour does the
+  work of detail; palettes per region type stay distinct (Greenhollow lush greens,
+  Amberwood gold and rust, Frostveil blue-white, Murmur Marsh olive and ochre,
+  Windpeak grey-violet rock and heather, Whispering Coast pale sand and sea-blue).
+- **Cohesion.** Terrain, plants, props, birds and UI must look like one world.
+- **Performance.** 60 fps at 1280×720 on an integrated-GPU laptop at "medium". The
+  harness prints fps on this machine (it reaches ~120 today); stay above 90 here.
+  Use instancing, LOD and distance fades; keep draw calls under ~900.
+
+Post-processing: `ctx.post` (module `web/js/fx/`) owns the final render — main.js
+calls `ctx.post.render(dt)` when it exists, also for photographs (`ctx.capture`).
+`three/addons/` resolves to `web/vendor/three-addons/` (EffectComposer, RenderPass,
+ShaderPass, OutputPass, UnrealBloomPass, SMAAPass and their shaders are vendored; ask
+in your report if you need another official addon). Post effects must respect the
+quality setting (low = none) and must not blur the picture when the binoculars or
+camera are raised.
+
+## 11. Trees with branches, birds on them, and nests
+
+**Tree models.** `internal/world` generates `core.TreeVariants` (6) branching models
+for every tree kind (`VegKind.IsTree()`: oak, birch, pine, snag, amber oak, amber
+birch, snow pine, sweet chestnut): `(*World).TreeModels() []proto.TreeModel`,
+deterministic and the same for every seed (they are species shapes, not world
+content). An instance uses model `variant % 6` with its scale and Y rotation. Shapes
+follow the real trees: oak — short stout trunk, heavy spreading limbs, broad domed
+crown; birch — slim, leaning slightly, ascending limbs with fine drooping ends;
+pine — straight trunk, whorls of near-horizontal branches, open layered crown, bare
+lower trunk on big ones; snag — dead, bare broken limbs; chestnut — tall, spiralling
+limbs, big crown. 25–70 branch segments and 6–18 foliage masses per model. The
+welcome message carries all models (`welcome.trees`).
+
+**Perches come from the model.** For every tree instance the world derives perches by
+transforming points of its model: `branch` perches *on* limb segments in the outer
+crown (the bird's feet on the top of the limb; cover from how much foliage surrounds
+it), `canopy` perches on twigs inside foliage masses, `trunk` perches on the trunk
+surface, `snag` perches on bare tips, `fork` perches where two sturdy limbs meet, and
+`cavity` perches on the trunks/limbs of large old trees (oak, birch, snag, chestnut;
+radius ≥ 0.18 m; 1.5–9 m up). Elsewhere the world provides `bank` perches (steep
+earth banks beside water) and `ledge` perches (cliff and crag ledges, sea stacks).
+A bird reported at a branch perch must visibly stand on that branch in the client.
+
+**Client trees** (`c-trees`) build each model once from `welcome.trees` — tapered
+limb geometry plus soft stylised foliage around each `TreeLeaf` — and instance it.
+The foliage must hide small birds inside it and leave outer branches visible.
+
+**Nests** (`nests` task). Every species carries its real nesting habit in
+`Species.Nest` (`core.NestInfo`: site type, perch kinds, height range, season, size,
+description) — accurate to the real bird: wren a domed ball low in thick cover; robin
+a cup low in a bank or ivy; blackbird and song thrush cups in shrubs and forks; tits,
+nuthatch, treecreeper, woodpeckers and tawny owl in cavities; long-tailed tit a domed
+lichen ball in bramble; goldcrest a pendant cup under a conifer branch; buzzard,
+raven and heron big stick platforms high in trees (or crags); kingfisher a burrow in
+a waterside bank; mallard and moorhen on the ground or floating among reeds; reed
+warbler woven among reed stems; bittern in reeds; gulls, cormorant and eagle on
+ledges; puffin a burrow in turf; ptarmigan a ground scrape; winter visitors `none`.
+In the breeding season the ecosystem pairs resident birds; each pair owns a nest on a
+suitable perch in its territory (deterministic per population cell), passing through
+`NestBuilding` → `NestEggs` → `NestChicks` over the season, with the adults showing
+`ActNesting` (carrying material, visiting, sitting). Old nests remain as `NestOld`
+until the next spring. `Ecosystem.Nests` reports them; the session streams them
+(`nests` message — never the species). Getting too close to a nest makes the adults
+alarm and leave until the player backs off (no punishment beyond that).
+**Finding a nest** (observing it at clarity ≥ 0.5 or photographing it) records a
+`NestEntry` and pays XP once per nest species (as "unique behaviour", 75) — the owner
+is named in the journal only if the player has identified that species. **Nest
+photos**: `field` adds the tag `nest` (and `nest:chicks` etc.) when a nest is in
+frame and reasonably clear, with a score bonus; first nest photo per species pays the
+photo XP again.
+
+## 12. Foraging and the field kitchen
+
+Wild plants can be picked and turned into food and drink that give a timed bonus.
+Realistic and gentle: real temperate plants with their real seasons and habitats,
+honest uses, no magic. Spec rule 8 holds (cozy; nothing harmful, nothing punishing).
+
+**Plants** (`VegKind` 18+, placed by the world in fitting region types and habitats
+at natural densities — a handful per forested chunk, clustered, seasonal availability
+decided at pick time; they are in the chunk vegetation list at LOD 0 and 1). Pinned
+plant ids → ingredient item ids:
+
+| plant id | VegKind | yields (season) |
+|---|---|---|
+| `bramble` | 18 | `blackberry` (late summer, autumn) |
+| `wild_strawberry` | 19 | `wild_strawberry` (summer) |
+| `bilberry` | 20 | `bilberry` (summer, early autumn) |
+| `elder` | 21 | `elderflower` (spring), `elderberry` (autumn) |
+| `dog_rose` | 22 | `rosehip` (autumn, winter) |
+| `hazel` | 23 | `hazelnut` (autumn) |
+| `sweet_chestnut` | 24 | `chestnut` (autumn) |
+| `nettle` | 25 | `nettle` (spring, summer) |
+| `wild_garlic` | 26 | `wild_garlic` (spring) |
+| `water_mint` | 27 | `water_mint` (spring, summer, autumn) |
+| `chamomile` | 28 | `chamomile` (summer) |
+| `young_pine` | 29 | `pine_tips` (all year; best in spring) |
+| `chanterelle` | 30 | `chanterelle` (summer, autumn) |
+| `penny_bun` | 31 | `penny_bun` (autumn) |
+| `sea_buckthorn` | 32 | `sea_buckthorn` (autumn, winter) |
+| `samphire` | 33 | `samphire` (summer) |
+| `cloudberry` | 34 | `cloudberry` (summer) |
+| `wild_thyme` | 35 | `wild_thyme` (spring, summer, autumn) |
+
+Pantry staples sold by Finn: `oats`, `honey`, `flour`.
+
+**Food** (pinned ids; `larder` decides inputs, durations and effects within these
+bounds: every effect is a modest additive change to existing `core.Stats` fields that
+makes sense for the food; drinks 2–3 in-game hours, snacks 2–4, meals 4–6; one active
+buff per slot `drink | meal | snack`): teas `pine_tip_tea`, `mint_tea`,
+`chamomile_tea`, `thyme_honey_tea`, `nettle_tea`; cordials and syrups
+`elderflower_cordial`, `elderberry_syrup`, `rosehip_syrup`, `sea_buckthorn_juice`;
+snacks `berry_oat_bars`, `hazelnut_trail_mix`, `roasted_chestnuts`,
+`cloudberry_preserve`, `bilberry_tart`; meals `nettle_soup`, `wild_garlic_flatbread`,
+`mushroom_broth`, `forager_stew`, `samphire_salad`. Raw berries and nuts can be eaten
+as they are for a small, short snack effect. Suggested flavour of effects: pine-tip
+tea steadies the hands; mint wakes the ears; chamomile calms (wildlife settles
+sooner, quieter approach); bilberries help the eyes at dusk; oat bars and nuts feed
+long walks; a hot meal makes rain and cold matter less.
+
+**Rules.**
+- Picking: E on a forage plant within 2.5 m sends `forage {id}` (id format on
+  `proto.ForageMsg`). The session checks distance, season and regrowth
+  (`profile.forage[id]` = day picked; bears again after `PlantDef.Regrow` days) and
+  pack capacity, adds 1–3 ingredients (`ForagedMsg`), records the plant in the
+  herbarium (`journal.plants`) the first time (+25 XP once per plant — never again),
+  and teaches the recipes whose `Learn` is `plant:<id>`.
+- Cooking: `cook {recipe, qty}` at the cabin (kettle and stove recipes) or within
+  12 m of any `camp` POI (kettle recipes) when the recipe is known and the inputs are
+  in the pack. Starting recipes: `pine_tip_tea`, `mint_tea`, `berry_oat_bars`.
+- Eating/drinking: `use {item}` on a food or edible ingredient applies its `BuffDef`
+  as a `proto.Buff` (replacing the current buff in that slot); `ComputeStats`
+  includes active buffs; expired buffs are removed on the tick and the profile pushed.
+- No XP or credits for repeat picking or cooking (spec §7.4, §22). First time cooking
+  each recipe pays 20 XP once.
+- Quests: `content` adds a few foraging/cooking quests using new objective kinds
+  `forage` (Target plant id | "any") and `cook` (Target recipe id | "any") and `eat`.
+
+**Client** (`c-field`): renders the forage plants from the chunk vegetation lists
+(`ctx.world.vegOf(cx, cz)` → the parsed LOD-0 vegetation array of a loaded chunk, in
+wire order, each `{kind, variant, x, y, z, scale, rot}`; the world module must skip
+kinds ≥ 18 in its own rendering) as charming recognisable plants with their fruit,
+flowers or caps shown only when they can be picked this season and are not in
+`profile.forage`; a "Pick" interaction (short crouch-and-pick motion, soft sound);
+buff chips on the HUD with time remaining; a `cook` screen (opened from a new
+"Kitchen" station in the home base and by interacting with a camp's fire): known
+recipes, what you have, what is missing, the effect, cook; a Herbarium section in the
+journal (pressed-plant style pages: drawing, names, how to recognise it, uses,
+caution, season, where found); ingredients and food in the inventory with "Eat".
+
+## 13. The narrator's voice (task `voice`)
+
+The narrator is the player's own inner voice: the mumbled thoughts of the naturalist
+you are playing (§8 still applies: original character, never a real person's voice or
+name, never spoils an identification).
+
+- **More to say.** (a) When the player spots a bird they have identified, he may
+  mumble one of its `Species.Facts` — every species gets at least six short, true,
+  interesting facts (owned by `nests` in the species data; `voice` wires them in,
+  rotating without repeats). (b) Activity mumbles: short, in-the-moment, first-person
+  asides for doing things — picking each plant (2–3 lines per plant id of §12:
+  "Mm. Blackberries. One for the pot, one for me."), cooking and tasting each food,
+  filling the pack, finding a feather, opening an old cache, climbing a tower,
+  wading the creek, sheltering from rain, sitting down to wait, finding a nest (by
+  site type, never naming an unidentified owner), raising the binoculars on nothing,
+  running out of film. New `narrator.Event` kinds for these (`Foraged`, `Cooked`,
+  `Ate`, `NestFound`, `Collected`, `Climbed`, `Waded`, `Sheltered`, `SatDown`,
+  `EmptyView`, `OutOfFilm`…) with an `Item` field for the plant/food/site id.
+  Occasional, not constant: the same pacing budget as before.
+- **Pregenerated voice.** Every line the narrator can ever say is known ahead of
+  time, so the voice is generated once and shipped. `narrator.AllLines()` enumerates
+  every final spoken sentence with a stable id (first 16 hex chars of the SHA-256 of
+  the exact text); `proto.Narration.ID` stays a counter, and the client keys audio by
+  hashing `text` the same way. Templates with slots must be made finite: rewrite
+  them so that the number of distinct sentences stays manageable (target ≤ ~2 500
+  lines in total) — prefer whole authored sentences over combinatorial slots.
+  `tools/voice/generate.mjs` (Node 22, no dependencies) reads the line list (from
+  `go run ./cmd/wildcall -narrator-lines` or a small Go tool), calls the OpenRouter
+  API to synthesise each line, and writes `web/voice/<id>.<ext>` plus
+  `web/voice/manifest.json` (`{voice, model, lines: {id: {file, dur}}}`). It must be
+  resumable (skip existing files), rate-limited, retrying, with `--dry-run` (count,
+  estimated cost), `--limit N`, `--only <ids>` and `--sample` (a dozen representative
+  lines in several candidate voices into `tools/voice/samples/` for the user to
+  choose from). The API key comes from the `OPENROUTER_API_KEY` environment variable
+  or a git-ignored `.env` file in the repo root; never print it, never commit it.
+  Look up the current OpenRouter documentation for audio/speech output before
+  writing the client code. Voice direction: a calm, warm, slightly gravelly older
+  British man speaking softly to himself, close to the microphone, unhurried, with
+  quiet delight — an original voice, not an impression of anyone.
+- **Playback.** `web/js/narrator/voice.js` plays the pregenerated file for a line
+  when the manifest has it (through the audio engine's bus if available so it obeys
+  the volume settings and ducks under focus listening) and falls back to speech
+  synthesis only when it does not. `web/voice/` is embedded in the engine binary.
+
+## 14. Real bird sound (task `birdsong`)
+
+So that players really learn birds, every species should be heard as it really
+sounds. The audio engine gains a **sample path**: when `web/birdsong/manifest.json`
+lists recordings for a species' call (`{species: {<species id>: {<call index>:
+[{file, dur, gain}]}}, credits: [...]}`) it plays one of them through the same
+spatial chain (position following the bird, distance roll-off, air absorption and
+occlusion filters, reverb send) instead of the synthesised call; otherwise it falls
+back to synthesis. Recordings are short (2–12 s), trimmed to the vocalisation,
+loudness-normalised, mono, Ogg/Opus or MP3. `tools/birdsong/` holds a fetch tool that
+finds suitable openly licensed recordings for each species and call type (song /
+call / alarm / drumming) from a public archive, records the licence, recordist and
+source URL for every file in `web/birdsong/CREDITS.md` and the manifest, and
+converts them. **The tool must not download anything by default**: `--plan` writes
+the candidate list (species, recording id, licence, length, quality, URL) for the
+user to approve; `--fetch` runs only when explicitly invoked. Journal playback
+(`ctx.audio.playCall`) uses the same recordings. Only recordings whose licence
+permits redistribution with attribution may be used; note any non-commercial terms
+prominently in the plan.

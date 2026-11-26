@@ -87,6 +87,7 @@ type ItemDef struct {
 	Name string `json:"name"`
 	Desc string `json:"desc"`
 	// Kind: equipment (goes in a slot) | gadget (works passively while carried) |
+	// ingredient (foraged or pantry, stackable) | food (prepared, stackable, eaten for a Buff) |
 	// supply (consumable, stackable) | keepsake (story item, may grant effects while owned)
 	Kind string `json:"kind"`
 	// Slot (equipment only): optics|camera|audio|backpack|navigation|clothing
@@ -104,10 +105,99 @@ type ItemDef struct {
 	History  string       `json:"history"`
 	Special  string       `json:"special"`
 	Upgrades []UpgradeDef `json:"upgrades"`
-	Stack    int          `json:"stack"`  // max stack size (supplies); 0 = not stackable
-	Use      string       `json:"use"`    // supply action: "film" | "seed" | ""
-	Source   string       `json:"source"` // start|shop|quest|loot|research
-	Icon     string       `json:"icon"`   // icon key (see docs/contract.md §Icons)
+	Stack    int          `json:"stack"` // max stack size (supplies, ingredients, food); 0 = not stackable
+	Use      string       `json:"use"`   // use action: "film" | "seed" | "eat" | ""
+	// Buff is the timed effect of eating or drinking this (Kind "food", and raw
+	// ingredients that can be eaten as they are).
+	Buff   *BuffDef `json:"buff,omitempty"`
+	Source string   `json:"source"` // start|shop|quest|loot|research
+	Icon   string   `json:"icon"`   // icon key (see docs/contract.md §Icons)
+}
+
+// BuffDef is a timed bonus from food or drink. At most one buff per Slot is active:
+// a new drink replaces the current drink, and so on.
+type BuffDef struct {
+	Slot  string             `json:"slot"`  // drink | meal | snack
+	Hours float32            `json:"hours"` // in-game hours the effect lasts
+	Mods  map[string]float32 `json:"mods"`  // additive, keys = core.Stats JSON names
+	Text  string             `json:"text"`  // player-facing effect, e.g. "Steadier hands for 3 hours"
+}
+
+// Buff is an active BuffDef on the player.
+type Buff struct {
+	Item  string             `json:"item"`
+	Name  string             `json:"name"`
+	Slot  string             `json:"slot"`
+	Until float64            `json:"until"` // absolute game clock in hours: (day-1)*24 + time
+	Hours float32            `json:"hours"` // original duration, for the HUD ring
+	Mods  map[string]float32 `json:"mods"`
+	Text  string             `json:"text"`
+}
+
+// PlantDef is a forageable wild plant or fungus (docs/contract.md §9).
+type PlantDef struct {
+	ID      string       `json:"id"`  // e.g. "bramble"
+	Veg     int          `json:"veg"` // core.VegKind it is drawn as (18+)
+	Name    string       `json:"name"`
+	Sci     string       `json:"sci"`
+	Desc    string       `json:"desc"`    // herbarium description: how to recognise it
+	Uses    string       `json:"uses"`    // what it is good for
+	Caution string       `json:"caution"` // honest safety note where a real forager would want one
+	Yields  []PlantYield `json:"yields"`
+	Regrow  int          `json:"regrow"`  // in-game days before a picked plant bears again
+	Regions []int        `json:"regions"` // region types where it grows
+	Habitat string       `json:"habitat"` // player-facing: "Damp woodland floor"
+	Icon    string       `json:"icon"`
+}
+
+// PlantYield is what a plant gives in which seasons.
+type PlantYield struct {
+	Item    string  `json:"item"`    // ingredient item id
+	Seasons [4]bool `json:"seasons"` // spring, summer, autumn, winter
+	Min     int     `json:"min"`
+	Max     int     `json:"max"`
+}
+
+// RecipeDef turns ingredients into food at a kettle (any camp fire, or the cabin) or
+// a stove (the cabin only).
+type RecipeDef struct {
+	ID      string      `json:"id"`
+	Name    string      `json:"name"`
+	Desc    string      `json:"desc"`
+	Station string      `json:"station"` // kettle | stove
+	Inputs  []ItemStack `json:"inputs"`
+	Output  string      `json:"output"` // food item id
+	Qty     int         `json:"qty"`
+	// Learn: how the recipe becomes known — "start" | "plant:<plant id>" (first time
+	// that plant is picked) | "npc:<npc id>" | "lore:<lore id>".
+	Learn string `json:"learn"`
+}
+
+// TreeModel is one branching tree shape. The server derives perches (and nest sites)
+// from it and the client builds the visible tree from the same data, so a bird on a
+// branch perch is really sitting on that branch. Model space: metres at scale 1, Y up,
+// trunk base at the origin; an instance applies its scale and its rotation about Y.
+type TreeModel struct {
+	Kind     int          `json:"kind"`    // core.VegKind
+	Variant  int          `json:"variant"` // 0..core.TreeVariants-1
+	Height   float32      `json:"height"`
+	Branches []TreeBranch `json:"branches"` // index 0 is the trunk's first segment
+	Leaves   []TreeLeaf   `json:"leaves"`   // foliage masses
+}
+
+// TreeBranch is a tapered limb segment from A to B.
+type TreeBranch struct {
+	A      [3]float32 `json:"a"`
+	B      [3]float32 `json:"b"`
+	RA     float32    `json:"ra"`     // radius at A
+	RB     float32    `json:"rb"`     // radius at B
+	Parent int        `json:"parent"` // index of the segment it grows from, -1 for the trunk base
+}
+
+// TreeLeaf is one foliage mass: an ellipsoid of leaves around a branch end.
+type TreeLeaf struct {
+	C [3]float32 `json:"c"` // centre
+	R [3]float32 `json:"r"` // radii
 }
 
 // UpgradeDef is a purchasable improvement to a specific item.
@@ -277,8 +367,11 @@ type Profile struct {
 	Trails   []string               `json:"trails"` // hidden trail ids revealed
 	Journal  Journal                `json:"journal"`
 	Quests   map[string]*QuestState `json:"quests"`
-	Flags    map[string]bool        `json:"flags"` // tutorial steps, features, npc met…
-	Stats    core.Stats             `json:"stats"` // derived; recomputed by progress
+	Flags    map[string]bool        `json:"flags"`   // tutorial steps, features, npc met…
+	Buffs    []Buff                 `json:"buffs"`   // active food and drink effects
+	Forage   map[string]int         `json:"forage"`  // forage node id → day it was picked (pruned once regrown)
+	Recipes  []string               `json:"recipes"` // recipe ids known
+	Stats    core.Stats             `json:"stats"`   // derived; recomputed by progress
 	Film     Film                   `json:"film"`
 	Totals   Totals                 `json:"totals"`
 	XPLog    map[string]int         `json:"xpLog"` // diminishing-returns counters, key "<source>:<species>"
@@ -324,6 +417,8 @@ type Journal struct {
 	Lore         []string                 `json:"lore"`      // natural-history entry ids unlocked
 	Rare         []*RareDiscovery         `json:"rare"`
 	Collectibles map[string]int           `json:"collectibles"` // collectible id → day found
+	Plants       map[string]*PlantEntry   `json:"plants"`       // herbarium: plants the player has found, by plant id
+	Nests        []*NestEntry             `json:"nests"`        // nests the player has found
 	Pinned       []string                 `json:"pinned"`       // photo ids on the photography wall
 	Badges       []string                 `json:"badges"`
 }
@@ -423,6 +518,26 @@ type RecMeta struct {
 	Stars     int     `json:"stars"`
 	Analyzed  bool    `json:"analyzed"`
 	Submitted bool    `json:"submitted"`
+}
+
+// PlantEntry is a herbarium record.
+type PlantEntry struct {
+	ID       string `json:"id"`
+	FirstDay int    `json:"firstDay"`
+	Region   int    `json:"region"`
+	Picked   int    `json:"picked"`
+}
+
+// NestEntry is a nest the player has found (observed closely or photographed).
+type NestEntry struct {
+	ID      string    `json:"id"`      // "n<nest id>"
+	Species string    `json:"species"` // species id if the player has identified the owner, else ""
+	Site    string    `json:"site"`    // core.NestInfo.Site
+	Stage   int       `json:"stage"`
+	Day     int       `json:"day"`
+	Region  int       `json:"region"`
+	Pos     core.Vec3 `json:"pos"`
+	Photo   string    `json:"photo"` // best photo id, or ""
 }
 
 // Observation is a written field observation (spec §13.2 "Observation").

@@ -8,3 +8,6 @@ desktop/build/
 *.test
 *.out
 node_modules/
+
+.env
+.env.*

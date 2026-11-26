@@ -12,6 +12,8 @@ import { createDome } from './dome.js';
 import { createClouds } from './clouds.js';
 import { createPrecip } from './precip.js';
 
+const WHITE = new THREE.Color(0xffffff);
+
 const WIND_DIR = [0.8, -0.6]; // prevailing wind towards the north-east (x east, z south)
 const SHADOW_SPAN = 70;       // metres either side of the player covered by the shadow map
 const SHADOW_MAP = 2048;
@@ -37,6 +39,11 @@ export default {
     const hemi = new THREE.HemisphereLight(0xbfd6ff, 0x4a4a32, 1);
     hemi.name = 'sky-hemi';
     scene.add(hemi);
+    // A flat fill so no face is ever black: the undersides of dense crowns only see
+    // the (dim) ground half of the hemisphere light.
+    const fill = new THREE.AmbientLight(0xffffff, 0.5);
+    fill.name = 'sky-fill';
+    scene.add(fill);
     const dir = new THREE.DirectionalLight(0xffffff, 2);
     dir.name = 'sky-sun';
     dir.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
@@ -165,6 +172,8 @@ export default {
       setSRGB(hemi.color, sky.hemiSky);
       setSRGB(hemi.groundColor, sky.hemiGround);
       hemi.intensity = sky.hemiIntensity;
+      fill.color.copy(hemi.color).lerp(WHITE, 0.5);
+      fill.intensity = 0.32 + 0.3 * sky.daylight;
       const useSun = sky.sunIntensity >= sky.moonIntensity;
       if (useSun) {
         setSRGB(dir.color, sky.sun);

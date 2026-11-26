@@ -18,8 +18,11 @@ import { createUI } from './core/ui.js';
 const MODULES = [
   './world/index.js',        // ctx.world   terrain, vegetation, water, chunk streaming
   './sky/index.js',          // ctx.sky     sky dome, sun/moon, fog, lighting, weather FX
+  './fx/index.js',           // ctx.post    post-processing (bloom, grading, light shafts); owns the final render
   './props/index.js',        // ctx.props   structures, NPCs, collectibles, lures, trail markers
   './birds/index.js',        // ctx.birds   procedural bird models + animation
+  './nests/index.js',        // ctx.nests   nests in trees, shrubs, reeds, banks and ledges
+  './forage/index.js',       // ctx.forage  forage plants, picking, cooking, buffs
   './player/index.js',       // ctx.player  first-person controller + ctx.tools
   './audio/index.js',        // ctx.audio   spatial audio, call synth, ambience, music
   './narrator/index.js',     // ctx.narrator  spoken narration + captions
@@ -90,7 +93,7 @@ async function boot() {
      * @param {HTMLElement[]} hide  elements to ignore — only the 3D canvas is captured anyway
      */
     capture(width = 640, quality = 0.82) {
-      renderer.render(scene, camera);
+      renderFrame(0);
       const h = Math.round(width / camera.aspect);
       captureCanvas.width = width; captureCanvas.height = h;
       captureCanvas.getContext('2d').drawImage(canvas, 0, 0, width, h);
@@ -98,6 +101,15 @@ async function boot() {
     },
   };
   window.wildcall = ctx; // debugging / automated tests
+
+  // The post-processing module (ctx.post), when present, owns the final render so it
+  // can add bloom, colour grading and light shafts; otherwise draw the scene directly.
+  function renderFrame(dt) {
+    if (ctx.post && typeof ctx.post.render === 'function') {
+      try { ctx.post.render(dt); return; } catch (err) { console.error('[post] render threw; falling back', err); ctx.post = null; }
+    }
+    renderer.render(scene, camera);
+  }
 
   applyQuality();
 
@@ -164,7 +176,7 @@ async function boot() {
     for (const m of modules) {
       if (m.lateUpdate) { try { m.lateUpdate(dt, ctx); } catch (err) { reportOnce(m, 'lateUpdate', err); } }
     }
-    renderer.render(scene, camera);
+    renderFrame(dt);
     requestAnimationFrame(frame);
   }
   const reported = new Set();

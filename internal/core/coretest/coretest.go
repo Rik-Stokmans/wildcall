@@ -113,6 +113,8 @@ func (f *Flat) PerchesNear(x, z, radius float32, buf []core.Perch) []core.Perch 
 			add(core.Perch{Pos: core.V(gx, f.H+8, gz), Kind: core.PerchCanopy, Cover: 0.8})
 			add(core.Perch{Pos: core.V(gx+1.5, f.H+10, gz), Kind: core.PerchBranch, Cover: 0.2})
 			add(core.Perch{Pos: core.V(gx+0.3, f.H+4, gz), Kind: core.PerchTrunk, Cover: 0.3})
+			add(core.Perch{Pos: core.V(gx+0.35, f.H+5, gz), Kind: core.PerchCavity, Cover: 0.9})
+			add(core.Perch{Pos: core.V(gx-0.8, f.H+6.5, gz+0.4), Kind: core.PerchFork, Cover: 0.5})
 			add(core.Perch{Pos: core.V(gx+TreeSpacing/2, f.H+1, gz+TreeSpacing/2), Kind: core.PerchShrub, Cover: 0.6})
 		}
 	}
@@ -159,9 +161,10 @@ var _ core.Terrain = (*Flat)(nil)
 
 // Birds is a fake core.Ecosystem holding a fixed, settable list of birds.
 type Birds struct {
-	List   []core.BirdState
-	Events []core.EcoEvent // returned (and cleared) by the next Step
-	Lures  []core.Lure
+	List     []core.BirdState
+	Events   []core.EcoEvent // returned (and cleared) by the next Step
+	Lures    []core.Lure
+	NestList []core.Nest
 }
 
 func (b *Birds) Step(dt float32, env core.Env, obs core.Observer) []core.EcoEvent {
@@ -186,6 +189,15 @@ func (b *Birds) Get(id uint32) (core.BirdState, bool) {
 		}
 	}
 	return core.BirdState{}, false
+}
+
+func (b *Birds) Nests(center core.Vec3, radius float32, buf []core.Nest) []core.Nest {
+	for _, n := range b.NestList {
+		if n.Pos.Dist(center) <= radius {
+			buf = append(buf, n)
+		}
+	}
+	return buf
 }
 
 func (b *Birds) Count() int                              { return len(b.List) }

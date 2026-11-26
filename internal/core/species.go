@@ -39,12 +39,35 @@ type Species struct {
 	// Further entries are optional: contact call, alarm call, drumming…
 	Calls  []Call `json:"calls"`
 	Traits Traits `json:"traits"`
+	// Nest describes where and when the species really nests.
+	Nest NestInfo `json:"nest"`
+	// Facts are short, true, spoken-length facts (one sentence each) the narrator may
+	// mumble when the player spots a bird they have identified.
+	Facts []string `json:"facts"`
 	// Difficulty is the 1..5 discovery difficulty shown in the journal after identification.
 	Difficulty int `json:"difficulty"`
 	// Similar lists species ids this one is easily confused with (field-guide "compare").
 	Similar []string `json:"similar"`
 	// Relations are short ecological notes shown with Ecological Knowledge.
 	Relations []string `json:"relations"`
+}
+
+// NestInfo is a species' real nesting habit.
+type NestInfo struct {
+	// Site: cavity (tree hole) | cup_shrub (cup in a bush/low cover) | cup_fork (cup in a
+	// tree fork) | platform (big stick nest high in a crown) | dome (domed/ball nest in
+	// thick cover) | pendant (hung under a conifer branch) | ground (hidden on the ground) |
+	// scrape (bare scrape on open ground/shingle) | reed (woven among reed stems) |
+	// floating (mound in shallow water or reeds) | burrow (tunnel in a bank or turf) |
+	// ledge (cliff or crag ledge) | none (does not breed here, e.g. winter visitors).
+	Site string `json:"site"`
+	// Perches are the PerchKind keys the nest can be placed on, most typical first.
+	Perches   []string `json:"perches"`
+	HeightMin float32  `json:"heightMin"` // metres above the ground / water
+	HeightMax float32  `json:"heightMax"`
+	Seasons   [4]bool  `json:"seasons"` // when nests are active (spring, summer, autumn, winter)
+	Size      float32  `json:"size"`    // outer diameter in metres (wren 0.12, buzzard 0.9)
+	Desc      string   `json:"desc"`    // one field-guide sentence about the nest
 }
 
 // FirstIDXP is the XP for the first identification of a species (spec §7.3:

@@ -51,6 +51,8 @@ const (
 	CSkill        = "skill"        // SkillAction
 	CCabin        = "cabin"        // CabinAction
 	CNote         = "note"         // NoteMsg
+	CForage       = "forage"       // ForageMsg: pick from a forage plant
+	CCook         = "cook"         // CookMsg: prepare a recipe at a kettle or stove
 	CDebug        = "debug"        // DebugMsg (only honoured when the server runs with -dev)
 )
 
@@ -168,6 +170,19 @@ type NoteMsg struct {
 	Text    string `json:"text"`
 }
 
+// ForageMsg picks from a forage plant. ID is "fg@<cx>,<cz>,<n>": n is the index of the
+// plant's record in the vegetation list of chunk (cx, cz) at LOD 0.
+type ForageMsg struct {
+	ID string `json:"id"`
+}
+
+// CookMsg prepares a recipe Qty times. Valid within 25 m of the cabin (kettle and
+// stove) or within 12 m of a camp POI (kettle only).
+type CookMsg struct {
+	Recipe string `json:"recipe"`
+	Qty    int    `json:"qty"`
+}
+
 // DebugMsg.Cmd: xp|credits|time|weather|season|tp|unlock|give|identify|skillpoints|rank|spawn|rep
 type DebugMsg struct {
 	Cmd  string   `json:"cmd"`
@@ -201,6 +216,8 @@ const (
 	SLure     = "lure"     // LureMsg: seed placed / expired
 	SPois     = "pois"     // PoisMsg: points of interest and trails that came into range
 	SNarrate  = "narrate"  // Narration: a line from the narrator
+	SNests    = "nests"    // NestsMsg: nests near the player (1 Hz, full list within range)
+	SForaged  = "foraged"  // ForagedMsg: result of a pick
 	SError    = "error"    // ErrorMsg
 )
 
@@ -222,6 +239,9 @@ type Welcome struct {
 	Quests       []QuestDef        `json:"quests"`
 	Collectibles []CollectibleDef  `json:"collectibles"`
 	Lore         []LoreDef         `json:"lore"`
+	Plants       []PlantDef        `json:"plants"`
+	Recipes      []RecipeDef       `json:"recipes"`
+	Trees        []TreeModel       `json:"trees"`
 	POIs         []core.POI        `json:"pois"`   // home-valley POIs + those near the player now
 	Trails       []core.Trail      `json:"trails"` // likewise
 	Shop         []string          `json:"shop"`   // item ids Finn sells
@@ -439,6 +459,27 @@ type Narration struct {
 	Priority int `json:"priority"`
 	// TTL is how many seconds the line stays relevant if it has to wait its turn.
 	TTL float32 `json:"ttl"`
+}
+
+// NestsMsg lists the nests within ~200 m. Each nest is the array
+// [id, siteIndex, stage, x, y, z, size, yaw] where siteIndex indexes NestSites.
+// The owner species is never sent. A nest missing from the list is out of range.
+type NestsMsg struct {
+	N [][]float32 `json:"n"`
+}
+
+// NestSites is the wire order of core.NestInfo.Site values in NestsMsg.
+var NestSites = []string{"cavity", "cup_shrub", "cup_fork", "platform", "dome", "pendant", "ground", "scrape", "reed", "floating", "burrow", "ledge"}
+
+// ForagedMsg answers a forage message.
+type ForagedMsg struct {
+	ID      string      `json:"id"`
+	OK      bool        `json:"ok"`
+	Plant   string      `json:"plant"` // plant id
+	Got     []ItemStack `json:"got"`
+	First   bool        `json:"first"`   // first time this plant was found: added to the herbarium
+	Learned []string    `json:"learned"` // recipe ids learned from it
+	Reason  string      `json:"reason"`  // when !OK: "Nothing to pick this season", "Already picked", "Pack is full"…
 }
 
 type ErrorMsg struct {

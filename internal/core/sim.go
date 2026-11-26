@@ -215,6 +215,26 @@ type EcoEvent struct {
 	Seed    uint32  // per-event variation seed for the synth
 }
 
+// Nest stages.
+const (
+	NestOld      uint8 = iota // disused: last season's nest
+	NestBuilding              // adults carrying material (ActNesting)
+	NestEggs                  // one adult sitting tight
+	NestChicks                // adults visiting with food
+)
+
+// Nest is a nest in the world. Nests belong to a breeding pair, sit on a perch that
+// suits the species' real nesting habit, and persist for the season.
+type Nest struct {
+	ID      uint32
+	Species int     // Species.Index (never sent to the client)
+	Site    string  // NestInfo.Site
+	Stage   uint8   // NestOld … NestChicks
+	Pos     Vec3    // centre of the nest
+	Size    float32 // outer diameter, metres
+	Yaw     float32 // orientation (e.g. which side of the trunk a cavity faces)
+}
+
 // Lure is a temporary attraction placed in the world (seed mix, garden feeder).
 type Lure struct {
 	Pos    Vec3
@@ -232,6 +252,8 @@ type Ecosystem interface {
 	Near(center Vec3, radius float32, buf []BirdState) []BirdState
 	Get(id uint32) (BirdState, bool)
 	Count() int
+	// Nests appends every nest within radius of center to buf.
+	Nests(center Vec3, radius float32, buf []Nest) []Nest
 	// AddLure places an attraction; ground- and seed-feeding birds nearby will visit
 	// and show ActFeeding there.
 	AddLure(l Lure)
