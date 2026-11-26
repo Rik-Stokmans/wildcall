@@ -6,6 +6,7 @@
 //   music → musIn → musDuck → musUser(volMusic) ──────────────────┼→ master(volMaster) → limiter → out
 //   ui one-shots → uiIn → uiUser(volUI) ──────────────────────────┘
 //   voice sends → revIn → convolver(forest IR) → revReturn → birdIn
+//   master → limiter → safety soft-clip → out
 //
 // The analyser taps the bird bus before the user's bird volume, so the recorder's
 // spectrogram and level meter show what reaches the microphone, not the mixer setting.
@@ -33,7 +34,17 @@ export class AudioEngine {
     this.limiter.release.value = 0.25;
     this.master = g(1);
     this.master.connect(this.limiter);
-    this.limiter.connect(ac.destination);
+    // Last line of defence: a soft clip after the limiter rounds any peak that gets past
+    // it (the limiter is a compressor, not a brick wall), so nothing ever hard-clips.
+    if (ac.createWaveShaper) {
+      this.safety = ac.createWaveShaper();
+      this.safety.curve = softClipCurve();
+      this.safety.oversample = '2x';
+      this.limiter.connect(this.safety);
+      this.safety.connect(ac.destination);
+    } else {
+      this.limiter.connect(ac.destination);
+    }
 
     this.birdIn = g(1);
     this.birdFocus = g(1);
@@ -173,6 +184,22 @@ export class AudioEngine {
     this.analyser.getByteFrequencyData(this.spectrum);
     return this.spectrum;
   }
+}
+
+/**
+ * Transfer curve of the safety stage: transparent up to 0.8, then a smooth tanh knee
+ * that tops out at 0.98 (so even a large overshoot stays below full scale).
+ */
+export function softClipCurve(n = 2049) {
+  const c = new Float32Array(n);
+  const knee = 0.8, top = 0.98;
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    const a = Math.abs(x);
+    const y = a <= knee ? a : knee + (top - knee) * Math.tanh((a - knee) / (top - knee));
+    c[i] = Math.sign(x) * y;
+  }
+  return c;
 }
 
 function clamp01(x) { return Number.isFinite(x) ? (x < 0 ? 0 : x > 1 ? 1 : x) : 0; }

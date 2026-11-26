@@ -10,16 +10,27 @@
 //   * season: leaf vertices (aVeg.y) blend towards the seasonal colour of their class,
 //     keeping their light/shade structure; plants pick one of two seasonal colours.
 // Per-instance colour (instanceColor) is applied with the per-vertex weight aVeg.z, so
-// bark stays bark while crowns and petals vary.
+// bark stays bark while crowns and petals vary. Optional model parts (aVeg2: the
+// fraction of instances that show the part, e.g. a lily flower) are collapsed on the
+// other instances.
+//
+// Trees and shrubs are drawn by the forest (trees/forest.js) from branching models —
+// the server's tree models (welcome.trees, setTreeModels) and the shrub models — with
+// one InstancedMesh per model across all chunks. Each chunk's mesh list carries a
+// small handle that registers and unregisters its trees with the forest. Until the
+// tree models arrive (or should a server not send them) trees fall back to the
+// procedural low-poly models of vegModels.js.
 import * as THREE from 'three';
 import { VEG_INFO, VEG_KIND_COUNT } from './constants.js';
 import { buildVegModel, detailForLod } from './vegModels.js';
 import { seasonTint, easeTint } from './season.js';
 import { countInstances, fillInstances } from './instances.js';
 import { chunkSphere } from './terrainMesh.js';
+import { createForest } from './trees/forest.js';
 
 const HEADER = /* glsl */`
 attribute vec3 aVeg;
+attribute float aVeg2;
 uniform float uTime;
 uniform float uWind;
 uniform vec2 uWindDir;
@@ -54,6 +65,12 @@ vec3 vegWind(vec3 p) {
 
 const BEGIN = /* glsl */`
 vec3 transformed = vec3(position) + vegWind(position);
+#ifdef USE_INSTANCING
+  if (aVeg2 < 1.0) {
+    vec2 ip = mod(modelMatrix[3].xz * 0.29 + instanceMatrix[3].xz, 991.0);
+    if (fract(sin(dot(ip, vec2(39.346, 11.135))) * 24634.6345) >= aVeg2) transformed = vec3(0.0);
+  }
+#endif
 #ifdef USE_ALPHAHASH
   vPosition = vec3(position);
 #endif
@@ -154,6 +171,7 @@ export function createVegetationKit() {
     g.setAttribute('normal', new THREE.BufferAttribute(m.normal, 3));
     g.setAttribute('color', new THREE.BufferAttribute(m.color, 3));
     g.setAttribute('aVeg', new THREE.BufferAttribute(m.veg, 3));
+    g.setAttribute('aVeg2', new THREE.BufferAttribute(m.part || new Float32Array(m.vertexCount).fill(1), 1));
     g.setIndex(new THREE.BufferAttribute(m.index, 1));
     g.userData.model = m;
     geometries.set(key, g);
@@ -162,9 +180,19 @@ export function createVegetationKit() {
 
   const counts = new Uint32Array(VEG_KIND_COUNT);
   const bounds = { minY: 0, maxY: 0, reach: 0 };
+  const forest = createForest(shared);
 
   return {
     materials,
+    /** The group holding every tree and shrub; the world adds it to its root. */
+    trees: forest.root,
+    forest,
+    /**
+     * Installs the server's tree models (welcome.trees, contract §11).
+     * @param {object[]} list  proto.TreeModel[]
+     * @returns {boolean} whether trees are now drawn from them
+     */
+    setTreeModels: (list) => forest.setModels(list),
     /**
      * Builds the InstancedMeshes of one chunk's vegetation.
      * @param {import('./chunkCodec.js').ChunkData} chunk
@@ -175,11 +203,14 @@ export function createVegetationKit() {
       const out = [];
       const veg = chunk.veg;
       if (!veg.count) return out;
+      for (let i = 0; i < veg.count; i++) {
+        if (forest.draws(veg.kind[i])) { out.push(forest.handleFor(chunk)); break; }
+      }
       countInstances(veg, quality.decor, counts);
       const ox = chunk.cx * 64, oz = chunk.cz * 64;
       for (let k = 0; k < VEG_KIND_COUNT; k++) {
         const n = counts[k];
-        if (!n) continue;
+        if (!n || forest.draws(k)) continue;
         const geo = geometryFor(k, detailForLod(k, chunk.lod));
         const matrices = new Float32Array(n * 16);
         const colors = new Float32Array(n * 3);
@@ -216,6 +247,7 @@ export function createVegetationKit() {
       // A prevailing south-westerly that wanders slowly.
       const a = 0.9 + Math.sin(time * 0.011) * 0.5;
       shared.uWindDir.value.set(Math.cos(a), Math.sin(a));
+      forest.update(dt, season);
       const tk = 1 - Math.exp(-dt * 0.35);
       for (const [cls, u] of tints) {
         if (!cls) continue;
@@ -228,6 +260,7 @@ export function createVegetationKit() {
 
     /** Jumps straight to a season's colours (first frame, no wash-in). */
     snapSeason(season) {
+      forest.snapSeason(season);
       for (const [cls, u] of tints) {
         if (!cls) continue;
         easeTint(u.live, seasonTint(cls, season), 1);

@@ -4,23 +4,20 @@ import * as THREE from 'three';
 import { CHUNK_SIZE } from './constants.js';
 import { chunkKey } from './heightfield.js';
 import { buildTerrainArrays, chunkSphere } from './terrainMesh.js';
+import { createTerrainMaterial } from './terrainMaterial.js';
 
-/**
- * The terrain material: vertex colours carry the whole palette (region, habitat,
- * trails, shoreline are blended in by the server); Lambert keeps the light soft and
- * cheap, and it honours scene.fog so the far ring melts into the sky.
- */
-export function createTerrainMaterial() {
-  return new THREE.MeshLambertMaterial({ vertexColors: true });
-}
+export { createTerrainMaterial };
 
 /**
  * @param {THREE.Object3D} root  parent of every chunk group
  * @param {object} vegKit  from createVegetationKit()
  * @param {() => {decor:number, shadows:boolean}} quality  current quality preset
+ * @param {object} [opts]
+ * @param {(x:number, z:number) => number} [opts.canopyAt]  tree cover, baked into the terrain
+ * @param {object} [opts.uniforms]  live uniforms shared with the ground cover (terrainMaterial.js)
  */
-export function createChunkRenderer(root, vegKit, quality) {
-  const terrainMaterial = createTerrainMaterial();
+export function createChunkRenderer(root, vegKit, quality, opts = {}) {
+  const terrainMaterial = createTerrainMaterial(opts.uniforms);
   /** key → THREE.Group currently drawn */
   const groups = new Map();
 
@@ -34,11 +31,12 @@ export function createChunkRenderer(root, vegKit, quality) {
   }
 
   function terrainMesh(chunk) {
-    const t = buildTerrainArrays(chunk);
+    const t = buildTerrainArrays(chunk, opts.canopyAt);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(t.position, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(t.normal, 3, true)); // int8 × 127, normalised
     g.setAttribute('color', new THREE.BufferAttribute(t.color, 3));
+    g.setAttribute('aCanopy', new THREE.BufferAttribute(t.canopy, 1));
     g.setIndex(new THREE.BufferAttribute(t.index, 1));
     const s = chunkSphere(t.minY, t.maxY);
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(s.x, s.y, s.z), s.r);

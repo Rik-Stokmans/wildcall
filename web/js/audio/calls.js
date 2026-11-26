@@ -5,11 +5,16 @@
 //         → HRTF panner (at the bird, following it) → birdIn
 //                                                   └→ send → shared forest reverb
 //
+// When web/birdsong has recordings for the call (samples.js), a bout plays one of them
+// instead: the recording's source nodes feed the same `input`, so the chain below is
+// identical (position, roll-off, air + occlusion filter, reverb send, voice cap).
+//
 // The voice count is capped (MAX_VOICES); the nearest/loudest win (curves.pickVoiceSlot).
 // Nothing here shows anything to the player: this is only what the ear gets.
 import { scheduleCall } from './schedule.js';
 import { renderNote } from './voice.js';
 import { mulberry32, hashSeed } from './rng.js';
+import { fitBout, MAX_WAIT_S } from './samples.js';
 import {
   audibleRange, pannerParams, edgeFade, sourceLevel, occlusionGain, voiceCutoff,
   canopyOcclusion, blendOcclusion, voicePriority, pickVoiceSlot, reverbSend, dist3,
@@ -26,15 +31,52 @@ const BIRD_HEADROOM = 0.5;
 const STOP_FADE = 0.06;
 /** Voice parameters are refreshed at this rate (Hz) rather than every frame. */
 const PARAM_HZ = 20;
+/** Level of a recording (the tool normalises them to -16 LUFS) against synthesised notes. */
+const SAMPLE_LEVEL = 0.85;
+/** Attack ramp on every recording segment (s): a mid-file start must not click. */
+const SAMPLE_ATTACK = 0.012;
+
+/**
+ * What playCall hands back: stop(), duration (s), playing, and an optional onEnded that
+ * fires once, however the sound ends (finished, stopped, or never started).
+ */
+class PlayHandle {
+  constructor(onEnded) {
+    this.onEnded = typeof onEnded === 'function' ? onEnded : null;
+    this.v = null;
+    this.dur = 0;
+    this.stopped = false;
+    this.ended = false;
+    this.manager = null;
+  }
+  bind(v, manager) { this.v = v; this.manager = manager; v.onEnd = () => this.finish(); }
+  get duration() { return this.v ? this.v.plan.duration : this.dur; }
+  get playing() { return !this.ended && !this.stopped; }
+  stop() {
+    if (this.stopped) return;
+    this.stopped = true;
+    if (this.v) this.manager.stopVoice(this.v);
+    this.finish();
+  }
+  finish() {
+    if (this.ended) return;
+    this.ended = true;
+    const cb = this.onEnded;
+    this.onEnded = null;
+    if (cb) { try { cb(); } catch (err) { console.error('[audio] onEnded failed', err); } }
+  }
+}
 
 export class CallManager {
   /**
    * @param {import('./engine.js').AudioEngine} eng
    * @param {object} ctx the game ctx (state, birds, world, camera)
    */
-  constructor(eng, ctx) {
+  constructor(eng, ctx, bank = null) {
     this.eng = eng;
     this.ctx = ctx;
+    /** @type {import('./samples.js').SampleBank|null} */
+    this.bank = bank;
     /** @type {Bout[]} */
     this.voices = [];
     this.focus = 0; // 0..1 smoothed focus amount (set by the module)
@@ -49,10 +91,34 @@ export class CallManager {
     return call && Array.isArray(call.notes) && call.notes.length ? call : null;
   }
 
+  /** Id of species `sp` (for the recordings manifest), or ''. */
+  speciesId(sp) {
+    return this.ctx.state?.species?.[sp | 0]?.id || '';
+  }
+
   /** Handle a net:call message (proto.CallMsg: bird, sp, call, reps, x, y, z, occ, seed). */
   onCall(msg) {
     const call = this.callData(msg?.sp, msg?.call);
     if (!call) return;
+    const seed = (msg.seed >>> 0) || hashSeed(msg.bird, msg.sp, msg.call, Math.floor(this.eng.now * 10));
+    const id = this.bank ? this.speciesId(msg.sp) : '';
+    const entry = id ? this.bank.pick(id, msg.call | 0, seed) : null;
+    if (!entry) { this.startBout(msg, call, seed, null); return; }
+    const buf = this.bank.cached(entry);
+    if (buf) { this.startBout(msg, call, seed, { entry, buf }); return; }
+    // Decode lazily without blocking: the bout starts when the recording is ready (a few
+    // tens of milliseconds for a small file), is dropped when that takes too long, and
+    // falls back to synthesis when the recording cannot be loaded.
+    const asked = this.eng.now;
+    this.bank.prefetch(id, msg.call | 0);
+    this.bank.ensure(entry).then((b) => {
+      if (this.eng.now - asked > MAX_WAIT_S) return;
+      this.startBout(msg, call, seed, b ? { entry, buf: b } : null);
+    });
+  }
+
+  /** Start a bout now: synthesised notes, or `sample` = {entry, buf} (a recording). */
+  startBout(msg, call, seed, sample) {
     const pos = this.birdPos(msg.bird) || { x: +msg.x || 0, y: +msg.y || 0, z: +msg.z || 0 };
     const L = this.listener;
     const d = dist3(pos.x, pos.y, pos.z, L.x, L.y, L.z);
@@ -67,14 +133,50 @@ export class CallManager {
     if (!slot.accept) return;
     if (slot.victim >= 0) this.stopVoice(this.voices[slot.victim]);
 
-    const seed = (msg.seed >>> 0) || hashSeed(msg.bird, msg.sp, msg.call, Math.floor(this.eng.now * 10));
-    const plan = scheduleCall(call, msg.reps | 0, seed);
-    if (!plan.events.length) return;
+    let plan = scheduleCall(call, msg.reps | 0, seed);
+    let fit = null;
+    if (sample) {
+      // The bout's length is what the synthesised bout would last: reps x phrase.
+      fit = fitBout(sample.buf.duration, plan.duration, mulberry32(seed ^ 0x2f6e2b1), { gap: call.gap });
+      plan = { events: [], duration: fit.duration, repeats: plan.repeats };
+    } else if (!plan.events.length) return;
     const bout = this.makeSpatialVoice(call, pos, occ, plan, seed);
     bout.bird = msg.bird;
     bout.priority = pri;
+    if (sample) this.playSegments(bout, sample.buf, sample.entry, fit);
     this.voices.push(bout);
     this.refresh(bout, true);
+  }
+
+  /**
+   * Schedule the segments of a fitted recording into voice `v` (all at once: a bout has
+   * at most a handful, and each is one cheap buffer source).
+   */
+  playSegments(v, buf, entry, fit) {
+    const ac = this.eng.ac;
+    for (const seg of fit.segments) {
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = seg.rate;
+      const env = ac.createGain();
+      const level = SAMPLE_LEVEL * entry.gain * seg.gain;
+      const t = v.t0 + seg.at;
+      const play = seg.len / seg.rate;
+      const fo = Math.min(Math.max(0.02, seg.fadeOut), play * 0.5);
+      env.gain.setValueAtTime(0, t);
+      env.gain.linearRampToValueAtTime(level, t + Math.min(SAMPLE_ATTACK, play * 0.25));
+      env.gain.setValueAtTime(level, t + play - fo);
+      env.gain.linearRampToValueAtTime(0, t + play);
+      src.connect(env);
+      env.connect(v.input);
+      src.start(t, seg.offset, seg.len);
+      src.stop(t + play + 0.02);
+      v.sources.add(src);
+      src.addEventListener('ended', () => {
+        v.sources.delete(src);
+        try { src.disconnect(); env.disconnect(); } catch { /* already gone */ }
+      });
+    }
   }
 
   makeSpatialVoice(call, pos, occ, plan, seed) {
@@ -110,13 +212,37 @@ export class CallManager {
   }
 
   /**
-   * Non-spatial playback for the journal / field guide. Goes through the bird bus (so the
-   * spectrogram shows it) with a touch of reverb, and is never stolen by world calls.
+   * Non-spatial playback of a species' call for the journal / field guide: a recording
+   * when there is one, else the synthesised call. Goes through the bird bus (so the
+   * spectrogram shows it). Returns a PlayHandle at once, even while a recording loads.
+   * @param {number} sp species index
+   * @param {number} ci call index
+   * @param {{gain?: number, seed?: number, reps?: number, onEnded?: () => void}} opts
    */
-  preview(call, opts = {}) {
-    const ac = this.eng.ac;
+  play(sp, ci, opts = {}) {
+    const call = this.callData(sp, ci);
+    if (!call) return null;
     const seed = (opts.seed >>> 0) || ((Math.random() * 0xffffffff) >>> 0);
-    const plan = scheduleCall(call, opts.reps | 0, seed);
+    const handle = new PlayHandle(opts.onEnded);
+    const id = this.bank ? this.speciesId(sp) : '';
+    const entry = id ? this.bank.pick(id, ci | 0, seed) : null;
+    const synth = () => handle.bind(this.preview(call, { ...opts, seed }), this);
+    if (!entry) { synth(); return handle; }
+    // Journal playback of a recording plays it whole unless a bout length was asked for.
+    const want = opts.reps > 0 ? scheduleCall(call, opts.reps | 0, seed).duration : 0;
+    handle.dur = want > 0 ? want : entry.dur;
+    const begin = (buf) => handle.bind(this.previewSample(call, entry, buf, want, opts, seed), this);
+    const buf = this.bank.cached(entry);
+    if (buf) { begin(buf); return handle; }
+    this.bank.ensure(entry).then((b) => {
+      if (handle.stopped) return;
+      if (b) begin(b); else synth();
+    });
+    return handle;
+  }
+
+  makePreviewVoice(call, plan, opts, seed) {
+    const ac = this.eng.ac;
     const input = ac.createGain();
     const fade = ac.createGain();
     fade.gain.value = clamp(opts.gain ?? 1, 0, 2) * 0.7;
@@ -134,7 +260,25 @@ export class CallManager {
     };
     this.previews ??= [];
     this.previews.push(v);
-    this.pump(v, ac.currentTime);
+    return v;
+  }
+
+  previewSample(call, entry, buf, boutDur, opts, seed) {
+    const fit = fitBout(buf.duration, boutDur, mulberry32(seed ^ 0x2f6e2b1), { gap: call.gap });
+    const v = this.makePreviewVoice(call, { events: [], duration: fit.duration, repeats: 1 }, opts, seed);
+    this.playSegments(v, buf, entry, fit);
+    return v;
+  }
+
+  /**
+   * Synthesised non-spatial playback (also the fallback when a recording cannot load).
+   * Never stolen by world calls.
+   */
+  preview(call, opts = {}) {
+    const seed = (opts.seed >>> 0) || ((Math.random() * 0xffffffff) >>> 0);
+    const plan = scheduleCall(call, opts.reps | 0, seed);
+    const v = this.makePreviewVoice(call, plan, opts, seed);
+    this.pump(v, this.eng.ac.currentTime);
     return v;
   }
 
@@ -157,6 +301,7 @@ export class CallManager {
     for (const s of v.sources) { try { s.stop(now + STOP_FADE + 0.02); } catch { /* not started / done */ } }
     v.next = v.plan.events.length;
     v.disposeAt = now + STOP_FADE + 0.1;
+    v.onEnd?.();
   }
 
   dispose(v) {

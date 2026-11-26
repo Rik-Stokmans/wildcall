@@ -1,5 +1,5 @@
-// Weather particles around the camera: rain streaks, snowflakes and wind-blown leaf
-// motes. Each is a fixed set of particles in a box that wraps around the camera in
+// Weather particles around the camera: rain streaks, snowflakes, wind-blown leaves,
+// pollen/dust motes glinting in the sunbeams and fireflies on summer evenings. Each is a fixed set of particles in a box that wraps around the camera in
 // world space (particles stay put as the player walks; only the box moves), animated
 // entirely in the vertex shader — no per-frame CPU work beyond a few uniforms.
 import * as THREE from 'three';
@@ -146,7 +146,72 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
-/** Builds rain, snow and leaves; add `group` to the scene. */
+// --- motes: tiny specks that glint when they sit between the eye and the sun -------
+const MOTE_VERT = /* glsl */`
+${WRAP}
+uniform float uSize;
+uniform vec3 uSunDir;
+attribute vec3 aSeed;
+varying float vA;
+void main() {
+  vec3 p = wrapPos(aSeed);
+  float ph = aSeed.x * 53.0 + aSeed.y * 17.0;
+  p += vec3(sin(uTime * 0.31 + ph), sin(uTime * 0.23 + ph * 1.7) * 0.6, cos(uTime * 0.27 + ph * 0.7)) * 0.35;
+  vec4 mv = viewMatrix * vec4(p, 1.0);
+  vec3 toP = normalize(p - cameraPosition);
+  float fwd = pow(max(dot(toP, uSunDir), 0.0), 3.0);
+  float dist = length(mv.xyz);
+  vA = (0.25 + 1.6 * fwd) * (1.0 - smoothstep(uBox.x * 0.22, uBox.x * 0.5, dist)) * smoothstep(0.4, 1.2, dist)
+     * (0.6 + 0.4 * sin(uTime * (1.5 + aSeed.z * 3.0) + ph));
+  gl_PointSize = uSize * (0.6 + 0.8 * fract(aSeed.z * 71.3)) * (300.0 / max(0.5, -mv.z));
+  gl_Position = projectionMatrix * mv;
+}`;
+const MOTE_FRAG = /* glsl */`
+uniform vec3 uColor;
+uniform float uOpacity;
+varying float vA;
+void main() {
+  float r = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5, 0.0, r);
+  gl_FragColor = vec4(uColor * (0.6 + 0.8 * a), a * a * uOpacity * vA);
+  #include <colorspace_fragment>
+}`;
+
+// --- fireflies: slow wandering lights that pulse on and off ----------------------
+const FLY_VERT = /* glsl */`
+${WRAP}
+uniform float uSize;
+attribute vec3 aSeed;
+varying float vGlow;
+void main() {
+  vec3 p = wrapPos(aSeed);
+  float ph = aSeed.x * 61.0 + aSeed.z * 23.0;
+  p += vec3(sin(uTime * 0.21 + ph) * 1.4, sin(uTime * 0.37 + ph * 1.3) * 0.45, cos(uTime * 0.17 + ph * 0.9) * 1.4);
+  vec4 mv = viewMatrix * vec4(p, 1.0);
+  // Each fly blinks: a soft pulse of ~0.8 s every 2.5–5 s.
+  float period = 2.5 + aSeed.y * 2.5;
+  float t = fract(uTime / period + aSeed.x * 7.3) * period;
+  float pulse = smoothstep(0.0, 0.3, t) * (1.0 - smoothstep(0.7, 1.6, t));
+  float dist = length(mv.xyz);
+  vGlow = pulse * (1.0 - smoothstep(uBox.x * 0.3, uBox.x * 0.5, dist));
+  gl_PointSize = uSize * (300.0 / max(0.5, -mv.z));
+  gl_Position = projectionMatrix * mv;
+}`;
+const FLY_FRAG = /* glsl */`
+uniform vec3 uColor;
+uniform float uOpacity;
+varying float vGlow;
+void main() {
+  float r = length(gl_PointCoord - 0.5) * 2.0;
+  float core = smoothstep(0.22, 0.0, r);
+  float halo = exp(-r * r * 9.0) * 0.5;
+  float a = (core + halo) * vGlow * uOpacity;
+  if (a < 0.002) discard;
+  gl_FragColor = vec4(uColor * (core * 5.0 + halo * 1.5), a);
+  #include <colorspace_fragment>
+}`;
+
+/** Builds rain, snow, leaves, motes and fireflies; add `group` to the scene. */
 export function createPrecip() {
   const rnd = mulberry(0x5eed);
   const group = new THREE.Group();
@@ -171,7 +236,7 @@ export function createPrecip() {
   const sg = new THREE.BufferGeometry();
   sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SNOW * 3), 3));
   sg.setAttribute('aSeed', new THREE.BufferAttribute(seeds(SNOW, 1, rnd), 3));
-  const su = { ...baseUniforms(snowBox), uSize: { value: 0.09 }, uSway: { value: 0.6 } };
+  const su = { ...baseUniforms(snowBox), uSize: { value: 0.14 }, uSway: { value: 0.6 } };
   const snow = new Field(new THREE.Points(sg, new THREE.ShaderMaterial({
     uniforms: su, vertexShader: FLAKE_VERT, fragmentShader: SNOW_FRAG, transparent: true, depthWrite: false, fog: false,
   })), su, snowBox);
@@ -187,7 +252,30 @@ export function createPrecip() {
     uniforms: lu, vertexShader: FLAKE_VERT, fragmentShader: LEAF_FRAG, transparent: true, depthWrite: false, fog: false,
   })), lu, leafBox);
 
-  for (const f of [rain, snow, leaves]) group.add(f.object);
+  // Motes: a small cloud of specks close to the eye, glinting in the sun.
+  const MOTES = 420, moteBox = [14, 7, 14];
+  const mg = new THREE.BufferGeometry();
+  mg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MOTES * 3), 3));
+  mg.setAttribute('aSeed', new THREE.BufferAttribute(seeds(MOTES, 1, rnd), 3));
+  const mu = { ...baseUniforms(moteBox), uSize: { value: 0.018 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) } };
+  const motes = new Field(new THREE.Points(mg, new THREE.ShaderMaterial({
+    uniforms: mu, vertexShader: MOTE_VERT, fragmentShader: MOTE_FRAG, transparent: true, depthWrite: false, fog: false,
+    blending: THREE.AdditiveBlending,
+  })), mu, moteBox);
+
+  // Fireflies: a few dozen in a wide, low box around the player.
+  const FLIES = 160, flyBox = [46, 3.2, 46];
+  const fg = new THREE.BufferGeometry();
+  fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FLIES * 3), 3));
+  fg.setAttribute('aSeed', new THREE.BufferAttribute(seeds(FLIES, 1, rnd), 3));
+  const fu = { ...baseUniforms(flyBox), uSize: { value: 0.75 } };
+  const flies = new Field(new THREE.Points(fg, new THREE.ShaderMaterial({
+    uniforms: fu, vertexShader: FLY_VERT, fragmentShader: FLY_FRAG, transparent: true, depthWrite: false, fog: false,
+    blending: THREE.AdditiveBlending,
+  })), fu, flyBox);
+  fu.uColor.value.setRGB(0.85, 1.0, 0.45, THREE.SRGBColorSpace);
+
+  for (const f of [rain, snow, leaves, motes, flies]) group.add(f.object);
   const center = new THREE.Vector3();
 
   /**
@@ -195,7 +283,8 @@ export function createPrecip() {
    * @param {number} time seconds
    * @param {THREE.Vector3} cam camera position
    * @param {object} w {rain, snow, leaves (0..1 amounts), wind 0..1, windDir [x,z] unit,
-   *   light 0..1 (dims particles at night), leafA/leafB sRGB triples}
+   *   light 0..1 (dims particles at night), leafA/leafB sRGB triples, motes, fireflies
+   *   0..1 amounts, sunDir THREE.Vector3, sunColor sRGB triple, ground y below the camera}
    */
   function update(dt, time, cam, w) {
     const wx = w.windDir[0] * w.wind, wz = w.windDir[1] * w.wind;
@@ -212,6 +301,12 @@ export function createPrecip() {
     lu.uSway.value = 0.6 + w.wind * 1.4;
     lu.uColor.value.setRGB(w.leafA[0], w.leafA[1], w.leafA[2], THREE.SRGBColorSpace);
     lu.uColor2.value.setRGB(w.leafB[0], w.leafB[1], w.leafB[2], THREE.SRGBColorSpace);
+    center.copy(cam);
+    motes.advance(dt, wx * 0.4, 0.02, wz * 0.4, center, time, w.motes);
+    mu.uSunDir.value.copy(w.sunDir);
+    mu.uColor.value.setRGB(w.sunColor[0], w.sunColor[1], w.sunColor[2], THREE.SRGBColorSpace);
+    center.y = (Number.isFinite(w.ground) ? w.ground : cam.y - 1.6) + 1.4;
+    flies.advance(dt, 0, 0, 0, center, time, w.fireflies);
   }
 
   /** Scales particle counts for the quality setting (draw ranges, no rebuild). */
@@ -220,6 +315,8 @@ export function createPrecip() {
     rg.setDrawRange(0, Math.floor(RAIN * f) * 2);
     sg.setDrawRange(0, Math.floor(SNOW * f));
     lg.setDrawRange(0, Math.floor(LEAVES * f));
+    mg.setDrawRange(0, Math.floor(MOTES * f));
+    fg.setDrawRange(0, Math.floor(FLIES * (0.5 + 0.5 * f)));
   }
 
   return { group, update, setQuality };

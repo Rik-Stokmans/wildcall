@@ -12,12 +12,17 @@
 //   chunkRenderer.js  terrain meshes + per-chunk vegetation, swapped atomically            [three]
 //   vegetation.js     shared vegetation geometry and the wind/season foliage material      [three]
 //   water.js          the y = 0 water surface                                               [three]
+//   groundField.js    what grows where; the ground-cover lattice and its rings              [pure]
+//   groundCover.js    GPU grass, wildflowers and ferns around the camera                    [three]
+//   terrainMaterial.js the terrain shader (painterly detail, litter, shade)                [three]
 import * as THREE from 'three';
 import { CHUNK_SIZE, SEA_LEVEL, qualityOf } from './constants.js';
 import { WorldPipeline } from './pipeline.js';
+import { vegList } from './chunkCodec.js';
 import { createVegetationKit } from './vegetation.js';
 import { createChunkRenderer } from './chunkRenderer.js';
 import { createWater } from './water.js';
+import { createGroundCover } from './groundCover.js';
 
 /** Meshing budget per frame while the game waits for the world (ms). */
 const BOOT_BUILD_MS = 12;
@@ -36,7 +41,19 @@ export default {
     scene.add(root);
 
     const vegKit = createVegetationKit();
-    const renderer = createChunkRenderer(root, vegKit, () => quality);
+    // c-trees: every tree and shrub is instanced across chunks under this one group.
+    root.add(vegKit.trees);
+    // Uniforms the terrain shader and the ground cover share (season tint, time, wind).
+    const groundUniforms = {
+      uGrassTint: { value: new THREE.Vector4(0, 0, 0, 0) },
+      uTime: { value: 0 },
+      uWind: { value: 0.3 },
+      uWet: { value: 0 },
+      uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
+    };
+    let pipeline = null;
+    const canopyAt = (x, z) => (pipeline ? pipeline.collision.canopyAt(x, z) : 0);
+    const renderer = createChunkRenderer(root, vegKit, () => quality, { canopyAt, uniforms: groundUniforms });
     const water = createWater(scene);
     water.setRadius(quality.radius);
 
@@ -47,7 +64,7 @@ export default {
     let errorsLogged = 0;
     let loopRunning = false;
 
-    const pipeline = new WorldPipeline({
+    pipeline = new WorldPipeline({
       request: (cx, cz, lod) => net.send('chunkReq', { cx, cz, lod }),
       mesher: renderer,
       quality,
@@ -59,6 +76,8 @@ export default {
     });
     const store = pipeline.store;
     const collision = pipeline.collision;
+    const ground = createGroundCover(root, { store, canopyAt, quality: state.settings?.quality, uniforms: groundUniforms });
+    ground.setShadows(quality.shadows);
 
     // --- player tracking -----------------------------------------------------------
     const spawn = { x: 0, z: 0 };
@@ -81,6 +100,8 @@ export default {
       readyEmitted = false;
       pipeline.watchReady(spawn.x, spawn.z);
       started = true;
+      // c-trees: the server's branching tree models (contract §11), before any chunk is built.
+      vegKit.setTreeModels(welcome?.trees);
       vegKit.snapSeason(state.env?.season ?? welcome?.env?.season ?? 0);
       ensureLighting();
       startBootPump();
@@ -123,14 +144,14 @@ export default {
     }
 
     bus.on('welcome', (w) => {
-      if (started) pipeline.reset();
+      if (started) { pipeline.reset(); ground.reset(); }
       start(w);
     });
     // A new adventure on the same connection (newGame) brings a new seed: new world.
     bus.on('net:welcome', (w) => {
       if (!started) return; // the first welcome is handled via 'welcome'
       const s = w?.seed ?? w?.world?.seed ?? null;
-      if (s !== seed) { pipeline.reset(); start(w); }
+      if (s !== seed) { pipeline.reset(); ground.reset(); start(w); }
     });
     bus.on('net:chunk', (buf) => { if (started) pipeline.receive(buf); });
     bus.on('net:close', () => pipeline.connectionLost());
@@ -141,6 +162,8 @@ export default {
       quality = next;
       pipeline.configure(quality);
       water.setRadius(quality.radius);
+      ground.setQuality(value);
+      ground.setShadows(quality.shadows);
       if (fallbackLights && scene.fog?.isFog) scene.fog.far = (quality.radius + 0.5) * CHUNK_SIZE;
       // Decoration density and shadows are baked into the instanced meshes.
       pipeline.rebuildAll();
@@ -148,6 +171,8 @@ export default {
 
     // --- the public API ---------------------------------------------------------------
     const hit = { x: 0, y: 0, z: 0 };
+    /** VegData → its object list (built on first vegOf, dropped with the chunk). */
+    const vegLists = new WeakMap();
     const api = {
       /** Metres per chunk side. */
       chunkSize: CHUNK_SIZE,
@@ -179,6 +204,21 @@ export default {
       addSurfacePatch: (p) => collision.addSurfacePatch(p),
       canopyAt: (x, z) => collision.canopyAt(x, z),
 
+      /**
+       * The lod-0 vegetation of a loaded chunk in wire order, as plain objects
+       * {kind, variant, x, y, z, scale, rot} (world metres, rot in radians) — forage
+       * plants (kind >= 18) included, which the world itself never draws. null if the
+       * chunk is not loaded or was never received at lod 0. The array is cached per
+       * chunk and shared: do not mutate it. Re-query on 'world:chunk'.
+       */
+      vegOf(cx, cz) {
+        const veg = store.vegOf(cx, cz);
+        if (!veg) return null;
+        let list = vegLists.get(veg);
+        if (!list) { list = vegList(veg); vegLists.set(veg, list); }
+        return list;
+      },
+
       raycastTerrain(origin, dir, maxDist = 500) {
         if (!origin || !dir) return null;
         return store.raycast(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, maxDist, hit)
@@ -200,7 +240,8 @@ export default {
     ctx.world = api;
 
     // --- per frame ------------------------------------------------------------------
-    const look = { sunDir: null, light: 1, sky: null };
+    const look = { sunDir: null, light: 1, sky: null, skyHigh: null, wind: 0.3 };
+    const groundEnv = { wind: 0.3, rain: 0, season: 0, sunDir: null, light: 1 };
     frame = (dt) => {
       loopRunning = true;
       step(dt, quality.buildMs);
@@ -234,7 +275,15 @@ export default {
       const daylight = ctx.sky?.daylight;
       look.light = Number.isFinite(daylight) ? daylight : (state.env?.light ?? 1);
       look.sky = ctx.sky?.fogColor || scene.fog?.color || null;
+      look.skyHigh = ctx.sky?.zenithColor || null;
+      look.wind = state.env?.wind ?? 0.3;
       water.update(dt, ctx.time, feet.x, feet.z, store, look);
+      groundEnv.wind = state.env?.wind ?? 0.3;
+      groundEnv.rain = ctx.sky?.env?.rain ?? state.env?.rain ?? 0;
+      groundEnv.season = state.env?.season ?? 0;
+      groundEnv.sunDir = look.sunDir;
+      groundEnv.light = look.light;
+      ground.update(dt, ctx.time, ctx.camera?.position || feet, groundEnv);
     }
   },
 

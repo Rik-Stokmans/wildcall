@@ -1,0 +1,884 @@
+[
+  {
+    "id": "european_robin",
+    "index": 0,
+    "name": "European Robin",
+    "sci": "Erithacus rubecula",
+    "family": "Thrushes \u0026 Chats",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "melodic",
+        "loud": 0.45
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.3
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "whistle",
+        "loud": 0.2
+      }
+    ]
+  },
+  {
+    "id": "blue_tit",
+    "index": 1,
+    "name": "Blue Tit",
+    "sci": "Cyanistes caeruleus",
+    "family": "Tits",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "trill",
+        "loud": 0.3
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.2
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "harsh",
+        "loud": 0.35
+      }
+    ]
+  },
+  {
+    "id": "great_tit",
+    "index": 2,
+    "name": "Great Tit",
+    "sci": "Parus major",
+    "family": "Tits",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "repeated",
+        "loud": 0.5
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.4
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.45
+      }
+    ]
+  },
+  {
+    "id": "common_blackbird",
+    "index": 3,
+    "name": "Common Blackbird",
+    "sci": "Turdus merula",
+    "family": "Thrushes \u0026 Chats",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "melodic",
+        "loud": 0.6
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.3
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.7
+      }
+    ]
+  },
+  {
+    "id": "eurasian_wren",
+    "index": 4,
+    "name": "Eurasian Wren",
+    "sci": "Troglodytes troglodytes",
+    "family": "Wrens",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "trill",
+        "loud": 0.55
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.3
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "harsh",
+        "loud": 0.4
+      }
+    ]
+  },
+  {
+    "id": "common_chaffinch",
+    "index": 5,
+    "name": "Common Chaffinch",
+    "sci": "Fringilla coelebs",
+    "family": "Finches",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "chatter",
+        "loud": 0.5
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.45
+      },
+      {
+        "index": 2,
+        "kind": "call",
+        "pattern": "whistle",
+        "loud": 0.4
+      }
+    ]
+  },
+  {
+    "id": "great_spotted_woodpecker",
+    "index": 6,
+    "name": "Great Spotted Woodpecker",
+    "sci": "Dendrocopos major",
+    "family": "Woodpeckers",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "drum",
+        "pattern": "drumming",
+        "loud": 0.75
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.5
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.55
+      }
+    ]
+  },
+  {
+    "id": "eurasian_jay",
+    "index": 7,
+    "name": "Eurasian Jay",
+    "sci": "Garrulus glandarius",
+    "family": "Crows \u0026 Jays",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "harsh",
+        "loud": 0.7
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.35
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "harsh",
+        "loud": 0.75
+      }
+    ]
+  },
+  {
+    "id": "eurasian_nuthatch",
+    "index": 8,
+    "name": "Eurasian Nuthatch",
+    "sci": "Sitta europaea",
+    "family": "Nuthatches",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "whistle",
+        "loud": 0.6
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.5
+      },
+      {
+        "index": 2,
+        "kind": "song",
+        "pattern": "trill",
+        "loud": 0.55
+      }
+    ]
+  },
+  {
+    "id": "eurasian_treecreeper",
+    "index": 9,
+    "name": "Eurasian Treecreeper",
+    "sci": "Certhia familiaris",
+    "family": "Treecreepers",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "melodic",
+        "loud": 0.18
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.15
+      }
+    ]
+  },
+  {
+    "id": "tawny_owl",
+    "index": 10,
+    "name": "Tawny Owl",
+    "sci": "Strix aluco",
+    "family": "Owls",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "whistle",
+        "loud": 0.85
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.7
+      }
+    ]
+  },
+  {
+    "id": "common_buzzard",
+    "index": 11,
+    "name": "Common Buzzard",
+    "sci": "Buteo buteo",
+    "family": "Hawks \u0026 Eagles",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.8
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "repeated",
+        "loud": 0.8
+      }
+    ]
+  },
+  {
+    "id": "song_thrush",
+    "index": 12,
+    "name": "Song Thrush",
+    "sci": "Turdus philomelos",
+    "family": "Thrushes \u0026 Chats",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "repeated",
+        "loud": 0.65
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.2
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "goldcrest",
+    "index": 13,
+    "name": "Goldcrest",
+    "sci": "Regulus regulus",
+    "family": "Kinglets",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "repeated",
+        "loud": 0.15
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.12
+      }
+    ]
+  },
+  {
+    "id": "long_tailed_tit",
+    "index": 14,
+    "name": "Long-tailed Tit",
+    "sci": "Aegithalos caudatus",
+    "family": "Long-tailed Tits",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "chatter",
+        "loud": 0.2
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "trill",
+        "loud": 0.15
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "trill",
+        "loud": 0.2
+      }
+    ]
+  },
+  {
+    "id": "eurasian_blackcap",
+    "index": 15,
+    "name": "Eurasian Blackcap",
+    "sci": "Sylvia atricapilla",
+    "family": "Warblers",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "melodic",
+        "loud": 0.5
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "single",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "common_chiffchaff",
+    "index": 16,
+    "name": "Common Chiffchaff",
+    "sci": "Phylloscopus collybita",
+    "family": "Warblers",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "repeated",
+        "loud": 0.45
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "whistle",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "grey_wagtail",
+    "index": 17,
+    "name": "Grey Wagtail",
+    "sci": "Motacilla cinerea",
+    "family": "Wagtails \u0026 Pipits",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.35
+      },
+      {
+        "index": 1,
+        "kind": "song",
+        "pattern": "trill",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "common_kingfisher",
+    "index": 18,
+    "name": "Common Kingfisher",
+    "sci": "Alcedo atthis",
+    "family": "Kingfishers",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "whistle",
+        "loud": 0.45
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "harsh",
+        "loud": 0.45
+      }
+    ]
+  },
+  {
+    "id": "golden_oriole",
+    "index": 19,
+    "name": "Golden Oriole",
+    "sci": "Oriolus oriolus",
+    "family": "Orioles",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "whistle",
+        "loud": 0.75
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "harsh",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "mallard",
+    "index": 20,
+    "name": "Mallard",
+    "sci": "Anas platyrhynchos",
+    "family": "Ducks, Geese \u0026 Swans",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "harsh",
+        "loud": 0.6
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "common_moorhen",
+    "index": 21,
+    "name": "Common Moorhen",
+    "sci": "Gallinula chloropus",
+    "family": "Rails \u0026 Crakes",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.55
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "repeated",
+        "loud": 0.45
+      }
+    ]
+  },
+  {
+    "id": "grey_heron",
+    "index": 22,
+    "name": "Grey Heron",
+    "sci": "Ardea cinerea",
+    "family": "Herons \u0026 Bitterns",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "harsh",
+        "loud": 0.75
+      }
+    ]
+  },
+  {
+    "id": "eurasian_reed_warbler",
+    "index": 23,
+    "name": "Eurasian Reed Warbler",
+    "sci": "Acrocephalus scirpaceus",
+    "family": "Warblers",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "chatter",
+        "loud": 0.4
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "harsh",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "eurasian_bittern",
+    "index": 24,
+    "name": "Eurasian Bittern",
+    "sci": "Botaurus stellaris",
+    "family": "Herons \u0026 Bitterns",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "boom",
+        "pattern": "booming",
+        "loud": 1
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "western_marsh_harrier",
+    "index": 25,
+    "name": "Western Marsh Harrier",
+    "sci": "Circus aeruginosus",
+    "family": "Hawks \u0026 Eagles",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "whistle",
+        "loud": 0.45
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.4
+      }
+    ]
+  },
+  {
+    "id": "northern_wheatear",
+    "index": 26,
+    "name": "Northern Wheatear",
+    "sci": "Oenanthe oenanthe",
+    "family": "Thrushes \u0026 Chats",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "chatter",
+        "loud": 0.35
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "repeated",
+        "loud": 0.35
+      }
+    ]
+  },
+  {
+    "id": "common_raven",
+    "index": 27,
+    "name": "Common Raven",
+    "sci": "Corvus corax",
+    "family": "Crows \u0026 Jays",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "harsh",
+        "loud": 0.8
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.45
+      }
+    ]
+  },
+  {
+    "id": "ring_ouzel",
+    "index": 28,
+    "name": "Ring Ouzel",
+    "sci": "Turdus torquatus",
+    "family": "Thrushes \u0026 Chats",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "song",
+        "pattern": "whistle",
+        "loud": 0.65
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "repeated",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "golden_eagle",
+    "index": 29,
+    "name": "Golden Eagle",
+    "sci": "Aquila chrysaetos",
+    "family": "Hawks \u0026 Eagles",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "herring_gull",
+    "index": 30,
+    "name": "Herring Gull",
+    "sci": "Larus argentatus",
+    "family": "Gulls \u0026 Terns",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "laughing",
+        "loud": 0.9
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.7
+      },
+      {
+        "index": 2,
+        "kind": "alarm",
+        "pattern": "repeated",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "eurasian_oystercatcher",
+    "index": 31,
+    "name": "Eurasian Oystercatcher",
+    "sci": "Haematopus ostralegus",
+    "family": "Waders",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.85
+      },
+      {
+        "index": 1,
+        "kind": "song",
+        "pattern": "trill",
+        "loud": 0.8
+      }
+    ]
+  },
+  {
+    "id": "great_cormorant",
+    "index": 32,
+    "name": "Great Cormorant",
+    "sci": "Phalacrocorax carbo",
+    "family": "Cormorants",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.4
+      }
+    ]
+  },
+  {
+    "id": "atlantic_puffin",
+    "index": 33,
+    "name": "Atlantic Puffin",
+    "sci": "Fratercula arctica",
+    "family": "Auks",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.25
+      }
+    ]
+  },
+  {
+    "id": "redwing",
+    "index": 34,
+    "name": "Redwing",
+    "sci": "Turdus iliacus",
+    "family": "Thrushes \u0026 Chats",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.4
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "brambling",
+    "index": 35,
+    "name": "Brambling",
+    "sci": "Fringilla montifringilla",
+    "family": "Finches",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "harsh",
+        "loud": 0.4
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "hawfinch",
+    "index": 36,
+    "name": "Hawfinch",
+    "sci": "Coccothraustes coccothraustes",
+    "family": "Finches",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.35
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "single",
+        "loud": 0.2
+      }
+    ]
+  },
+  {
+    "id": "snow_bunting",
+    "index": 37,
+    "name": "Snow Bunting",
+    "sci": "Plectrophenax nivalis",
+    "family": "Buntings",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "trill",
+        "loud": 0.35
+      },
+      {
+        "index": 1,
+        "kind": "call",
+        "pattern": "whistle",
+        "loud": 0.3
+      }
+    ]
+  },
+  {
+    "id": "rock_ptarmigan",
+    "index": 38,
+    "name": "Rock Ptarmigan",
+    "sci": "Lagopus muta",
+    "family": "Grouse",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "drumming",
+        "loud": 0.5
+      }
+    ]
+  },
+  {
+    "id": "snowy_owl",
+    "index": 39,
+    "name": "Snowy Owl",
+    "sci": "Bubo scandiacus",
+    "family": "Owls",
+    "calls": [
+      {
+        "index": 0,
+        "kind": "call",
+        "pattern": "repeated",
+        "loud": 0.75
+      },
+      {
+        "index": 1,
+        "kind": "alarm",
+        "pattern": "chatter",
+        "loud": 0.2
+      }
+    ]
+  }
+]

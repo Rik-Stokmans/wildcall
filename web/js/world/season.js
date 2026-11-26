@@ -75,6 +75,24 @@ export function seasonTint(cls, season) {
   return rows[((season | 0) % 4 + 4) % 4];
 }
 
+// Fraction of leaf cards a class sheds per season [spring, summer, autumn, winter]:
+// broadleaves are still opening in spring, thin out as they turn and stand nearly
+// bare in winter (a few muted leaves hang on); evergreens keep everything.
+const THIN = {
+  broadleaf: [0.12, 0, 0.18, 0.72],
+  shrub: [0.08, 0, 0.12, 0.5],
+};
+
+/**
+ * How much of a class's foliage is gone in a season (0 = full, 1 = bare).
+ * @param {string} cls  seasonal tint class ('' = never changes)
+ * @param {number} season  core.Season
+ */
+export function seasonThin(cls, season) {
+  const row = THIN[cls];
+  return row ? row[((season | 0) % 4 + 4) % 4] : 0;
+}
+
 /**
  * Eases the live tint values towards a target so a change of season washes over the
  * land instead of popping.

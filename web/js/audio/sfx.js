@@ -23,17 +23,21 @@ export class Sfx {
     this.gearBus.gain.value = 0.8;
     this.gearBus.connect(eng.ambUser);
     this.uiLast = new Map();
+    this.foot = 0;
   }
 
   /** Footstep on a surface for a movement mode. */
   footstep(surface, move) {
-    const p = footstepParams(surface, move, this.rng);
+    this.foot ^= 1;
+    const p = footstepParams(surface, move, this.rng, this.foot);
     if (!p) return;
     const ac = this.eng.ac;
     const t = ac.currentTime + 0.005;
     const out = this.footBus;
     // Scuff / crunch body.
     this.burst('white', p.filter, p.freq, p.q, t, 0.006, p.dur, p.gain * 0.9, out);
+    // The toe settling after the heel.
+    if (p.toe) this.burst('white', p.filter, p.freq * 1.25, p.q, t + p.toe.delay, 0.004, p.dur * 0.6, p.gain * p.toe.gain, out);
     // Crunch grains: tiny bright crackles spread across the step.
     for (let i = 0; i < p.grains; i++) {
       const gt = t + this.rng() * p.dur * 0.8;

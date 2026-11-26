@@ -17,16 +17,20 @@ export function skirtDrop(cell) { return cell + 1; }
 
 /**
  * @param {import('./chunkCodec.js').ChunkData} chunk
- * @returns {{position:Float32Array, normal:Int8Array, color:Float32Array, index:Uint16Array,
- *   vertexCount:number, minY:number, maxY:number}}
+ * @param {(x:number, z:number) => number} [canopyAt]  tree cover at a world point, 0..1
+ *        (baked per vertex for the terrain shader's shade; 0 everywhere without it)
+ * @returns {{position:Float32Array, normal:Int8Array, color:Float32Array, canopy:Float32Array,
+ *   index:Uint16Array, vertexCount:number, minY:number, maxY:number}}
  */
-export function buildTerrainArrays(chunk) {
+export function buildTerrainArrays(chunk, canopyAt) {
   const { n, cell, heights, normals, colors } = chunk;
   const grid = n * n;
   const vertexCount = grid + 4 * n;
   const position = new Float32Array(vertexCount * 3);
   const normal = new Int8Array(vertexCount * 3);
   const color = new Float32Array(vertexCount * 3);
+  const canopy = new Float32Array(vertexCount);
+  const x0 = chunk.cx * CHUNK_SIZE, z0 = chunk.cz * CHUNK_SIZE;
 
   for (let iz = 0; iz < n; iz++) {
     for (let ix = 0; ix < n; ix++) {
@@ -38,6 +42,10 @@ export function buildTerrainArrays(chunk) {
       color[o] = SRGB_TO_LINEAR[colors[o]];
       color[o + 1] = SRGB_TO_LINEAR[colors[o + 1]];
       color[o + 2] = SRGB_TO_LINEAR[colors[o + 2]];
+      if (canopyAt) {
+        const c = canopyAt(x0 + ix * cell, z0 + iz * cell);
+        canopy[i] = c > 0 ? (c < 1 ? c : 1) : 0;
+      }
     }
   }
 
@@ -51,6 +59,7 @@ export function buildTerrainArrays(chunk) {
     position[d] = position[s]; position[d + 1] = position[s + 1] - drop; position[d + 2] = position[s + 2];
     normal[d] = normal[s]; normal[d + 1] = normal[s + 1]; normal[d + 2] = normal[s + 2];
     color[d] = color[s]; color[d + 1] = color[s + 1]; color[d + 2] = color[s + 2];
+    canopy[dst] = canopy[src];
   };
   for (let k = 0; k < n; k++) {
     copy(north + k, k);
@@ -91,7 +100,7 @@ export function buildTerrainArrays(chunk) {
     index[p++] = t1; index[p++] = s1; index[p++] = s0;
   }
 
-  return { position, normal, color, index, vertexCount, minY: chunk.minY - drop, maxY: chunk.maxY };
+  return { position, normal, color, canopy, index, vertexCount, minY: chunk.minY - drop, maxY: chunk.maxY };
 }
 
 /**

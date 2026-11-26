@@ -44,8 +44,11 @@ class FakeSource extends FakeNode {
     super(ctx);
     this._started = false; this._stopped = false; this.onended = null; this._listeners = [];
   }
-  start(t = 0) {
+  start(t = 0, offset, dur) {
     finite(t, 'start');
+    if (offset !== undefined) finite(offset, 'start offset');
+    if (dur !== undefined) finite(dur, 'start duration');
+    this.startArgs = [t, offset, dur];
     if (this._started) throw new Error('InvalidStateError: start called twice');
     this._started = true; liveSources++; stats.started++;
     this.context._sources.add(this);
@@ -105,7 +108,12 @@ export class FakeAudioContext {
   createBuffer(ch, len, sr) {
     finite(len, 'len');
     const data = Array.from({ length: ch }, () => new Float32Array(len));
-    return { numberOfChannels: ch, length: len, sampleRate: sr, getChannelData: (i) => data[i] };
+    return { numberOfChannels: ch, length: len, sampleRate: sr, duration: len / sr, getChannelData: (i) => data[i] };
+  }
+  /** Test stand-in for decoding: `bytes` of length n decode to n/100 seconds of silence; "bad" fails. */
+  decodeAudioData(bytes) {
+    if (!(bytes instanceof ArrayBuffer) || bytes.byteLength < 100) return Promise.reject(new Error('EncodingError'));
+    return Promise.resolve(this.createBuffer(1, Math.round((bytes.byteLength / 100) * this.sampleRate), this.sampleRate));
   }
   createPanner() {
     const n = new FakeNode(this);
@@ -113,6 +121,7 @@ export class FakeAudioContext {
     n.panningModel = 'equalpower'; n.distanceModel = 'inverse'; n.refDistance = 1; n.rolloffFactor = 1; n.maxDistance = 10000;
     return n;
   }
+  createWaveShaper() { const n = new FakeNode(this); n.curve = null; n.oversample = 'none'; return n; }
   createStereoPanner() { const n = new FakeNode(this); n.pan = new FakeParam(0); return n; }
   createConvolver() { const n = new FakeNode(this); n.buffer = null; n.normalize = true; return n; }
   createDelay() { const n = new FakeNode(this); n.delayTime = new FakeParam(0); return n; }

@@ -17,11 +17,13 @@ SHAPE[VEG.SHRUB] = BUSH;
 SHAPE[VEG.ROCK] = STONE;
 
 /**
- * Whether an instance survives the quality setting's decoration density. Only small
+ * Whether the world draws an instance at the quality setting's decoration density. Only small
  * ground decoration is ever thinned: trees, shrubs, reeds and rocks are places birds
  * perch and hide, so every client must draw all of them.
  */
 export function keepInstance(kind, variant, x, z, density) {
+  // Forage plants (and anything else past the drawn kinds) are the forage module's to draw.
+  if (!(kind < VEG_KIND_COUNT)) return false;
   if (density >= 1 || !VEG_INFO[kind].decor) return true;
   return hashByte(variant, (Math.floor(x * 4) * 31 + Math.floor(z * 4) * 17) & 0xffff) < density;
 }

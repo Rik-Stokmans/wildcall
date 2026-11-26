@@ -35,7 +35,7 @@ export function daylight(env) {
  * @param {number} p.altitude listener height above sea level (m)
  * @returns {{wind:number, windHowl:number, leaves:number, creek:number, lap:number,
  *   surf:number, rainOpen:number, rainCanopy:number, insects:number, crickets:number,
- *   night:number}} target levels 0..1 (before the per-layer gain trims in ambience.js)
+ *   night:number, canopy:number, leafDry:number}} target levels 0..1 (canopy, leafDry: character) (before the per-layer gain trims in ambience.js)
  */
 export function ambienceMix(p) {
   const env = p.env || {};
@@ -78,7 +78,30 @@ export function ambienceMix(p) {
   // Quiet night air.
   const night = clamp01((1 - smoothstep(0.05, 0.45, light)) * (1 - 0.5 * rain));
 
-  return { wind, windHowl, leaves, creek, lap, surf, rainOpen, rainCanopy, insects, crickets, night };
+  // Character, not level: under a canopy the wind is dulled by the leaves; autumn leaves
+  // are dry and crisp, summer ones soft.
+  const leafDry = [0.25, 0.1, 0.9, 0.55][season];
+
+  return { wind, windHowl, leaves, creek, lap, surf, rainOpen, rainCanopy, insects, crickets, night, canopy, leafDry };
+}
+
+/** Sum of the squared layer levels (noise layers add in power, not in amplitude). */
+export function ambienceLoad(mix, trim) {
+  let p = 0;
+  for (const k of Object.keys(trim)) {
+    const v = (+mix?.[k] || 0) * trim[k];
+    p += v * v;
+  }
+  return p;
+}
+
+/**
+ * Gain that keeps a pile-up of layers (storm + surf + creek...) from swamping the birds:
+ * 1 up to `limit` (power), then falling with the square root, so the stacked sum stays
+ * level instead of growing.
+ */
+export function loadCompensation(load, limit = 0.16) {
+  return load > limit ? Math.sqrt(limit / load) : 1;
 }
 
 function finiteExp(d, k) {

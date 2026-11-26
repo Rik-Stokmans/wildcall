@@ -18,7 +18,7 @@
 //
 // Everything is little endian. Frames are read through a DataView so the result does
 // not depend on the byte order of the machine.
-import { CHUNK_SIZE, MAX_LOD, cellSize, gridSize, vegVisibleAtLod, VEG_KIND_COUNT } from './constants.js';
+import { CHUNK_SIZE, MAX_LOD, cellSize, gridSize, vegVisibleAtLod, WIRE_VEG_KIND_COUNT } from './constants.js';
 
 export const CHUNK_MAGIC = 0x4b484357; // 'WCHK' read as a little-endian uint32
 export const CHUNK_VERSION = 2;
@@ -132,9 +132,10 @@ export function parseChunk(buf) {
     const y = dv.getFloat32(o + 8, true);
     const z = dv.getFloat32(o + 12, true);
     const scale = dv.getFloat32(o + 16, true);
-    // A newer server may append kinds this client cannot draw; skip those (and any
+    // A newer server may append kinds this client does not know; skip those (and any
     // record that would poison the instance matrices) instead of failing the chunk.
-    if (kind >= VEG_KIND_COUNT || !(scale > 0) || !Number.isFinite(x + y + z + scale)) continue;
+    // Forage kinds (18+) are kept: the forage module draws them via ctx.world.vegOf.
+    if (kind >= WIRE_VEG_KIND_COUNT || !(scale > 0) || !Number.isFinite(x + y + z + scale)) continue;
     veg.kind[kept] = kind;
     veg.variant[kept] = dv.getUint8(o + 1);
     veg.rot[kept] = dv.getUint16(o + 2, true) / 65535 * TWO_PI;
@@ -162,6 +163,22 @@ function trimVeg(veg, count) {
     x: veg.x.slice(0, count), y: veg.y.slice(0, count), z: veg.z.slice(0, count),
     scale: veg.scale.slice(0, count),
   };
+}
+
+/**
+ * Plain-object view of vegetation (ctx.world.vegOf), in wire order; frozen.
+ * @param {VegData} veg
+ * @returns {ReadonlyArray<Readonly<{kind:number, variant:number, x:number, y:number, z:number, scale:number, rot:number}>>}
+ */
+export function vegList(veg) {
+  const out = new Array(veg.count);
+  for (let i = 0; i < veg.count; i++) {
+    out[i] = Object.freeze({
+      kind: veg.kind[i], variant: veg.variant[i],
+      x: veg.x[i], y: veg.y[i], z: veg.z[i], scale: veg.scale[i], rot: veg.rot[i],
+    });
+  }
+  return Object.freeze(out);
 }
 
 /**

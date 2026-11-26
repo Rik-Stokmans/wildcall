@@ -3,7 +3,9 @@
 // (controller.test.js).
 //
 //   createController({
-//     speech,            // a backend from voice.js createSpeech() (or a voice pack with the same shape)
+//     speech,            // a backend with createSpeech()'s shape (index.js passes pack.js
+//                        //   createNarratorVoice: pack clips, else speech synthesis);
+//                        //   optional speech.prefetch(text) is called as lines are queued
 //     caption,           // { show(text), hide() } from caption.js createCaption()
 //     settings(),        // → state.settings (volNarrator, volMaster, narrator, narratorVoice)
 //     blocked(),         // → { hard, soft }: hard = focus listening / recording / dialogue
@@ -127,6 +129,7 @@ export function createController({ speech, caption, settings, blocked }) {
     /** A proto.Narration from the server. */
     receive(line) {
       const ok = queue.push(line, clock, cfg().narrator || 'normal');
+      if (ok && line?.text) { try { speech?.prefetch?.(line.text); } catch { /* best effort */ } }
       tick(0);
       return ok;
     },

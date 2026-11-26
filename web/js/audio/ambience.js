@@ -4,6 +4,7 @@
 // swells, drifting filters) so the soundscape keeps evolving and never loops audibly.
 import { valueNoise1D, mulberry32, hashSeed } from './rng.js';
 import { setPannerPos } from './calls.js';
+import { ambienceLoad, loadCompensation } from './mix.js';
 
 /** Per-layer gain trims: mix levels are 0..1, these set the real loudness. */
 const TRIM = {
@@ -42,7 +43,12 @@ export class Ambience {
   }
 
   build() {
-    const eng = this.eng, ac = eng.ac, out = eng.ambIn;
+    const eng = this.eng, ac = eng.ac;
+    // Every layer feeds one trim node (levelled against the pile-up of layers, see
+    // update) which feeds the ambience bus.
+    this.bed = this.gain(1);
+    this.bed.connect(eng.ambIn);
+    const out = this.bed;
 
     // --- wind: two decorrelated brown-noise beds, low-passed, spread wide.
     this.windGain = this.gain(0);
@@ -62,6 +68,7 @@ export class Ambience {
     // --- leaves: bright noise with a fast, organic flutter driven by brown noise.
     this.leafGain = this.gain(0);
     this.leafAmp = [];
+    this.leafBP = [];
     for (const pan of [-0.6, 0.6]) {
       const src = eng.noiseSource('white');
       const hp = this.filter('highpass', 1600, 0.6);
@@ -73,6 +80,7 @@ export class Ambience {
       mod.connect(modG).connect(amp.gain);
       src.connect(hp).connect(bp).connect(amp).connect(this.stereo(pan)).connect(this.leafGain);
       this.leafAmp.push(amp);
+      this.leafBP.push(bp);
     }
     this.leafGain.connect(out);
 
@@ -179,12 +187,15 @@ export class Ambience {
     const gust = 0.6 * n.gust(t * 0.11) + 0.4 * n.gustFast(t * 0.45);
     const windAmp = m.wind * (0.45 + 0.9 * gust);
     set(this.windGain.gain, TRIM.wind * windAmp, now, 0.35);
-    for (const lp of this.windLP) set(lp.frequency, 220 + 1100 * gust * (0.3 + m.wind), now, 0.4);
+    // Under the canopy the leaves take the edge off the wind.
+    const dull = 1 - 0.4 * m.canopy;
+    for (const lp of this.windLP) set(lp.frequency, (220 + 1100 * gust * (0.3 + m.wind)) * dull, now, 0.4);
     set(this.howlGain.gain, TRIM.windHowl * m.windHowl * smooth01(gust * 1.4 - 0.2), now, 0.5);
     set(this.howlBP.frequency, 500 + 900 * n.howl(t * 0.07), now, 0.8);
 
     // Leaves rustle with the gusts.
     set(this.leafGain.gain, TRIM.leaves * m.leaves * (0.35 + 0.9 * gust), now, 0.25);
+    for (const bp of this.leafBP) set(bp.frequency, 3600 + 1900 * m.leafDry, now, 1);
     set(this.leafAmp[0].gain, 0.3 + 0.4 * n.leafL(t * 0.8), now, 0.2);
     set(this.leafAmp[1].gain, 0.3 + 0.4 * n.leafR(t * 0.8 + 50), now, 0.2);
 
@@ -218,6 +229,9 @@ export class Ambience {
     set(this.insectGain.gain, insectLvl * (0.75 + 0.5 * n.insect(t * 0.05)), now, 1.5);
 
     set(this.nightGain.gain, TRIM.night * m.night * (0.7 + 0.6 * n.night(t * 0.04)), now, 1.5);
+
+    // Keep the sum of layers in check (storm over a creek on the coast is not 4x louder).
+    set(this.bed.gain, loadCompensation(ambienceLoad(m, TRIM)), now, 1.2);
   }
 
   /** Creek bubbles: each band hops to a new pitch every 60–200 ms. */

@@ -4,7 +4,7 @@
 //   * vegetation of the loaded chunks — tree trunks, snags, big rocks and stumps are
 //     solid; tree crowns give canopy cover (light, rain audio, sound occlusion);
 //   * blockers and surface patches registered by other modules (buildings, boardwalks).
-import { CHUNK_SIZE, VEG_INFO } from './constants.js';
+import { CHUNK_SIZE, vegInfo } from './constants.js';
 import { chunkKey } from './heightfield.js';
 
 const CELL = 8;                       // metres per bucket
@@ -14,14 +14,14 @@ const HASH_CELL = 16;                 // metres per bucket for registered circle
 
 /** Radius of the solid body of a vegetation instance (0 = walk through). */
 export function solidRadius(kind, scale) {
-  const info = VEG_INFO[kind];
+  const info = vegInfo(kind);
   if (!info || info.trunk <= 0 || scale < info.minSolid) return 0;
   return info.trunk * scale;
 }
 
 /** Radius of the crown of a vegetation instance (0 = casts no canopy). */
 export function crownRadius(kind, scale) {
-  const info = VEG_INFO[kind];
+  const info = vegInfo(kind);
   return info && info.crown > 0 ? info.crown * scale : 0;
 }
 
@@ -63,7 +63,7 @@ export function buildColliderGrid(cx, cz, veg) {
     data[o + 1] = veg.z[i];
     data[o + 2] = solidRadius(veg.kind[i], veg.scale[i]);
     data[o + 3] = crownRadius(veg.kind[i], veg.scale[i]);
-    cover[slot] = VEG_INFO[veg.kind[i]].cover;
+    cover[slot] = vegInfo(veg.kind[i]).cover;
   }
   return { cx, cz, start, data, cover, maxSolid, maxCrown };
 }

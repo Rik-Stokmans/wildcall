@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   sunPosition, sunTimes, moonPosition, moonPhase, daylight, starVisibility, skyColors,
   fogRange, viewDistance, hourDiff, EnvInterp, regionAtmosphere, mixAtmosphere, REGION, particleAmounts,
+  goldenHour, atmosphereParams, mistLevel, lightBasis, snapShadowCenter, shadowConfig, dirFrom,
 } from './skymath.js';
 
 const DEG = Math.PI / 180;
@@ -175,4 +176,87 @@ test('EnvInterp: small drift is corrected smoothly, big jumps snap, midnight wra
   it.set({ time: 23.99 });
   for (let i = 0; i < 20; i++) it.step(0.1);
   assert.ok(it.cur.time < 1, 'wrapped past midnight');
+});
+
+test('light balance: warm sun over a cooler, dimmer sky fill; golden hour is saturated', () => {
+  const { rise, set } = sunTimes(1);
+  const noon = skyColors({ hour: 13, season: 1 });
+  const gold = skyColors({ hour: set - 0.7, season: 1 });
+  const night = skyColors({ hour: 1, season: 1 });
+  // Sunlit side clearly brighter than shade at midday (ratio of the light sums).
+  const shade = noon.hemiIntensity + noon.fillIntensity;
+  assert.ok((noon.sunIntensity + shade) / shade > 2, 'contrast at noon');
+  assert.ok(warmth(noon.sun) > 0 && noon.hemiSky[2] > noon.hemiSky[0], 'warm sun, cool sky fill');
+  assert.ok(gold.golden > 0.5 && noon.golden === 0, 'golden-hour weight');
+  assert.ok(warmth(gold.sun) > warmth(noon.sun) + 0.15, 'saturated warm evening sun');
+  assert.ok(gold.sunIntensity > 1, 'evening sun still carries light');
+  assert.ok(night.moonIntensity > 0.3 && night.moonLight[2] > night.moonLight[0], 'cool moonlight');
+  assert.ok(night.fillIntensity > 0.15, 'night stays readable');
+  assert.ok(skyColors({ hour: rise - 1, season: 1 }).golden < 0.05);
+});
+
+test('goldenHour peaks just after sunrise / before sunset', () => {
+  assert.equal(goldenHour(-10 * DEG), 0);
+  assert.ok(goldenHour(5 * DEG) > 0.9);
+  assert.equal(goldenHour(40 * DEG), 0);
+});
+
+test('particles: motes by day, fireflies on summer evenings only, Frostveil always snows a little', () => {
+  const day = particleAmounts({ hour: 13, season: 1 });
+  const night = particleAmounts({ hour: 1, season: 1 });
+  assert.ok(day.motes > 0.2 && night.motes === 0);
+  assert.ok(particleAmounts({ hour: 13, season: 1, rain: 1 }).motes < 0.01, 'no motes in rain');
+  const { set } = sunTimes(1);
+  const eve = particleAmounts({ hour: set + 0.8, season: 1 });
+  assert.ok(eve.fireflies > 0.8, 'summer evening fireflies');
+  assert.equal(particleAmounts({ hour: set + 0.8, season: 3 }).fireflies, 0, 'none in winter');
+  assert.equal(day.fireflies, 0, 'none at midday');
+  assert.ok(particleAmounts({ hour: set + 0.8, season: 1, rain: 1 }).fireflies < 0.01, 'none in rain');
+  assert.equal(particleAmounts({ hour: set + 0.8, season: 1, atmo: regionAtmosphere(REGION.FROSTVEIL) }).fireflies, 0);
+  assert.ok(particleAmounts({ cloud: 0, atmo: regionAtmosphere(REGION.FROSTVEIL) }).snow > 0.1, 'Frostveil flakes');
+  assert.ok(particleAmounts({ wind: 0, atmo: regionAtmosphere(REGION.AMBERWOOD) }).leaves > 0.3, 'Amberwood sheds on still days');
+});
+
+test('atmosphere: blue aerial perspective by day, mist from env and wet ground, warm in-scatter at golden hour', () => {
+  const { set } = sunTimes(1);
+  const noonSky = skyColors({ hour: 13, season: 1 });
+  const goldSky = skyColors({ hour: set - 0.6, season: 1 });
+  const noon = atmosphereParams({ sky: noonSky, fogFar: 400 });
+  const gold = atmosphereParams({ sky: goldSky, fogFar: 400 });
+  assert.ok(noon.aerial[2] > noon.aerial[0], 'aerial tint is blue');
+  assert.ok(noon.aerialAmt > 0.3 && noon.aerialAmt <= 1);
+  assert.ok(gold.inscatterAmt > noon.inscatterAmt, 'in-scatter grows as the sun lowers');
+  assert.ok(warmth(gold.inscatter) > 0.2);
+  assert.ok(atmosphereParams({ sky: noonSky, mist: 1, fogFar: 400 }).mistAmt > 0.9);
+  assert.ok(atmosphereParams({ sky: noonSky, wet: 1, fogFar: 400 }).mistAmt > noon.mistAmt, 'post-rain mist');
+  assert.ok(atmosphereParams({ sky: noonSky, rain: 1, fogFar: 400 }).curtain > 0.9);
+  assert.equal(noon.curtain, 0);
+  assert.equal(noon.fogFar, 400);
+});
+
+test('mistLevel sits just above the low ground, robust to pits and water', () => {
+  const hs = [12, 14, 13, 30, 40, 11, 12, 15, -6, 25];
+  const m = mistLevel(hs);
+  assert.ok(m > 11 && m < 15, String(m));
+  assert.equal(mistLevel([-5, -4, -3]), 1.5, 'never below sea level');
+  assert.equal(mistLevel([]), 0);
+});
+
+test('shadow centre snaps to whole texels in light space', () => {
+  const L = dirFrom(2.1, 25 * DEG);
+  const { right, up } = lightBasis(L);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  assert.ok(near(dot(right, L), 0, 1e-9) && near(dot(up, L), 0, 1e-9) && near(dot(right, up), 0, 1e-9));
+  assert.ok(near(Math.hypot(...up), 1, 1e-9) && up[1] > 0, 'up is unit and points skywards');
+  const texel = 0.0625;
+  for (const c of [[3.3, 7.1, -11.9], [1000.02, 40.5, -2000.7]]) {
+    const s = snapShadowCenter(c, L, texel);
+    const fr = dot(s, right) / texel, fu = dot(s, up) / texel;
+    assert.ok(near(fr, Math.round(fr), 1e-6) && near(fu, Math.round(fu), 1e-6));
+    assert.ok(Math.hypot(s[0] - c[0], s[1] - c[1], s[2] - c[2]) <= texel);
+    // Moving along the light direction does not change the snap.
+    assert.ok(near(dot(s, L), dot(c, L), 1e-9));
+  }
+  assert.equal(shadowConfig('low').enabled, false);
+  assert.ok(shadowConfig('high').mapSize > shadowConfig('medium').mapSize);
 });

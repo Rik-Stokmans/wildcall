@@ -123,3 +123,17 @@ test('movement cue flutter: placed along the bearing, closer and louder when str
   for (let i = 1; i < f.beats.length; i++) assert.ok(f.beats[i].t > f.beats[i - 1].t);
   assert.ok(f.gain > flutterParams({ strength: 0 }, rng).gain);
 });
+
+test('footsteps: left and right feet differ, a walking step has a toe settle, soft ground and sprints do not', () => {
+  const half = () => 0.5;
+  const l = footstepParams('grass', 'walk', half, 0);
+  const r = footstepParams('grass', 'walk', half, 1);
+  assert.notEqual(l.freq, r.freq);
+  assert.notEqual(l.gain, r.gain);
+  assert.ok(l.toe && l.toe.delay > 0.03 && l.toe.delay < 0.12 && l.toe.gain > 0);
+  assert.ok(footstepParams('rock', 'walk', half).toe.gain > footstepParams('sand', 'walk', half).toe.gain, 'hard ground slaps harder');
+  assert.equal(footstepParams('mud', 'walk', half).toe, null);
+  assert.equal(footstepParams('water', 'run', half).toe, null);
+  assert.equal(footstepParams('grass', 'sprint', half).toe, null);
+  assert.equal(footstepParams('grass', 'crouch', half).toe, null);
+});

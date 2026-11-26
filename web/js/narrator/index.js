@@ -5,12 +5,16 @@
 //   say(text, opts)  // queue a local line; opts {priority=1, ttl=10, kind='local', interrupt=false}
 //   stop()           // cut the current line and clear the queue
 //   voices()         // installed English voices, best first: [{name, lang, default, localService}]
+//   voicePack        // the pregenerated voice in use: {voice, model, lines} or null (system voice)
 // }
+// The bus event 'narrator:voicepack' ({voice, model, lines}) fires once a pack has loaded.
 //
-// Files: voice.js (the speech backend seam — swap it for a recorded/neural voice pack),
-// queue.js (priority/TTL queue, frequency setting), caption.js (timing, line balancing,
-// DOM caption), controller.js (the rules that tie them together).
+// Files: voice.js (system speech backend), pack.js (the pregenerated voice pack of §13 and
+// the backend that prefers its clips over speech synthesis), queue.js (priority/TTL
+// queue, frequency setting), caption.js (timing, line balancing, DOM caption),
+// controller.js (the rules that tie them together).
 import { createSpeech } from './voice.js';
+import { createVoicePack, createNarratorVoice } from './pack.js';
 import { createCaption } from './caption.js';
 import { createController } from './controller.js';
 
@@ -21,7 +25,10 @@ export default {
 
   init(ctx) {
     try {
-      const speech = createSpeech(typeof window !== 'undefined' ? window : globalThis);
+      const win = typeof window !== 'undefined' ? window : globalThis;
+      const system = createSpeech(win);
+      const pack = createVoicePack({ baseUrl: 'voice/', getAudio: () => ctx.audio, win });
+      const speech = createNarratorVoice(system, pack);
       const root = typeof document !== 'undefined' ? document.getElementById('narrator') : null;
       const caption = createCaption(root);
       let focusOn = false;
@@ -42,7 +49,13 @@ export default {
         say: (text, opts) => { try { return controller.say(text, opts); } catch { return false; } },
         stop: () => { try { controller.stop(); } catch { /* ignore */ } },
         voices: () => { try { return controller.voices(); } catch { return []; } },
+        get voicePack() { return pack.info; },
       };
+      pack.load().then((ok) => {
+        if (!ok) return;
+        console.info(`[narrator] voice pack: ${pack.info.voice} (${pack.info.lines} lines)`);
+        try { ctx.bus?.emit?.('narrator:voicepack', pack.info); } catch { /* ignore */ }
+      });
 
       const bus = ctx.bus;
       bus?.on?.('net:narrate', (line) => { try { controller.receive(line); } catch (err) { console.warn('[narrator]', err); } });
@@ -59,7 +72,7 @@ export default {
       speech.onVoicesChanged(() => { try { controller.refreshVoice(); } catch { /* ignore */ } });
     } catch (err) {
       console.warn('[narrator] init failed; continuing without narration', err);
-      ctx.narrator = ctx.narrator || { say() { return false; }, stop() {}, voices() { return []; } };
+      ctx.narrator = ctx.narrator || { say() { return false; }, stop() {}, voices() { return []; }, voicePack: null };
     }
   },
 

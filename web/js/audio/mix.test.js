@@ -125,3 +125,30 @@ test('creek trails and running water', () => {
   assert.equal(runningWaterDist(Infinity, { waterDist: 14, seaDist: 42 }, REGION.coast), Infinity);
   assert.equal(runningWaterDist(5, { waterDist: 14, seaDist: Infinity }, REGION.greenhollow), 5);
 });
+
+import { ambienceLoad, loadCompensation } from './mix.js';
+import { softClipCurve } from './engine.js';
+
+test('layers piling up are levelled, ordinary mixes are left alone', () => {
+  const trim = { wind: 0.32, creek: 0.26, surf: 0.42, rainOpen: 0.3 };
+  const calm = ambienceLoad({ wind: 0.5, creek: 0.3 }, trim);
+  assert.equal(loadCompensation(calm), 1);
+  const storm = ambienceLoad({ wind: 1, creek: 1, surf: 1, rainOpen: 1 }, trim);
+  const k = loadCompensation(storm);
+  assert.ok(k < 0.75 && k > 0.3, `storm gain ${k}`);
+  // Levelled power equals the limit: the stack stops growing.
+  assert.ok(Math.abs(storm * k * k - 0.16) < 1e-9);
+  assert.equal(ambienceLoad(null, trim), 0);
+  const mix = ambienceMix({ env: { wind: 0.5, season: 2 }, region: 0, canopy: 0.8, creekDist: Infinity, waterDist: Infinity, seaDist: Infinity, altitude: 0 });
+  assert.equal(mix.canopy, 0.8);
+  assert.ok(mix.leafDry > 0.8, 'autumn leaves are dry');
+});
+
+test('the safety soft clip is transparent below the knee and never reaches full scale', () => {
+  const c = softClipCurve(2049);
+  const at = (x) => c[Math.round(((x + 1) / 2) * (c.length - 1))];
+  assert.ok(Math.abs(at(0.5) - 0.5) < 1e-3 && Math.abs(at(-0.5) + 0.5) < 1e-3);
+  assert.ok(Math.abs(at(0.8) - 0.8) < 1e-2);
+  assert.ok(at(1) < 0.985 && at(1) > 0.9);
+  for (let i = 1; i < c.length; i++) assert.ok(c[i] >= c[i - 1] - 1e-9, 'monotonic');
+});

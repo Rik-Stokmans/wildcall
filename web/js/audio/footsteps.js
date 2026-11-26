@@ -36,22 +36,31 @@ export const STRIDE = { crouch: 0.55, walk: 0.75, run: 1.1, sprint: 1.45 };
  * @param {string} surface one of SURFACES (unknown → grass)
  * @param {string} move 'still'|'crouch'|'walk'|'run'|'sprint' (unknown → walk)
  * @param {() => number} rng variation source
+ * @param {number} [foot] 0 / 1: left and right feet differ a little (pitch, weight)
  * @returns {null | object} null when the step makes no sound
  */
-export function footstepParams(surface, move, rng = Math.random) {
+export function footstepParams(surface, move, rng = Math.random, foot = 0) {
   const base = FOOTSTEP[surface] || FOOTSTEP.grass;
   const mg = MOVE_GAIN[move] ?? MOVE_GAIN.walk;
   if (mg <= 0) return null;
   const vary = (k) => 1 + (rng() * 2 - 1) * k;
   // Faster steps strike harder: brighter, a touch shorter.
   const bright = move === 'sprint' ? 1.25 : move === 'run' ? 1.12 : move === 'crouch' ? 0.8 : 1;
+  // A heel strike then the toe settling: only a walking step has the time and weight for
+  // it, and soft ground swallows it. Sprinting is a single hit.
+  const hard = base.tone > 0 || base.grains > 0 || base.dur < 0.1;
+  const toe = (move === 'walk' || move === 'run') && !(base.squelch || base.splash)
+    ? { delay: (move === 'run' ? 0.045 : 0.07) * vary(0.15), gain: (hard ? 0.4 : 0.28) * vary(0.2) }
+    : null;
+  const side = foot ? 1 : -1;
   return {
     surface: FOOTSTEP[surface] ? surface : 'grass',
     filter: base.filter,
-    freq: base.freq * bright * vary(0.15),
+    toe,
+    freq: base.freq * bright * vary(0.15) * (1 + 0.04 * side),
     q: base.q,
     dur: base.dur * (move === 'crouch' ? 1.2 : 1) * vary(0.12),
-    gain: base.gain * mg * vary(0.12),
+    gain: base.gain * mg * vary(0.12) * (1 - 0.06 * side),
     grains: base.grains ? Math.max(1, Math.round(base.grains * (0.7 + 0.6 * rng()) * (move === 'crouch' ? 0.6 : 1))) : 0,
     tone: base.tone ? base.tone * vary(0.08) : 0,
     splash: base.splash * mg,

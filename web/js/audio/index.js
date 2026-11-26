@@ -11,6 +11,7 @@
 // gear, UI), music.js + composer.js (generative music). Pure logic is unit tested.
 import { AudioEngine, FFT_SIZE } from './engine.js';
 import { CallManager } from './calls.js';
+import { SampleBank } from './samples.js';
 import { Ambience } from './ambience.js';
 import { Sfx } from './sfx.js';
 import { Music } from './music.js';
@@ -28,6 +29,7 @@ const WATER_SAMPLE_S = 0.5;
 let ctx = null;
 let eng = null;
 let calls = null;
+let bank = null;
 let ambience = null;
 let sfx = null;
 let music = null;
@@ -63,7 +65,9 @@ function start() {
       console.error('[audio] could not create the audio engine', err);
       return Promise.resolve(false);
     }
-    calls = new CallManager(eng, ctx);
+    bank = new SampleBank(sampleIO(eng.ac));
+    bank.load(); // recordings are optional: a missing manifest just means synthesis
+    calls = new CallManager(eng, ctx, bank);
     ambience = new Ambience(eng, ((ctx.state?.welcome?.seed ?? 1) >>> 0) || 1);
     sfx = new Sfx(eng);
     music = new Music(eng);
@@ -75,6 +79,22 @@ function start() {
   if (ac.state !== 'running') startedAt = nowMs();
   const p = ac.state === 'running' ? Promise.resolve() : ac.resume().catch(() => {});
   return p.then(() => { checkReady(); return ac.state === 'running'; });
+}
+
+/** Network and decoding for the recordings bank (injected so tests can fake them). */
+function sampleIO(ac) {
+  // The manifest is revalidated (a new fetch run changes it); recordings are immutable
+  // per name and may come from the HTTP cache.
+  const get = async (url, cache) => {
+    const res = await fetch(url, { cache });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res;
+  };
+  return {
+    fetchJson: async (url) => (await get(url, 'no-cache')).json(),
+    fetchBytes: async (url) => (await get(url, 'force-cache')).arrayBuffer(),
+    decode: (bytes) => ac.decodeAudioData(bytes),
+  };
 }
 
 function nowMs() { return globalThis.performance?.now?.() ?? Date.now(); }
@@ -233,25 +253,29 @@ const api = {
   /** Focused listening on/off: ducks ambience (~12 dB + noiseReduce) and music, lifts birds a little, widens range. */
   setFocus,
   /**
-   * Non-spatial playback of a species' call (journal / field guide).
+   * Non-spatial playback of a species' call (journal / field guide). Plays a real
+   * recording when web/birdsong has one for this call (rotating between them), else the
+   * synthesised call. Returns at once, also while a recording is still loading.
    * @param {number} spIndex species index
    * @param {number} callIndex index into species.calls
-   * @param {{gain?: number, seed?: number, reps?: number}} [opts] reps ≤ 0 / missing →
-   *   the call's own repeat range (seeded)
-   * @returns {{stop(): void, duration: number, readonly playing: boolean}}
+   * @param {{gain?: number, seed?: number, reps?: number, onEnded?: () => void}} [opts]
+   *   reps > 0 asks for a bout of that many phrases; otherwise a recording plays whole
+   *   and a synthesised call uses its own repeat range (seeded). onEnded fires once when
+   *   the sound finishes or is stopped (also when nothing could be played).
+   * @returns {{stop(): void, duration: number, readonly playing: boolean}} duration in
+   *   seconds (a recording's length until it has loaded, then what is actually played)
    */
   playCall(spIndex, callIndex, opts = {}) {
-    const silent = { stop() {}, duration: 0, get playing() { return false; } };
     start();
-    if (!eng || !calls || !canPlay()) return silent;
-    const call = calls.callData(spIndex, callIndex);
-    if (!call) return silent;
-    const v = calls.preview(call, opts || {});
-    return {
-      stop() { calls.stopVoice(v); },
-      duration: v.plan.duration,
-      get playing() { return !v.stopping; },
-    };
+    opts = opts || {};
+    const handle = eng && calls && canPlay() ? calls.play(spIndex, callIndex, opts) : null;
+    if (handle) return handle;
+    const silent = { stop() {}, duration: 0, get playing() { return false; } };
+    if (typeof opts.onEnded === 'function') {
+      // Nothing will play (no audio yet, or unknown call): still tell the caller it is over.
+      queueMicrotask(() => { try { opts.onEnded(); } catch (err) { console.error('[audio] onEnded failed', err); } });
+    }
+    return silent;
   },
   /** 512-bin byte spectrum of the bird-call bus. The array is reused: copy it to keep it. */
   getSpectrum() {

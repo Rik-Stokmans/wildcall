@@ -51,6 +51,12 @@ export class ChunkStore {
   constructor() {
     /** @type {Map<number, import('./chunkCodec.js').ChunkData>} */
     this.chunks = new Map();
+    /**
+     * key → the full (lod-0) vegetation of a chunk, kept while the chunk stays loaded
+     * even if it is later drawn coarser (ctx.world.vegOf, contract §12).
+     * @type {Map<number, import('./chunkCodec.js').VegData>}
+     */
+    this.veg0 = new Map();
     this._last = null; // most queries hit the same chunk as the previous one
     /** Bumped whenever the set of loaded chunks (or a chunk's LOD) changes. */
     this.version = 0;
@@ -60,26 +66,40 @@ export class ChunkStore {
 
   /** Stores (or replaces) the chunk at its coordinate. */
   set(chunk) {
-    this.chunks.set(chunkKey(chunk.cx, chunk.cz), chunk);
+    const key = chunkKey(chunk.cx, chunk.cz);
+    this.chunks.set(key, chunk);
+    if (chunk.lod === 0) this.veg0.set(key, chunk.veg);
     this._last = null;
     this.version++;
   }
 
   /** Removes the chunk at a coordinate; returns whether there was one. */
   delete(cx, cz) {
-    const had = this.chunks.delete(chunkKey(cx, cz));
+    const key = chunkKey(cx, cz);
+    const had = this.chunks.delete(key);
+    this.veg0.delete(key);
     if (had) { this._last = null; this.version++; }
     return had;
   }
 
   clear() {
     this.chunks.clear();
+    this.veg0.clear();
     this._last = null;
     this.version++;
   }
 
   /** @returns {import('./chunkCodec.js').ChunkData | undefined} */
   get(cx, cz) { return this.chunks.get(chunkKey(cx, cz)); }
+
+  /**
+   * The lod-0 vegetation of a loaded chunk (structure of arrays, wire order), or null
+   * if the chunk is not loaded or has never been received at lod 0.
+   * @returns {import('./chunkCodec.js').VegData | null}
+   */
+  vegOf(cx, cz) {
+    return this.veg0.get(chunkKey(cx, cz)) || null;
+  }
 
   /** LOD loaded at a chunk coordinate, or -1. */
   lodOf(cx, cz) {
