@@ -2,6 +2,9 @@
 /save/
 /wildcall
 /bin/
+desktop/node_modules/
+desktop/dist/
+desktop/build/
 *.test
 *.out
 node_modules/

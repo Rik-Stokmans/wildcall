@@ -25,6 +25,8 @@ show the RPG structure around it.
 - A living ecosystem that runs whether or not the player is watching (design rule 5).
 - Go does the heavy lifting: terrain generation and all simulation.
 - Efficient rendering.
+- **A standalone desktop app for macOS and Windows** — double-click to play; no
+  browser, no URL, no install steps.
 
 ## Non-goals (spec §33)
 
@@ -42,20 +44,23 @@ thinner than Greenhollow Woods.
 
 ## Approaches considered
 
-**A. Go server + browser client (Three.js / WebGL2 + Web Audio) — chosen.**
-The Go binary generates the world, runs the ecosystem and owns all rules; the embedded
-web client only renders, plays audio and shows UI. They talk over a local WebSocket.
+**A. Go engine + WebGL2/Web Audio renderer, shipped as a desktop app — chosen.**
+The Go binary generates the world, runs the ecosystem and owns all rules; the
+renderer (Three.js + Web Audio + HTML/CSS screens) only draws, plays audio and shows
+UI. They talk over a loopback WebSocket. Both are packaged into one desktop app
+(Electron shell, the Go engine as a hidden sidecar process) for macOS and Windows.
 - Web Audio gives HRTF spatial audio, per-voice filters for occlusion and a built-in
   analyser for the spectrogram — the spec's central mechanic — and lets every call be
   *synthesized* from data, so there are no audio assets to source.
 - HTML/CSS makes the 20 field-journal screens fast to build and good-looking.
 - WebGL2 with instanced vegetation and LOD chunk streaming is efficient on integrated
   GPUs; the renderer is replaceable because it only speaks the protocol.
-- One `go run` starts everything; nothing to install for a player beyond a browser.
-- Cost: a network hop between simulation and view (negligible on localhost), and JS
-  on the client rather than Go.
+- Chromium is the same on both platforms, so pointer lock, WebGL2 and HRTF audio
+  behave identically on macOS and Windows; the Go engine is pure Go and cross-compiles.
+- Cost: a loopback hop between simulation and view (negligible), JS for the view
+  layer, and a ~100 MB app because it carries its own Chromium.
 
-**B. Single native Go binary with raylib-go.** Lowest overhead and one language, but
+**B. Single native Go binary with raylib-go.** Smallest app and one language, but
 raylib has no HRTF or per-voice filtering (elevation and occlusion cues would have to
 be hand-built DSP through cgo), immediate-mode UI makes 20 polished screens slow, and
 it needs a C toolchain on every machine.
@@ -88,7 +93,10 @@ server/renderer boundary.
 - **Stats as the single progression currency.** Skills, items, upgrades and cabin
   upgrades are all additive modifiers on one `core.Stats` struct; every consumer reads
   the derived stats, so a new skill is one line of data.
-- **Single player, one session.** The server keeps one world and one save.
+- **Single player, one session.** The engine keeps one world and one save.
+- **Desktop shell.** Electron rather than the system webview (Wails): WKWebView's
+  pointer-lock support is unreliable, and a first-person game cannot ship without it.
+  The shell is ~150 lines; swapping it later does not touch the game.
 
 ## Architecture
 
@@ -108,6 +116,7 @@ internal/game      one player session: ties all of the above to the protocol
 internal/save      JSON save + photo files
 internal/server    HTTP static files, WebSocket transport
 web/               embedded client: three.js renderer, Web Audio, HTML/CSS screens
+desktop/           Electron shell + packaging for macOS and Windows
 ```
 
 Server loop at 10 Hz: clock → ecosystem step → perception → messages. The client
@@ -122,6 +131,7 @@ package or module they decide.
 
 ## Calls made without the user
 
-The stack (approach A), the vanilla-JS/no-bundler client, real European species,
+The stack (approach A; the desktop-app requirement is the user's, Electron as the
+shell is mine), the vanilla-JS/no-bundler client, real European species,
 the island layout and all ids, 38 species instead of the first-mockup five, building
 the outer regions thin rather than omitting them, and a 24-minute day.

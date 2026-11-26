@@ -7,12 +7,13 @@
 
 **Goal:** a playable WILDCALL prototype covering the whole spec at prototype depth.
 
-**Architecture:** a Go server generates the island, simulates the ecosystem and owns
+**Architecture:** a standalone desktop app (macOS, Windows): a Go engine generates the island, simulates the ecosystem and owns
 all game rules; an embedded Three.js + Web Audio browser client renders, plays sound
 and shows the UI, talking to the server over one WebSocket.
 
 **Tech Stack:** Go 1.26 (stdlib + gorilla/websocket), three.js r170 (vendored),
-vanilla ES modules, Web Audio, HTML/CSS. No bundler, no external assets.
+vanilla ES modules, Web Audio, HTML/CSS, Electron shell + electron-builder for
+packaging. No bundler, no external assets.
 
 **Spec:** `Wildcall Spec.md` · **Design:** `docs/superpowers/specs/2026-11-26-wildcall-design.md`
 
@@ -50,7 +51,7 @@ vanilla ES modules, Web Audio, HTML/CSS. No bundler, no external assets.
 `web/css/base.css`, `web/js/main.js`, `web/js/core/*`, `web/js/ui/kit.js` (stub),
 `docs/contract.md`.
 
-## Stage 1 — Parallel build (18 agents)
+## Stage 1 — Parallel build (19 agents)
 
 | # | Task | Files | Interfaces | Tests that prove it |
 |---|---|---|---|---|
@@ -72,6 +73,8 @@ vanilla ES modules, Web Audio, HTML/CSS. No bundler, no external assets.
 | 16 | c-menu | `web/js/ui/menu/`, `web/css/menu.css` | §5.3 | skill node state (locked/available/purchased) from profile + tiers; inventory sort/filter; stat comparison |
 | 17 | c-journal | `web/js/ui/journal/`, `web/css/journal.css` | §5.3 | fog-of-war cell lookup; world ↔ map coordinates; quest grouping |
 | 18 | c-base | `web/js/ui/base/`, `web/css/base-screen.css` | §5.3 | shop affordability/requirement logic; rest-until hour maths |
+
+| 19 | desktop | `desktop/`, `.github/workflows/` | contract §6 (engine CLI), §7 | shell starts a stand-in engine, waits for `WILDCALL_LISTENING`, loads it, exits cleanly and leaves no orphan process; `electron-builder --dir` produces a runnable macOS app |
 
 ## Stage 2 — Server integration (1 agent, after tasks 1–7)
 

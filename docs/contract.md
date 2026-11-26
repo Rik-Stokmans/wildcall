@@ -41,8 +41,9 @@ pinned ids) → the game spec (what the player should experience).
 | `content` | `internal/content` | regions, NPCs + dialogue, quests + quest engine, collectibles, lore |
 | `field` | `internal/field` | perception: hearing/clues, movement cues, observation/evidence, ID confidence, photo & recording scoring, rare discoveries |
 | `server` (stage 2) | `internal/game`, `internal/server`, `internal/save`, `cmd/wildcall` | session orchestration, WebSocket/HTTP, persistence, main |
+| `desktop` | `desktop/`, `.github/workflows/` | Electron shell, packaging for macOS + Windows, CI builds (§7) |
 
-### Client (`web/`, embedded into the Go binary)
+### Client (`web/`, embedded into the Go engine binary, shown inside the desktop app window)
 
 | Task | Owns | ctx API |
 |---|---|---|
@@ -456,6 +457,9 @@ state structs the session can hold). Required capabilities:
 - Region gating: entering a locked region sends `region {unlocked:false, reason}` once
   and the client turns the player back at the border; entering an unlocked region for
   the first time sends `region {unlocked:true}` (Region Discovery screen) + XP.
+- Pinned profile flags: `cache:<poi id>` (cache opened), `met:<npc id>`, `tutorial:<step>`.
+  Opening a cache gives its `Data["item"]` and sends `rareItem`. Picking up a
+  collectible records it in `journal.collectibles` (+ XP, lore for pages).
 - POI discovery: within `Radius` → journal location + 25 XP (+ toast). Hidden POIs
   also reveal on the map when within `Stats.TrailSense`. Fog of war: cells within 48 m
   are marked explored.
@@ -618,8 +622,8 @@ equip coin`), `level → 0..1` (current call-bus loudness).
 
 | name | owner | opened by | content (spec §28–§30) |
 |---|---|---|---|
-| `mainmenu` | c-menu | boot | Continue (if `welcome.hasSave`), New Adventure (confirm → `net.send('hello',{newGame:true})` then `location.assign('?play=1')` after the new `net:welcome`), Journal, Equipment, Skills, Map, Quests, Collection, Settings; live forest behind it; `closable:false`. Starting play: `ui.close('mainmenu')` then `bus.emit('game:start', {fresh})`. |
-| `menu` | c-menu | Tab / K / I / Esc | tabs `character` (level, XP bar, rank, skill points, progression unlocks, currency, reputation, totals), `skills` (five-discipline tree, node states locked/available/purchased, tier requirements, costs, buy), `inventory` (item grid, rarity, description, stats, equip/unequip, sort, filter, capacity, use supplies), `equipment` (six slots, current gear stats, comparison vs. selected, upgrade options), `rank` (current/next rank, requirements with progress, unlocks), `settings`; data `{tab}`. |
+| `mainmenu` | c-menu | boot | Continue (if `welcome.hasSave`), New Adventure (confirm → `net.send('hello',{newGame:true})` then `location.assign('?play=1')` after the new `net:welcome`), Journal, Equipment, Skills, Map, Quests, Collection, Settings, and Quit (only when `window.wildcallDesktop` exists → `wildcallDesktop.quit()`); live forest behind it; `closable:false`. Starting play: `ui.close('mainmenu')` then `bus.emit('game:start', {fresh})`. |
+| `menu` | c-menu | Tab / K / I / Esc | tabs `character` (level, XP bar, rank, skill points, progression unlocks, currency, reputation, totals), `skills` (five-discipline tree, node states locked/available/purchased, tier requirements, costs, buy), `inventory` (item grid, rarity, description, stats, equip/unequip, sort, filter, capacity, use supplies), `equipment` (six slots, current gear stats, comparison vs. selected, upgrade options), `rank` (current/next rank, requirements with progress, unlocks), `settings` (all of `state.settings`, a fullscreen toggle and "Quit to desktop" when `window.wildcallDesktop` exists, "Return to main menu"); data `{tab}`. |
 | `journal` | c-journal | J | sections `species` (grid by discovery level incl. mysteries with their evidence and an "Identify" button → `ui.open('identify', {mystery})`; species page: illustration, name, rarity, discovery status, habitat, locations, activity patterns from the player's own `phases`, vocalizations with playback, behaviours, photos, observations, identification confidence, editable personal notes), `photos`, `recordings` (playback + spectrogram), `locations`, `history` (Natural History lore), `rare` (Rare Discoveries); data `{section, species}`. Field-guide view of all species of unlocked regions (silhouette until identified; "compare similar"). |
 | `map` | c-journal | M | `welcome.world.mapUrl` image with fog of war from `profile.explored`, player arrow, trails (per `stats.mapDetail`; hidden trails only if in `profile.trails`), discovered landmarks, NPCs, tracked-quest markers, region borders and lock state. Never birds. |
 | `quests` | c-journal | L | active/available/completed quests, objectives + progress, rewards, categories, tracking toggle. |
@@ -691,10 +695,48 @@ animation. Class prefixes: `kit-`, `tool-`, `hud-`, `enc-`, `menu-`, `jr-`, `bas
 
 ---
 
-## 6. Server binary (stage 2)
+## 6. Engine binary (stage 2)
 
-`go run ./cmd/wildcall [-addr :8080] [-seed 20261126] [-save ./save] [-daylen 1440]
-[-dev] [-open]` — serves the embedded `web/` at `/`, the WebSocket at `/ws`, the map
-at `/map.png`, photos at `/photos/<id>.jpg`. One player session at a time (a new
-connection takes over the world; multiplayer is out of scope, spec §33). `-dev`
-serves `web/` from disk (live reload of client files) and enables debug commands.
+`go run ./cmd/wildcall [-addr 127.0.0.1:8080] [-seed 20261126] [-save <dir>]
+[-daylen 1440] [-dev] [-open] [-parent-stdin]` — serves the embedded `web/` at `/`,
+the WebSocket at `/ws`, the map at `/map.png`, photos at `/photos/<id>.jpg`.
+
+- `-addr 127.0.0.1:0` picks a free port. As soon as it is accepting connections the
+  engine prints exactly one line to stdout: `WILDCALL_LISTENING http://127.0.0.1:<port>`
+  (the desktop shell waits for this line).
+- `-save` defaults to the OS user-config directory (`os.UserConfigDir()/Wildcall`).
+- `-parent-stdin`: exit cleanly (after saving) when stdin reaches EOF, so the engine
+  never outlives the desktop shell. It also saves and exits on SIGINT/SIGTERM.
+- `-dev` serves `web/` from disk (edit client files without rebuilding) and enables
+  debug commands; `-open` opens the system browser (development only).
+- Always binds to loopback unless `-addr` says otherwise. One player session at a
+  time (a new connection takes over the world; multiplayer is out of scope, spec §33).
+- Pure Go, no cgo: must cross-compile with `GOOS=windows GOARCH=amd64 go build`.
+
+## 7. Desktop app (`desktop/`, task `desktop`)
+
+WILDCALL ships as a **standalone desktop app for macOS and Windows** — players never
+see a browser or a URL. `desktop/` is an Electron shell: its main process starts the
+engine binary (bundled under the app's resources as `bin/wildcall[.exe]`) with
+`-addr 127.0.0.1:0 -parent-stdin -save <app.getPath('userData')>`, waits for the
+`WILDCALL_LISTENING` line, then opens a single frameless-chrome-free game window
+(1440×900, min 1024×640, dark background `#1c2a22`, title "WILDCALL", no menu bar on
+Windows, standard minimal menu on macOS) that loads the printed URL. Quitting the app
+closes the engine. If the engine fails to start or dies, show a plain error dialog
+with the last lines of its output.
+
+- Window: `contextIsolation: true`, no node integration, `autoplayPolicy:
+  'no-user-gesture-required'`, `backgroundThrottling: false`, F11 / Ctrl-Cmd-F
+  toggles fullscreen, navigation to anything but the engine origin is blocked.
+- Preload exposes `window.wildcallDesktop = { quit(), toggleFullscreen(),
+  isFullscreen() → Promise<bool>, platform, version }`. The client must work when it
+  is absent (plain-browser development).
+- Packaging with electron-builder: macOS `.app` + `.dmg` (arm64 and x64), Windows x64
+  portable `.exe` + `.zip`; unsigned. `desktop/scripts/build-engine.mjs` cross-compiles
+  the Go engine for each target into `desktop/build/bin/<platform>-<arch>/`.
+  `npm run dev` runs the shell against `go run ./cmd/wildcall -dev`;
+  `npm run dist:mac`, `npm run dist:win`.
+- `.github/workflows/build.yml`: on push to `main` and on tags, run `go vet` + `go
+  test ./...`, then build the macOS and Windows apps on native runners and upload them
+  as artifacts (and attach them to a GitHub release on `v*` tags).
+- The same client also runs in a normal browser for development (`-dev -open`).
