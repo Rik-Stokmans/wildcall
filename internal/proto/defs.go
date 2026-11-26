@@ -253,22 +253,22 @@ type DialogChoice struct {
 // Player profile (persisted in the save file; a client view is sent on every change)
 
 type Profile struct {
-	Name        string            `json:"name"`
-	Level       int               `json:"level"`
-	XP          int               `json:"xp"`     // XP into the current level
-	XPNext      int               `json:"xpNext"` // XP needed for the next level
-	XPTotal     int               `json:"xpTotal"`
-	Rank        int               `json:"rank"` // 1..5
-	SkillPoints int               `json:"skillPoints"`
-	Skills      map[string]int    `json:"skills"` // skill id → rank
-	Credits     int               `json:"credits"`
-	Rep         map[string]int    `json:"rep"`       // faction → reputation
-	Inventory   []ItemStack       `json:"inventory"` // carried, limited by Stats.Capacity (equipped items do not count)
-	Storage     []ItemStack       `json:"storage"`   // cabin storage, unlimited
-	Equipped    map[string]string `json:"equipped"`  // slot → item id (equipped items live here, not in Inventory)
-	Upgrades    map[string][]string `json:"upgrades"` // item id → purchased upgrade ids
-	Cabin       []string          `json:"cabin"`     // cabin upgrade ids owned
-	Regions     []int             `json:"regions"`   // unlocked region ids
+	Name        string              `json:"name"`
+	Level       int                 `json:"level"`
+	XP          int                 `json:"xp"`     // XP into the current level
+	XPNext      int                 `json:"xpNext"` // XP needed for the next level
+	XPTotal     int                 `json:"xpTotal"`
+	Rank        int                 `json:"rank"` // 1..5
+	SkillPoints int                 `json:"skillPoints"`
+	Skills      map[string]int      `json:"skills"` // skill id → rank
+	Credits     int                 `json:"credits"`
+	Rep         map[string]int      `json:"rep"`       // faction → reputation
+	Inventory   []ItemStack         `json:"inventory"` // carried, limited by Stats.Capacity (equipped items do not count)
+	Storage     []ItemStack         `json:"storage"`   // cabin storage, unlimited
+	Equipped    map[string]string   `json:"equipped"`  // slot → item id (equipped items live here, not in Inventory)
+	Upgrades    map[string][]string `json:"upgrades"`  // item id → purchased upgrade ids
+	Cabin       []string            `json:"cabin"`     // cabin upgrade ids owned
+	Regions     []int               `json:"regions"`   // unlocked region ids
 	// Explored is the fog-of-war bitmap: 64×64 cells of 32 m, row-major (index = gz*64+gx),
 	// one byte per cell (0 hidden, 1 explored), base64 in JSON.
 	Explored []byte                 `json:"explored"`
