@@ -12,7 +12,11 @@
 //     single global water plane at y = 0; terrain below 0 is under water.
 package core
 
-import "math"
+import (
+	"fmt"
+	"math"
+	"strconv"
+)
 
 const (
 	ChunkSize   = 64  // metres per chunk side
@@ -173,6 +177,20 @@ func (r RegionID) Name() string {
 		return regionNames[r]
 	}
 	return "Open Sea"
+}
+
+// MarshalJSON writes a RegionID as a plain number. Without it encoding/json would
+// treat []RegionID as a byte string and send base64 instead of a JSON array.
+func (r RegionID) MarshalJSON() ([]byte, error) { return []byte(strconv.Itoa(int(r))), nil }
+
+// UnmarshalJSON reads a RegionID from a plain number.
+func (r *RegionID) UnmarshalJSON(b []byte) error {
+	n, err := strconv.Atoi(string(b))
+	if err != nil || n < 0 || n > 255 {
+		return fmt.Errorf("core: bad region id %s", b)
+	}
+	*r = RegionID(n)
+	return nil
 }
 
 // RegionFromKey resolves a region key; ok is false if unknown.
