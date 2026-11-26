@@ -9,10 +9,10 @@ import (
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 )
 
-// Flat is a fake core.Terrain: level ground at height H with a regular grid of trees,
-// shrubs and ground perches. West half (x < 1024) is woodland, east half is meadow,
-// and a pond (water perches, HabRiver) lies in a 40 m circle around (512, 1536).
-// Everything is in RegionGreenhollow unless Reg is set.
+// Flat is a fake core.Terrain: unbounded level ground at height H with a regular
+// grid of trees, shrubs and ground perches. West of x = 1024 is woodland, east of it
+// meadow, and a pond (water perches, HabRiver) lies in a 40 m circle around
+// (512, 1536). Everything is in RegionGreenhollow unless Reg is set.
 type Flat struct {
 	H     float32
 	Noise float32                          // AmbientNoise everywhere
@@ -31,9 +31,7 @@ func NewFlat() *Flat { return &Flat{H: 5} }
 
 func (f *Flat) Seed() int64 { return 1 }
 
-func (f *Flat) inWorld(x, z float32) bool {
-	return x >= 0 && z >= 0 && x <= core.WorldSize && z <= core.WorldSize
-}
+func (f *Flat) inWorld(x, z float32) bool { return true }
 
 func (f *Flat) pond(x, z float32) bool {
 	dx, dz := x-512, z-1536
@@ -128,27 +126,34 @@ func (f *Flat) Occlusion(from, to core.Vec3) float32 {
 	return 0
 }
 
-func (f *Flat) POIs() []core.POI { return f.Pois }
+func (f *Flat) HomePOIs() []core.POI { return f.Pois }
 
-func (f *Flat) Trails() []core.Trail { return nil }
+func (f *Flat) POIsNear(x, z, radius float32, buf []core.POI) []core.POI {
+	for _, p := range f.Pois {
+		dx, dz := p.Pos.X-x, p.Pos.Z-z
+		if dx*dx+dz*dz <= radius*radius {
+			buf = append(buf, p)
+		}
+	}
+	return buf
+}
+
+func (f *Flat) POI(id string) (core.POI, bool) {
+	for _, p := range f.Pois {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return core.POI{}, false
+}
+
+func (f *Flat) TrailsNear(x, z, radius float32, buf []core.Trail) []core.Trail { return buf }
 
 func (f *Flat) Spawn() (core.Vec3, float32) { return core.V(600, f.H+core.EyeHeight, 600), 0 }
 
 func (f *Flat) Chunk(cx, cz, lod int) ([]byte, error) { return nil, errors.New("coretest: no chunks") }
 
-func (f *Flat) RegionGrid() (int, []byte) {
-	n := 256
-	cells := make([]byte, n*n)
-	cell := float32(core.WorldSize) / float32(n)
-	for gz := 0; gz < n; gz++ {
-		for gx := 0; gx < n; gx++ {
-			cells[gz*n+gx] = byte(f.RegionAt((float32(gx)+0.5)*cell, (float32(gz)+0.5)*cell))
-		}
-	}
-	return n, cells
-}
-
-func (f *Flat) MapPNG(size int) ([]byte, error) { return nil, errors.New("coretest: no map") }
+func (f *Flat) MapTile(tx, tz int) ([]byte, error) { return nil, errors.New("coretest: no map") }
 
 var _ core.Terrain = (*Flat)(nil)
 

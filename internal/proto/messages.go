@@ -57,6 +57,8 @@ const (
 type Hello struct {
 	Name    string `json:"name"`
 	NewGame bool   `json:"newGame"` // true = discard the save and start a new adventure
+	// Seed for a new adventure: any text (hashed) or number; "" = a random world.
+	Seed string `json:"seed"`
 }
 
 // Pose is the player's state, sent ~10 times a second.
@@ -197,6 +199,7 @@ const (
 	SBase     = "base"     // BaseMsg: open the home-base screen
 	STeleport = "teleport" // Teleport
 	SLure     = "lure"     // LureMsg: seed placed / expired
+	SPois     = "pois"     // PoisMsg: points of interest and trails that came into range
 	SError    = "error"    // ErrorMsg
 )
 
@@ -218,22 +221,34 @@ type Welcome struct {
 	Quests       []QuestDef        `json:"quests"`
 	Collectibles []CollectibleDef  `json:"collectibles"`
 	Lore         []LoreDef         `json:"lore"`
-	POIs         []core.POI        `json:"pois"`
-	Trails       []core.Trail      `json:"trails"`
-	Shop         []string          `json:"shop"` // item ids Finn sells
+	POIs         []core.POI        `json:"pois"`   // home-valley POIs + those near the player now
+	Trails       []core.Trail      `json:"trails"` // likewise
+	Shop         []string          `json:"shop"`   // item ids Finn sells
 	Profile      Profile           `json:"profile"`
 	Env          EnvMsg            `json:"env"`
 	Spawn        Teleport          `json:"spawn"`
 }
 
+// WorldInfo describes the generated world. It is unbounded: there is no size.
 type WorldInfo struct {
-	Size        int     `json:"size"`        // metres
-	ChunkSize   int     `json:"chunkSize"`   // metres
-	Chunks      int     `json:"chunks"`      // per side
-	SeaLevel    float32 `json:"seaLevel"`    // 0
-	RegionGridN int     `json:"regionGridN"` // 256
-	RegionGrid  []byte  `json:"regionGrid"`  // base64; n*n region ids, index = gz*n+gx, 255 = sea
-	MapURL      string  `json:"mapUrl"`      // "/map.png" (1024 px, north up)
+	Seed        int64     `json:"seed"`
+	SeedText    string    `json:"seedText"`    // what the player typed, or the number as text
+	ChunkSize   int       `json:"chunkSize"`   // 64 m
+	SeaLevel    float32   `json:"seaLevel"`    // 0
+	MapTileSize int       `json:"mapTileSize"` // 512 m per map tile
+	MapTilePx   int       `json:"mapTilePx"`   // 128 px per tile
+	MapURL      string    `json:"mapUrl"`      // "/map/{tx}/{tz}.png" — substitute signed tile coordinates
+	FogCell     int       `json:"fogCell"`     // 32 m per fog-of-war cell
+	Home        core.Vec3 `json:"home"`        // the cabin
+	HomeRadius  int       `json:"homeRadius"`  // 450 m
+}
+
+// PoisMsg streams points of interest and trails as the player travels. POIs are
+// never removed by the server; the client may drop far-away ones and will be sent
+// them again when it returns (the server re-sends on re-entry).
+type PoisMsg struct {
+	POIs   []core.POI   `json:"pois"`
+	Trails []core.Trail `json:"trails"`
 }
 
 type EnvMsg struct {

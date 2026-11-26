@@ -24,6 +24,7 @@ show the RPG structure around it.
   Credits, rare discoveries (rare species, unusual plumage, out-of-range visitors).
 - A living ecosystem that runs whether or not the player is watching (design rule 5).
 - Go does the heavy lifting: terrain generation and all simulation.
+- A big, seed-generated, streaming world (Minecraft-style) in WILDCALL's look.
 - Efficient rendering.
 - **A standalone desktop app for macOS and Windows** — double-click to play; no
   browser, no URL, no install steps.
@@ -32,8 +33,8 @@ show the RPG structure around it.
 
 Multiplayer, combat, survival mechanics, crafting, breeding simulation, a full
 migration simulation, hundreds of species, huge quest chains, advanced cabin
-customisation. The five outer regions exist and are explorable but are deliberately
-thinner than Greenhollow Woods.
+customisation. The five other region types exist and are explorable but are
+deliberately thinner in authored content than Greenhollow Woods.
 
 ## Anti-goals
 
@@ -75,11 +76,19 @@ server/renderer boundary.
 
 ## Key decisions
 
-- **Designed generation.** Spec §33 puts "procedural maps" out of scope and §17 calls
-  for handcrafted regions, while the brief asks for terrain generation in Go. The world
-  is therefore a single authored island produced by a deterministic Go generator: the
-  region layout, the nine Greenhollow locations, trails and every point of interest are
-  pinned (contract §2), and noise only supplies natural detail.
+- **A big generated world.** The user asked for a large, seed-generated world in the
+  spirit of Minecraft, in WILDCALL's own style. This deliberately overrides spec §33
+  ("procedural maps" out of scope) and §17's "handcrafted regions". The world is
+  unbounded and generated on demand from a seed: the spec's six regions become the
+  region *types* of a procedural patchwork; structures, hidden places, trails and
+  collectibles are generated on a structure grid. To keep the spec's first-hour
+  experience, every world has a **home valley** at the origin — always Greenhollow
+  Woods — where the generator lays out the cabin and the nine locations of spec §18
+  (differently per seed), so the tutorial, the NPCs and the first quests always work.
+- **Local but persistent wildlife.** An unbounded world cannot simulate every bird, so
+  residents are a deterministic function of (seed, 128 m cell, season) and are
+  simulated in the cells around the player; return to a place and the same individuals
+  are living there.
 - **Server-authoritative perception.** What the player can hear and see is decided in
   Go (`internal/field`) from the true world state, stats and weather. The client never
   decides that a bird was identified or photographed, which keeps the rules in one
@@ -105,7 +114,7 @@ cmd/wildcall ── flags, wiring, HTTP + WebSocket
 internal/core      shared types: Vec3, habitats, regions, Species, BirdState, Stats, Terrain & Ecosystem interfaces
 internal/proto     wire messages, content definitions, Profile (JSON names are the protocol)
 internal/noise     simplex / fBm
-internal/world     island generator: heights, regions, habitats, vegetation, perches, POIs, trails, chunks, map
+internal/world     unbounded world generator: heights, region types, vegetation, perches, POIs, trails, chunks, map tiles
 internal/species   authored bird catalog (38 species)
 internal/env       clock, seasons, weather, forecast
 internal/eco       bird simulation (routines, territories, flocks, calls, fear, vagrants)
@@ -133,5 +142,5 @@ package or module they decide.
 
 The stack (approach A; the desktop-app requirement is the user's, Electron as the
 shell is mine), the vanilla-JS/no-bundler client, real European species,
-the island layout and all ids, 38 species instead of the first-mockup five, building
-the outer regions thin rather than omitting them, and a 24-minute day.
+the home-valley design and all ids, 40 species instead of the first-mockup five, and a
+24-minute day. The generated-world and desktop-app requirements are the user's.

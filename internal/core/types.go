@@ -1,7 +1,9 @@
 // Package core holds the shared contract types every Wildcall package builds on.
 //
 // Coordinate system (pinned, used by server AND client):
-//   - Units are metres. Y is up. The world spans x,z in [0, WorldSize].
+//   - Units are metres. Y is up. The world is unbounded in x and z; it is generated
+//     on demand from the seed (chunk coordinates are signed). The player's home
+//     valley is centred near the origin.
 //   - North is -Z, east is +X.
 //   - Yaw is a compass heading in radians: 0 = north (-Z), +pi/2 = east (+X).
 //     The unit direction for heading h is (sin h, 0, -cos h).
@@ -13,12 +15,14 @@ package core
 import "math"
 
 const (
-	ChunkSize   = 64   // metres per chunk side
-	WorldChunks = 32   // chunks per world side
-	WorldSize   = 2048 // metres per world side (ChunkSize * WorldChunks)
-	SeaLevel    = 0.0
-	TickHz      = 10 // simulation ticks per second
+	ChunkSize   = 64  // metres per chunk side
+	SeaLevel    = 0.0 // every body of standing water is the plane y = 0
+	TickHz      = 10  // simulation ticks per second
 	EyeHeight   = 1.65
+	MapTileSize = 512 // metres covered by one map tile (8 x 8 chunks)
+	MapTilePx   = 128 // pixels per map tile side (4 m per pixel)
+	FogCell     = 32  // metres per fog-of-war cell (16 x 16 cells per map tile)
+	HomeRadius  = 450 // metres: the home valley around the origin is always Greenhollow Woods
 )
 
 // Vec3 is a world-space position or direction in metres.
@@ -139,7 +143,9 @@ func HabitatFromKey(k string) (Habitat, bool) {
 	return 0, false
 }
 
-// RegionID identifies one of the island's regions (spec §17.2).
+// RegionID identifies a region TYPE (spec §17.2). The generated world is a patchwork
+// of large areas of these types; the home valley around the origin is always
+// Greenhollow Woods.
 type RegionID uint8
 
 const (
@@ -150,7 +156,7 @@ const (
 	RegionAmberwood                       // autumn forest
 	RegionFrostveil                       // winter region: snow
 	RegionCount
-	RegionNone RegionID = 255 // open sea beyond the island
+	RegionNone RegionID = 255 // open water away from any shore
 )
 
 var regionKeys = [...]string{"greenhollow", "murmur_marsh", "windpeak", "whispering_coast", "amberwood", "frostveil"}
@@ -263,10 +269,12 @@ type Perch struct {
 }
 
 // POI is a point of interest: structures, NPC spots, collectibles, viewpoints.
-// IDs are pinned by docs/contract.md so quests can reference them.
+// Home-valley POIs have the ids pinned by docs/contract.md §2.2 so quests can
+// reference them; generated POIs elsewhere have deterministic ids of the form
+// "<kind>@<cellX>,<cellZ>" (structure-grid cell) so they can be resolved again later.
 type POI struct {
 	ID     string            `json:"id"`
-	Kind   string            `json:"kind"` // cabin|ranger_station|watchtower|shop|research_site|abandoned_station|hidden_cabin|camp|viewpoint|hide|landmark|pond|npc|feather|page|relic|cache|sign|gate
+	Kind   string            `json:"kind"` // cabin|ranger_station|watchtower|shop|research_site|abandoned_station|hidden_cabin|camp|viewpoint|hide|landmark|pond|npc|feather|page|relic|cache|sign
 	Name   string            `json:"name"`
 	Pos    Vec3              `json:"pos"`
 	Yaw    float32           `json:"yaw"`
@@ -297,19 +305,25 @@ type Terrain interface {
 	// and foliage. 1 = terrain (or solid structure) fully blocks; partial values come
 	// from tree crowns, shrubs and reeds crossed along the way.
 	Occlusion(from, to Vec3) float32
-	POIs() []POI
+	// HomePOIs returns the fixed set of home-valley POIs (pinned ids).
+	HomePOIs() []POI
+	// POIsNear appends every POI within radius (XZ distance) of (x,z) to buf: home
+	// POIs and generated ones alike. Deterministic; cheap enough to call every second.
+	POIsNear(x, z, radius float32, buf []POI) []POI
+	// POI resolves an id (pinned or generated) back to its POI.
+	POI(id string) (POI, bool)
+	// TrailsNear appends every trail with a point within radius of (x,z) to buf.
+	TrailsNear(x, z, radius float32, buf []Trail) []Trail
 	// Spawn is the new-game player start (just outside the cabin) and its heading.
 	Spawn() (pos Vec3, yaw float32)
-	// Chunk returns the encoded binary chunk message (see docs/contract.md §Chunk).
-	// lod 0 = 2 m cells, lod 1 = 4 m, lod 2 = 8 m. Results are cached.
+	// Chunk returns the encoded binary chunk message (see docs/contract.md §2.3).
+	// cx, cz are signed. lod 0 = 2 m cells, lod 1 = 4 m, lod 2 = 8 m. Results are
+	// cached (bounded LRU).
 	Chunk(cx, cz, lod int) ([]byte, error)
-	// Trails returns the walking trails as polylines (world XZ; Y filled from HeightAt).
-	Trails() []Trail
-	// RegionGrid returns an n×n grid of RegionID bytes (row-major: index = gz*n + gx),
-	// each cell covering WorldSize/n metres. n is 256.
-	RegionGrid() (n int, cells []byte)
-	// MapPNG renders a stylised top-down map (size×size px, north up) as PNG bytes.
-	MapPNG(size int) ([]byte, error)
+	// MapTile renders the stylised top-down map tile (tx, tz) as PNG bytes:
+	// MapTilePx square, covering MapTileSize metres from (tx*MapTileSize, tz*MapTileSize),
+	// north (-Z) up. Cached.
+	MapTile(tx, tz int) ([]byte, error)
 }
 
 // Trail is a named footpath. Hidden trails are only drawn on the map once walked

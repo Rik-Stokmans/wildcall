@@ -7,7 +7,7 @@
 
 **Goal:** a playable WILDCALL prototype covering the whole spec at prototype depth.
 
-**Architecture:** a standalone desktop app (macOS, Windows): a Go engine generates the island, simulates the ecosystem and owns
+**Architecture:** a standalone desktop app (macOS, Windows): a Go engine generates an unbounded seed-based world, simulates the ecosystem and owns
 all game rules; an embedded Three.js + Web Audio browser client renders, plays sound
 and shows the UI, talking to the server over one WebSocket.
 
@@ -40,8 +40,9 @@ packaging. No bundler, no external assets.
 4. Profile actions sent out of context (buying without credits, equipping an item not
    owned, cabin actions away from the cabin, identify with a stale mystery id) —
    expect an `error` message and an unchanged profile.
-5. The player reaching world edges, deep water, locked regions or the tower platform —
-   expect gentle containment, never falling through the world or getting stuck.
+5. The player walking far (kilometres), into deep water, locked region types or onto a
+   tower platform — expect chunks to keep streaming, memory to stay bounded, gentle
+   containment, never falling through the world or getting stuck.
 
 ---
 
@@ -55,7 +56,7 @@ packaging. No bundler, no external assets.
 
 | # | Task | Files | Interfaces | Tests that prove it |
 |---|---|---|---|---|
-| 1 | world | `internal/noise`, `internal/world` | `core.Terrain`; contract §2 | determinism per seed; every pinned POI id present, on land, in its region; chunk byte layout and edge consistency across neighbours and LODs; perches sit on/above ground; occlusion 1 through a hill, 0 in the open; region grid matches `RegionAt`; map PNG decodes |
+| 1 | world | `internal/noise`, `internal/world` | `core.Terrain`; contract §2 | determinism per seed and different worlds for different seeds; for 20 seeds: every pinned home POI present, on land, inside the home valley, main trail connected; generated POIs on land with stable ids that resolve via `POI(id)`; chunk byte layout (v2) and edge consistency across neighbours and LODs at negative and far coordinates; perches sit on/above ground; occlusion 1 through a mountain, 0 in the open; all six region types occur within 4 km of home; map tile decodes; bounded memory after touching 5 000 chunks; chunk generation ≤ 4 ms |
 | 2 | species-greenhollow | `internal/species/greenhollow.go` | `core.Species`; `Validate` | `Validate` passes; the five prototype species and the seven "future" species of spec §25 are present; ids pinned (`european_robin`, `blue_tit`, `great_tit`, `common_blackbird`, `eurasian_wren`, …); no two species share the full trait tuple |
 | 3 | species-regional | `internal/species/regional.go` | same | `Validate` passes; every outer region has ≥ 3 resident species; at least 2 rare and 1 legendary species with distinctive calls |
 | 4 | eco | `internal/eco`, `internal/env` | `core.Ecosystem`; contract §3.1–§3.2 | population within range and inside home regions; calls cluster at dawn; sprinting flushes at a larger distance than crouching; flushed birds return; still observer habituates; seasonal absence; vagrant in autumn; lure produces `ActFeeding`; determinism; step time budget (benchmark) |

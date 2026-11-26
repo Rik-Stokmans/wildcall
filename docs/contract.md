@@ -33,7 +33,7 @@ pinned ids) → the game spec (what the player should experience).
 | Task | Owns | Purpose |
 |---|---|---|
 | lead (done) | `internal/core`, `internal/proto`, `internal/species/catalog.go` | contract types |
-| `world` | `internal/noise`, `internal/world` | terrain, regions, vegetation, perches, POIs, trails, chunks, map |
+| `world` | `internal/noise`, `internal/world` | the unbounded world generator: terrain, region types, vegetation, perches, POIs, trails, chunks, map tiles |
 | `species-greenhollow` | `internal/species/greenhollow.go`, `greenhollow_test.go` | Greenhollow roster (20 species) |
 | `species-regional` | `internal/species/regional.go`, `regional_test.go` | all other regions (18 species) |
 | `eco` | `internal/eco`, `internal/env` | bird simulation; clock, seasons, weather, forecast |
@@ -69,116 +69,150 @@ three.js); every JS file must pass `node --check`.
 ## 2. World
 
 Coordinates, units, yaw/pitch conventions and constants: see the header comment of
-`internal/core/types.go`. Summary: metres, Y up, north = −Z, east = +X, world is
-`[0,2048]²`, yaw is a compass heading (0 = north, π/2 = east), sea level is `y = 0`
-and all standing water is that one plane.
+`internal/core/types.go`. Summary: metres, Y up, north = −Z, east = +X, yaw is a
+compass heading (0 = north, π/2 = east), sea level is `y = 0` and all standing water
+(sea, lakes, rivers, marsh pools, ponds) is that one plane.
 
 **Client camera mapping:** `camera.rotation.order = 'YXZ'`, `rotation.y = -yaw`,
 `rotation.x = pitch`.
 
-### 2.1 Layout (designed, not random)
+### 2.1 A big generated world
 
-The island is one fixed, authored world built by a deterministic generator (default
-seed `20261126`). Noise adds detail; the large-scale layout below is pinned so content
-can reference it. Coordinates are approximate targets (±40 m is fine); the relationships
-are what matter. Open sea surrounds the island (RegionNone beyond ~60 m offshore).
+The world is **unbounded and generated on demand from a seed**, Minecraft-style, in
+WILDCALL's stylised look. Every query (`HeightAt`, `RegionAt`, chunks, POIs, perches…)
+is a deterministic function of the seed and the position; chunk coordinates are
+signed; there are no world edges. A new adventure gets a random seed unless the player
+types one (text is hashed). The same seed always gives the same world.
 
-| Region | Where | Character |
-|---|---|---|
-| Greenhollow Woods (0) | centre, roughly x 620–1420, z 820–1560 | temperate broadleaf forest with pine stands, small clearings, a creek, ferny hollow, one meadow clearing, a hidden pond. Gentle terrain 4–40 m. **The fully developed region.** |
-| Murmur Marsh (1) | south-east lowland, x 1300–1900, z 1400–1950 | reedbeds, pools and channels at/just below sea level, boardwalk |
-| Windpeak Highlands (2) | north, x 600–1500, z 200–800 | mountain to ~220 m, rock, scree, sparse pines on lower slopes, windy pass |
-| Whispering Coast (3) | east and north-east shore, x 1500–2000, z 300–1400 | cliffs, beaches, sea stacks, lighthouse |
-| Amberwood (4) | west, x 150–620, z 800–1700 | autumn-coloured forest (amber/rust/gold trees), leaf litter |
-| Frostveil (5) | far north-west plateau, x 100–600, z 150–780 | snowfields, frozen lake, snow-laden pines |
+- **Region types.** The spec's six regions are the world's biome-like region types.
+  They form large patches (typically 600–1600 m across) chosen from smooth climate
+  fields (continentalness → sea/coast/inland, elevation/ruggedness → highlands,
+  temperature → frost, moisture → marsh, a slow "season drift" field → Amberwood):
+  Greenhollow Woods (temperate broadleaf forest with pine stands, clearings, thickets,
+  streams, ponds — the most common type), Murmur Marsh (reedbeds, pools and channels
+  at/just below sea level), Windpeak Highlands (mountains to 150–300 m, rock, scree,
+  sparse pines, cliffs), Whispering Coast (the land within ~150 m of the sea: beaches,
+  dunes, sea cliffs, stacks), Amberwood (autumn-coloured forest), Frostveil (cold high
+  plateaus: snowfields, frozen lakes treated as flat ice at y = 0.3, snow-laden pines).
+  Transitions blend over ~60 m in height and colour; `RegionAt` is a hard classification.
+  Land dominates (~75 %); seas and lakes are bounded bodies, so one can travel far on
+  foot, but deep water is impassable (the player wades to ~1.2 m).
+- **Rivers and creeks.** A river-mask noise carves winding channels to just below
+  y = 0 through lowland (base elevation under ~14 m); they widen into lakes and reach
+  the sea. In higher ground they fade into dry gullies. Shallow reaches (0.2–0.7 m)
+  are wadeable.
+- **Terrain detail.** Within a region: rolling hills, hollows, knolls, clearings,
+  rocky outcrops; walkable slopes (< ~32°) across most of every region except
+  Windpeak's faces and sea cliffs.
+- **The home valley.** Within `core.HomeRadius` (450 m) of the origin the region is
+  always Greenhollow Woods and the terrain is gentle (2–35 m). The generator lays out
+  the starting area of spec §18 there for every seed — arranged differently per seed
+  by a deterministic site search — and shapes the ground for it: a creek (channel just
+  below y = 0, 3–6 m wide) crossing the valley, a meadow clearing ~120 m across, a
+  damp fern hollow downstream, a wooded rise for the watchtower, a small secluded
+  pond. Outside the home valley everything is purely procedural.
 
-The creek rises on the south slope of Windpeak, runs south through Greenhollow past
-Creekside and Fern Valley, then east into Murmur Marsh and the sea. It is carved below
-`y = 0` only in its lower (marsh) reach; inside Greenhollow it is a shallow stream bed
-whose water is rendered by the client as a ribbon following the `creek` trail (the
-world exposes the creek centre-line as a `Trail` with id `creek`, `Hidden=false`,
-name "Greenhollow Creek"; client world module draws water along it, 2–4 m wide, at
-terrain height + 0.05).
-
-### 2.2 POI manifest (ids are pinned)
+### 2.2 Points of interest
 
 `POI.Kind` vocabulary: `cabin ranger_station watchtower shop research_site
 abandoned_station hidden_cabin camp viewpoint hide landmark pond npc feather page relic
-cache sign gate`.
+cache sign`.
 
-| id | kind | name | region | notes |
-|---|---|---|---|---|
-| `cabin` | cabin | Naturalist Cabin | 0 | player home, ~ (1020, 1240). Spawn is 6 m in front of the door, facing away. |
-| `npc_mara` | npc | Mara | 0 | beside the cabin porch. `Data{"npc":"mara"}` |
-| `woodland_entrance` | landmark | Woodland Entrance | 0 | timber arch on the main path ~120 m from the cabin |
-| `shop_finn` | shop | Finn's Field Supply | 0 | stall beside the Woodland Entrance |
-| `npc_finn` | npc | Finn | 0 | at the stall. `Data{"npc":"finn"}` |
-| `old_oak` | landmark | The Old Oak | 0 | one giant oak (scale ≥ 2.4) in a small clearing |
-| `creekside` | landmark | Creekside | 0 | where the main path meets the creek (stepping stones) |
-| `research_creekside` | research_site | Creekside Field Lab | 0 | canvas lab tent by the creek |
-| `npc_alder` | npc | Professor Alder | 0 | at the field lab. `Data{"npc":"alder"}` |
-| `fern_valley` | landmark | Fern Valley | 0 | damp hollow, dense ferns and shrubs, downstream of Creekside |
-| `meadow_clearing` | landmark | Meadow Clearing | 0 | open meadow ~120 m across with wildflowers |
-| `ranger_station` | ranger_station | Greenhollow Ranger Station | 0 | on the main path, north side |
-| `npc_june` | npc | June | 0 | at the ranger station. `Data{"npc":"june"}` |
-| `old_watchtower` | watchtower | Old Watchtower | 0 | abandoned, on a wooded rise off the trail; climbable (client) |
-| `hidden_pond` | pond | Hidden Pond | 0 | **Hidden.** small pond (below y=0) ringed by reeds and shrubs, off-trail |
-| `hide_creek` | hide | Creek Hide | 0 | wooden bird hide overlooking the creek |
-| `viewpoint_lookout` | viewpoint | Lookout Rock | 0 | **Hidden.** rocky outcrop with a long view |
-| `hidden_cabin` | hidden_cabin | Trapper's Cabin | 0 | **Hidden.** ruined cabin deep off-trail |
-| `camp_survey` | camp | Old Survey Camp | 0 | **Hidden.** abandoned camp in the pines |
-| `marsh_boardwalk` | landmark | Murmur Boardwalk | 1 | entry to the marsh |
-| `marsh_hide` | hide | Reedbed Hide | 1 | |
-| `marsh_station` | abandoned_station | Drowned Research Station | 1 | **Hidden.** |
-| `windpeak_pass` | landmark | Windpeak Pass | 2 | |
-| `windpeak_tower` | watchtower | Storm Lookout | 2 | |
-| `windpeak_summit` | viewpoint | Summit Cairn | 2 | **Hidden.** highest point |
-| `coast_lighthouse` | landmark | Whisper Point Light | 3 | |
-| `coast_cliffs` | viewpoint | Seabird Cliffs | 3 | |
-| `coast_cove` | landmark | Driftwood Cove | 3 | **Hidden.** |
-| `amber_grove` | landmark | The Amber Grove | 4 | |
-| `amber_camp` | camp | Leaf-Fall Camp | 4 | **Hidden.** |
-| `frost_hut` | abandoned_station | Frostveil Hut | 5 | |
-| `frost_lake` | landmark | Mirror Lake | 5 | frozen lake |
-| `gate_marsh` `gate_windpeak` `gate_coast` `gate_amber` `gate_frost` | gate | "… Trailhead" | on the Greenhollow side of each border | signposted trailhead where the main trail leaves Greenhollow. `Data{"region":"<key>"}` |
-| `cache_watchtower` | cache | Weathered Satchel | 0 | at the Old Watchtower. `Data{"item":"forgotten_journal"}` |
-| `cache_hidden_cabin` | cache | Dusty Leather Case | 0 | at Trapper's Cabin. `Data{"item":"historical_binoculars"}` |
-| `cache_camp` | cache | Oilcloth Bundle | 0 | at Old Survey Camp. `Data{"item":"vintage_recorder"}` |
-| `cache_marsh` | cache | Sealed Specimen Tin | 1 | at the Drowned Station. `Data{"item":"explorers_lens"}` |
-| `cache_windpeak` | cache | Cairn Box | 2 | at the Summit Cairn. `Data{"item":"naturalists_compass"}` |
-| `cache_coast` | cache | Sea Chest | 3 | at Driftwood Cove. `Data{"item":"research_backpack"}` |
-| `feather_0` … `feather_11` | feather | (named by content) | 0:×6, 1:×2, 2:×1, 3:×1, 4:×1, 5:×1 | off-trail spots in fitting habitat. `Data{"collectible":"<same id>"}` |
-| `page_0` … `page_7` | page | Forgotten journal page | 0:×4 (`page_0` is inside the Old Watchtower), 1,2,3,4:×1 | `Data{"collectible":"<same id>"}` |
-| `relic_0` … `relic_2` | relic | (named by content) | 0, 3, 5 | `Data{"collectible":"<same id>"}` |
+**Home valley (pinned ids, present in every world):**
+
+| id | kind | name | notes |
+|---|---|---|---|
+| `cabin` | cabin | Naturalist Cabin | player home, within 60 m of the origin on a flattened pad. Spawn is 6 m in front of the door, facing away towards the Woodland Entrance. |
+| `npc_mara` | npc | Mara | beside the cabin porch. `Data{"npc":"mara"}` |
+| `woodland_entrance` | landmark | Woodland Entrance | timber arch on the main path ~120 m from the cabin |
+| `shop_finn` | shop | Finn's Field Supply | stall beside the Woodland Entrance |
+| `npc_finn` | npc | Finn | at the stall. `Data{"npc":"finn"}` |
+| `old_oak` | landmark | The Old Oak | one giant oak (scale ≥ 2.4) in a small clearing |
+| `creekside` | landmark | Creekside | where the main path meets the creek (stepping stones) |
+| `research_creekside` | research_site | Creekside Field Lab | canvas lab tent by the creek |
+| `npc_alder` | npc | Professor Alder | at the field lab. `Data{"npc":"alder"}` |
+| `fern_valley` | landmark | Fern Valley | damp hollow, dense ferns and shrubs, downstream of Creekside |
+| `meadow_clearing` | landmark | Meadow Clearing | open meadow with wildflowers |
+| `ranger_station` | ranger_station | Greenhollow Ranger Station | at the far end of the main path |
+| `npc_june` | npc | June | at the ranger station. `Data{"npc":"june"}` |
+| `old_watchtower` | watchtower | Old Watchtower | abandoned, on a wooded rise off the trail; climbable (client) |
+| `hidden_pond` | pond | Hidden Pond | **Hidden.** small pond ringed by reeds and shrubs, off-trail |
+| `hide_creek` | hide | Creek Hide | wooden bird hide overlooking the creek |
+| `viewpoint_lookout` | viewpoint | Lookout Rock | **Hidden.** rocky outcrop with a long view |
+| `hidden_cabin` | hidden_cabin | Trapper's Cabin | **Hidden.** ruined cabin deep off-trail |
+| `camp_survey` | camp | Old Survey Camp | **Hidden.** abandoned camp in the pines |
+| `cache_watchtower` | cache | Weathered Satchel | at the Old Watchtower. `Data{"item":"forgotten_journal"}` |
+| `cache_hidden_cabin` | cache | Dusty Leather Case | at Trapper's Cabin. `Data{"item":"historical_binoculars"}` |
+| `cache_camp` | cache | Oilcloth Bundle | at Old Survey Camp. `Data{"item":"vintage_recorder"}` |
+| `page_0` | page | Torn Journal Page | inside the Old Watchtower. `Data{"collectible":"page_0"}` |
+
+Hidden home POIs are genuinely off-trail (≥ 60 m from the main trail), tucked into
+terrain and vegetation, all inside the home valley.
+
+**Generated POIs (everywhere else, and a few extra inside the home valley).** A
+structure grid of 192 m cells; each cell deterministically holds zero or one feature
+chosen by region type, terrain and a seeded roll (about 45 % of land cells have one):
+
+| kind | where | notes |
+|---|---|---|
+| `watchtower` | high ground, any region | climbable; long views |
+| `hide` | by water: marsh, rivers, lakes, coast | |
+| `camp` | forest, highlands | **Hidden** half the time |
+| `hidden_cabin` | deep forest (Greenhollow, Amberwood) | **Hidden**; has a `cache` beside it |
+| `abandoned_station` | marsh, highlands, frost, coast | **Hidden** half the time; has a `cache` |
+| `viewpoint` | local summits, cliff tops | **Hidden** |
+| `pond` | forest hollows | **Hidden**; a real carved pond with reeds |
+| `landmark` | anywhere | a notable natural or old human feature fitting the region: giant tree, standing stones, waterfall rocks, sea arch, lighthouse (coast, rare), boardwalk (marsh), cairn (highlands), frozen falls (frost) |
+| `ranger_station` | rare (≈ 1 per 2 km²), on gentle ground | a waypoint with a signpost; no NPC |
+| `feather` | off-trail spots in fitting habitat (≈ 1 per 3 cells, as an extra) | `Data{"region":"<key>"}` |
+| `page` | at some camps / stations / hidden cabins | a journal page lies there |
+| `relic` | rare; at landmarks | |
+| `cache` | beside hidden cabins and abandoned stations | `Data{"region":"<key>"}` |
+
+Generated ids are `"<kind>@<cellX>,<cellZ>"` (signed cell coordinates; companions such
+as the cache of a station use their own kind with the same cell). Names are generated
+from region-flavoured word lists ("Heron Reach Hide", "Thornback Tower", "Greywater
+Station"), deterministic per id, unique-feeling. Every generated POI sits on land at a
+sensible spot (flattened pad for structures), never under water, and
+`POI.Region` is the region type at its position.
+
+What a generated `feather`, `page`, `relic` or `cache` actually **contains** is not
+the world's business: the session resolves it (§3.6) — feathers belong to a species of
+that region, pages are handed out in story order, caches hold the next unique item
+for that region type or a modest find.
 
 `Radius`: 14 m for landmarks/structures (discovery), 3 m for npc/cache/collectibles
-(interaction). The world package gives collectibles and caches generic names; the
-`content` package owns their real names and text via `CollectibleDef` (same id).
+(interaction).
 
-Trails (`core.Trail`): `main` "Greenhollow Trail" (cabin → Woodland Entrance → Old Oak
-→ Creekside → Ranger Station, with spurs to Meadow Clearing and each gate), `creek`
-(the creek line, see above), plus **hidden** trails `secret_pond`, `secret_cabin`,
-`secret_lookout`, `secret_camp`, and one trail per outer region (`marsh`, `windpeak`,
-`coast`, `amber`, `frost`). Terrain is flattened slightly and coloured as trodden earth
-along non-hidden trails; hidden trails are only a faint colour change.
+**Trails** (`core.Trail`): in the home valley `main` "Greenhollow Trail" (cabin →
+Woodland Entrance → Old Oak → Creekside → Ranger Station, with a spur to the Meadow
+Clearing), and hidden trails `secret_pond`, `secret_cabin`, `secret_lookout`,
+`secret_camp`. Elsewhere, each non-hidden generated structure is linked to its
+nearest non-hidden neighbour within 420 m by a generated trail (id
+`"trail@<cellX>,<cellZ>"`), routed around water and steep ground; hidden POIs
+sometimes get a hidden trail from the nearest visible one. Terrain is flattened
+slightly and coloured as trodden earth along visible trails; hidden trails are only a
+faint colour change.
 
 ### 2.3 Chunk binary format
 
 `Terrain.Chunk(cx, cz, lod)` returns one binary WebSocket frame. Little endian.
-`cx, cz ∈ [0, 32)`. LOD cell size = `2 << lod` metres (lod 0 → 2 m, 1 → 4 m, 2 → 8 m);
+`cx, cz` are signed. LOD cell size = `2 << lod` metres (lod 0 → 2 m, 1 → 4 m, 2 → 8 m);
 `N = 64 / cell + 1` vertices per side (33, 17, 9).
 
 ```
 offset size  field
-0      4     magic  = 0x4B484357  ("WCHK" as bytes 'W','C','H','K')
-4      1     version = 1
+0      4     magic  = bytes 'W','C','H','K'
+4      1     version = 2
 5      1     lod
-6      2     cx (uint16)
-8      2     cz (uint16)
-10     2     N  (uint16)
-12     N*N*4 heights   float32   row-major: index = iz*N + ix, world x = cx*64 + ix*cell, z = cz*64 + iz*cell
+6      2     N  (uint16)
+8      4     cx (int32)
+12     4     cz (int32)
+16     N*N*4 heights   float32   row-major: index = iz*N + ix, world x = cx*64 + ix*cell, z = cz*64 + iz*cell
 …      N*N*3 normals   int8 ×3   (x,y,z) * 127
-…      N*N*3 colors    uint8 ×3  sRGB vertex colour (biome/region palette, trails, shoreline already blended in)
+…      N*N*3 colors    uint8 ×3  sRGB vertex colour (region/habitat palette, trails, shoreline already blended in)
+…      N*N   region    uint8     core.RegionID at each vertex (255 = open water)
+…      N*N   habitat   uint8     core.Habitat at each vertex
 …      pad to a multiple of 4 bytes from the start of the frame
 …      4     vegCount (uint32)
 …      vegCount*20   each: kind u8, variant u8, rot u16 (radians = rot/65535*2π), x f32, y f32, z f32, scale f32
@@ -186,7 +220,13 @@ offset size  field
 
 Vegetation by LOD: lod 0 → everything; lod 1 → trees, snags, shrubs, rocks, reeds;
 lod 2 → trees and snags only. Vegetation positions are identical across LODs.
-Chunks are edge-consistent: shared border vertices have identical heights/normals/colours.
+Chunks are edge-consistent: shared border vertices have identical heights, normals,
+colours, region and habitat, including across LODs at shared vertices.
+
+Generation must be fast and bounded: a lod-0 chunk (heights, colours, vegetation,
+perches) in ≤ 4 ms on one laptop core; all caches are bounded LRUs (the world never
+holds more than a few hundred chunks' worth of data); everything is safe for
+concurrent use.
 
 ### 2.4 Perches and occlusion
 
@@ -194,13 +234,22 @@ Perches are derived deterministically from vegetation and terrain: tree crowns
 (`canopy`, cover 0.6–0.9, at 55–90 % of tree height), outer branches and tops (`branch`,
 cover 0.1–0.35), snags and posts (`snag`, cover 0), shrubs (`shrub`, cover 0.5–0.8),
 reeds (`reed`, cover 0.5–0.7), open `ground` (cover from ground vegetation, 0–0.3),
-`rock`, `water` (points on the sea/pond/marsh surface, y = 0), `shore` (water's edge),
+`rock`, `water` (points on the water surface, y = 0), `shore` (water's edge),
 `trunk` (on tree trunks at 2–8 m), `structure` (roofs, rails). `PerchesNear` must be
-fast (spatial grid) — the ecosystem calls it constantly.
+fast (per-chunk perch lists, cached) — the ecosystem calls it constantly.
 
 `Occlusion(from, to)`: 1.0 if terrain blocks the segment; otherwise accumulate partial
 occlusion from every tree crown (sphere/cone, ~0.35 each for a centre hit, scaled by
 path length through it), shrub and reed bed crossed, clamped to 0..0.95.
+
+### 2.5 Map tiles and fog of war
+
+`Terrain.MapTile(tx, tz)`: a 128 px PNG covering 512 m (4 m per pixel), north up: a
+stylised parchment-toned map with soft hillshade, region tints, water, beaches, visible
+trails (no labels or icons; the client overlays those). Served at `/map/<tx>/<tz>.png`.
+Fog of war is sparse: `Profile.Explored` maps tile keys to 256-bit masks of 32 m cells
+(layout documented on the field). The client only ever draws tiles that contain an
+explored cell.
 
 ---
 
@@ -224,10 +273,18 @@ path length through it), shrub and reed bed crossed, clamped to 0..0.95.
 Constructor: `eco.New(t core.Terrain, species []core.Species, seed int64) *Sim`
 (`*Sim` implements `core.Ecosystem`). Spec §5, §6.3, §6.4, §11, §12.
 
-- Population is persistent and independent of the player: roughly 450–650 birds
-  world-wide, placed by species `Regions`/`Habitats`/`Density`; each has a home
-  territory (centre + `Behavior.Territory`), favourite perches and feeding spots found
-  with `Terrain.PerchesNear`, and a daily routine driven by `Behavior.Activity[phase]`.
+- The world is unbounded, so the simulation is **local but persistent**: the land is
+  divided into 128 m population cells; every cell's resident birds are a
+  deterministic function of (seed, cell, season) — species by the region type and
+  habitats found there (`Regions`/`Habitats`/`Density`), each individual with a stable
+  id, home territory (centre + `Behavior.Territory`), favourite perches and feeding
+  spots found with `Terrain.PerchesNear`, and (rarely) rare plumage. Cells within
+  ~520 m of the observer are active and fully simulated (typically 350–600 birds);
+  cells are activated/retired with hysteresis as the observer travels. On activation a
+  bird is placed where its routine puts it at that time of day, so returning to a place
+  finds the same individuals living their lives (design rule 5). Without an observer
+  the cells around the home valley stay active. Each bird follows a daily routine
+  driven by `Behavior.Activity[phase]`.
 - Behaviour states: see `core.BirdAct`. Birds move between perches, forage, feed
   (`ActFeeding`, a few seconds), sing from song posts, preen, bathe, roost at night
   (owls invert), flock (`Sociality == "flock"`: members share a leader/target), soar or
@@ -251,17 +308,17 @@ Constructor: `eco.New(t core.Terrain, species []core.Species, seed int64) *Sim`
   the first hours of a season, emitting `EvArrive` for arrivals).
 - Rare discoveries (spec §11): ~1.5 % of individuals carry `FlagRarePlumage`. On windy
   or post-rain days, and at season changes, a small number of **vagrants** appear: a
-  bird of a species from another region placed in suitable habitat elsewhere with
-  `FlagVagrant` (always at least one vagrant somewhere in Greenhollow during
-  autumn). `Rare`/`Legendary` species follow strict conditions from their data
+  bird of a species from another region type placed in suitable habitat with
+  `FlagVagrant` (always at least one vagrant among the active cells during autumn). `Rare`/`Legendary` species follow strict conditions from their data
   (phase, weather, habitat) and exist in very small numbers.
 - `EvMove` is emitted for conspicuous movement (take-off, landing, branch-to-branch
   hop) of birds within 60 m of the observer — it feeds the movement cues.
 - Lures (`AddLure`): seed-eating and ground-feeding species within `Radius` visit in
   turn and show `ActFeeding` at the lure.
-- Performance budget: `Step` for 600 birds in < 1 ms on a laptop core. Use a spatial
-  grid for `Near`. Simulate birds far from the observer at a reduced rate if needed,
-  but they must keep living (positions change, calls happen).
+- Performance budget: `Step` for 600 active birds in < 1 ms on a laptop core; cell
+  activation must not hitch (spread it over ticks). Use a spatial grid for `Near`.
+  Birds far from the observer may tick at a reduced rate, but they keep living
+  (positions change, calls happen).
 - Must be deterministic given seed + identical call sequence.
 
 ### 3.3 Perception (`internal/field`)
@@ -307,7 +364,7 @@ state structs the session can hold). Required capabilities:
    habitat, season, stats, catalog)`: score every species that occurs in the player's
    unlocked regions; each matching evidence key multiplies the score up, each
    mismatching key multiplies it down hard (but not to zero: observation can be
-   wrong-ish for similar colours); habitat and season give a mild prior; species in
+   wrong-ish for similar colours); habitat, region type and season give a mild prior; species in
    `wrong` are excluded. Normalise to percentages, return the top 5 (top 3 with
    IDAssist 0; `IDAssist` and `RareID` sharpen the distribution toward the truth by
    weighting evidence more strongly). Deterministic.
@@ -399,8 +456,10 @@ state structs the session can hold). Required capabilities:
 
 ### 3.5 Content (`internal/content`)
 
-- `Regions() []proto.RegionInfo` — gating: Greenhollow rank 1; Murmur Marsh rank 2;
-  Amberwood rank 2; Windpeak rank 3; Whispering Coast rank 3; Frostveil rank 4.
+- `Regions() []proto.RegionInfo` — the six region TYPES. Gating by naturalist rank
+  (a "ranger permit"): Greenhollow rank 1; Murmur Marsh rank 2; Amberwood rank 2;
+  Windpeak rank 3; Whispering Coast rank 3; Frostveil rank 4. A locked region type is
+  closed wherever it occurs in the generated world.
 - `NPCs() []proto.NPCDef` — `mara` (Veteran Naturalist, faction `naturalists`, POI
   `npc_mara`), `finn` (Equipment Specialist, `outfitters`, `npc_finn`), `alder`
   (Researcher, `research`, `npc_alder`), `june` (Park Ranger, `rangers`, `npc_june`).
@@ -415,8 +474,12 @@ state structs the session can hold). Required capabilities:
   (acoustic; identify three species by sound), `visitor_from_afar` (research, Alder;
   document a vagrant: a `rare` objective with target `out_of_range`). Add at least
   nine more across all five categories (including conservation quests from June, one
-  quest per outer region that motivates the unlock, and 4+ repeat-free cabin research
-  contracts with `Giver:"board"`), plus the hidden quest unlocked by the watchtower.
+  quest per outer region type that motivates the unlock, and 4+ repeat-free cabin
+  research contracts with `Giver:"board"`), plus the hidden quest unlocked by the
+  watchtower. Because the world is generated, quests may reference by id only the
+  pinned **home-valley** POIs of §2.2; anything further afield must use kind targets
+  with params (`discover` target `kind:watchtower` with `Params{"region":"windpeak"}`,
+  `collect` target `kind:feather`, …).
 - Quest engine: `content.NewTracker()`-style pure logic over
   `map[string]*proto.QuestState`: `Available(p) []string`, `Accept`, `OnEvent(p,
   Event) []Progress` (advances objectives, honours `Ordered`, marks `complete`),
@@ -430,11 +493,18 @@ state structs the session can hold). Required capabilities:
   first conversation is the tutorial (movement, listening with F, binoculars, journal).
   Every NPC has distinct voice, a few "ask about…" topics that teach real mechanics,
   and reacts to rank/reputation.
-- Collectibles: `feather_0…11` (set "Feathers of the Island", each from a specific
-  catalog species, named e.g. "Jay Wing Covert"), `page_0…7` (set "The Forgotten
-  Field Journal": an earlier naturalist's diary, each page hints at a hidden place or
-  a rare bird's conditions — environmental storytelling), `relic_0…2`, and awarded
-  `badge_*` collectibles. Lore entries (`proto.LoreDef`) for Natural History.
+- Collectibles (`content.Collectibles(species []core.Species)`): one feather per
+  species, id `feather_<species id>` (set "Feathers", named e.g. "Jay Wing Covert",
+  rarity following the species); `page_0…7` (set "The Forgotten Field Journal": an
+  earlier naturalist's diary handed out in order wherever pages are found, each
+  hinting at the kinds of hidden places the world contains or a rare bird's
+  conditions — environmental storytelling, never coordinates); `relic_0…5`; and
+  awarded `badge_*` collectibles. `CollectibleDef.POI` is "" for all of these (the
+  session maps found POIs to collectibles). Lore entries (`proto.LoreDef`) for
+  Natural History. Also `content.CacheLoot(regionKey string) []string`: the ordered
+  unique items a cache of that region type yields (marsh → `explorers_lens`; windpeak
+  → `naturalists_compass`; whispering_coast → `research_backpack`; others none), and
+  the fallback modest find.
 
 ### 3.6 Session rules (`internal/game`, stage 2)
 
@@ -454,15 +524,30 @@ state structs the session can hold). Required capabilities:
   level 6 when `Study` reaches 100 via cabin desk research, which needs level 5).
 - Film: each photo uses one frame of `Film.Cap` (= `Stats.FilmCap`); arriving at the
   cabin develops the roll (`Film.Used = 0`).
-- Region gating: entering a locked region sends `region {unlocked:false, reason}` once
-  and the client turns the player back at the border; entering an unlocked region for
-  the first time sends `region {unlocked:true}` (Region Discovery screen) + XP.
-- Pinned profile flags: `cache:<poi id>` (cache opened), `met:<npc id>`, `tutorial:<step>`.
-  Opening a cache gives its `Data["item"]` and sends `rareItem`. Picking up a
-  collectible records it in `journal.collectibles` (+ XP, lore for pages).
-- POI discovery: within `Radius` → journal location + 25 XP (+ toast). Hidden POIs
-  also reveal on the map when within `Stats.TrailSense`. Fog of war: cells within 48 m
-  are marked explored.
+- Region gating: stepping into a locked region type sends `region {unlocked:false,
+  reason}` (at most once a minute per type) and the client turns the player back at
+  the border; entering an unlocked region type for the first time ever sends `region
+  {unlocked:true}` (Region Discovery screen) + XP.
+- The world belongs to the save: the save stores the seed; `hello {newGame:true,
+  seed}` builds a fresh world + ecosystem for that seed (random when empty).
+- POI streaming: every second, POIs and trails within 700 m that have not been sent
+  to this connection go out in a `pois` message (the welcome carries the home valley
+  and whatever is in range at connect).
+- Pinned profile flags: `taken:<poi id>` (a cache opened or a collectible POI picked
+  up — the client hides/opens the prop), `met:<npc id>`, `tutorial:<step>`.
+  Opening a cache: a pinned home cache gives its `Data["item"]`; a generated cache
+  gives the next unique item for its region type that the player does not own yet
+  (`content.CacheLoot`), else a modest find (a supply or two, some credits, sometimes
+  a lore entry). Unique items are announced with `rareItem`.
+  Picking up collectibles: a `feather` POI yields the feather of a species of that
+  region type (deterministic per POI id, preferring ones not yet collected); a `page`
+  POI yields the lowest-numbered page not yet collected (`page_0` first, at the Old
+  Watchtower) plus its lore; a `relic` POI likewise. Recorded in
+  `journal.collectibles` with XP.
+- POI discovery: within `Radius` → journal location (`LocEntry` copies name, kind,
+  region, position) + 25 XP (+ toast). Hidden POIs also reveal on the map when within
+  `Stats.TrailSense`. Fog of war: 32 m cells within 48 m of the player are marked
+  explored in the sparse `Profile.Explored`.
 - The cabin (`interact` with `cabin`) opens the home base (`base` message). Resting
   advances time (`Ecosystem.FastForward`).
 - `debug` commands work only with `-dev`.
@@ -475,7 +560,7 @@ Shapes: `internal/proto/messages.go` and `defs.go`. Envelope `{"t","d"}`.
 
 | Client → Server | When |
 |---|---|
-| `hello` | once after connect (`newGame:true` wipes the save) → `welcome` |
+| `hello` | once after connect (`newGame:true` wipes the save and generates a new world from `seed`) → `welcome` |
 | `pose` | 10 Hz while in `play` mode, 2 Hz otherwise |
 | `chunkReq` | whenever the client wants a chunk at a LOD → binary frame |
 | `photo` | shutter pressed with the camera raised → `photoResult` (+ `profile`, toasts) |
@@ -514,13 +599,16 @@ paths; dispose of GPU resources when chunks unload.
 
 ### 5.2 Module APIs
 
-**`ctx.world`** (c-world) — streams chunks around the player with LOD rings
-(quality-dependent radius: low 4 / medium 6 / high 8 chunks; lod 0 within 2 chunks,
-lod 1 to 4, lod 2 beyond), builds terrain meshes (vertex colours, flat-ish stylised
-shading, skirts to hide LOD cracks), instanced vegetation with gentle wind sway,
-the sea/water plane with soft shoreline, the creek ribbon. API:
+**`ctx.world`** (c-world) — streams the unbounded generated world: chunks around
+the player in LOD rings (quality-dependent radius: low 5 / medium 7 / high 10 chunks;
+lod 0 within 2 chunks, lod 1 to 4, lod 2 beyond; signed chunk coordinates; load
+near-to-far, unload with hysteresis), builds terrain meshes (vertex colours,
+flat-ish stylised shading, skirts to hide LOD cracks), instanced vegetation with
+gentle wind sway, and the water surface with soft shorelines (rivers, lakes and sea
+are all the y = 0 plane showing wherever terrain dips below it). API:
 `heightAt(x, z) → number` (bilinear on the finest loaded chunk; falls back to 0),
-`isLoaded(x, z) → bool`, `regionAt(x, z) → region id | 255` (from the welcome grid),
+`isLoaded(x, z) → bool`, `regionAt(x, z) → region id | 255` and `habitatAt(x, z) →
+habitat id` (from the chunk's region/habitat bytes; 255/0 if not loaded),
 `waterDepthAt(x, z) → number` (max(0, −height)), `collide(pos: Vector3, radius) →
 void` (pushes pos out of tree trunks, rocks and registered blockers in XZ),
 `addBlocker({x, z, r})` (props call this for buildings), `surfaceAt(x, z) → 'grass'|
@@ -536,11 +624,13 @@ motes / seasonal tint hints, per-region atmosphere (Amberwood warm haze, Frostve
 cold light and snowfall). Driven by `env` events, interpolated between updates.
 API: `sunDir → Vector3`, `daylight → 0..1`, `fogColor → Color`.
 
-**`ctx.props`** (c-sky task) — builds every POI from the welcome message as stylised
-low-poly geometry: cabin (with porch, chimney smoke, lit window at night), Finn's
-stall, ranger station, watchtowers (with a climbable stair/ladder volume: register a
+**`ctx.props`** (c-sky task) — builds POIs as they arrive (the welcome's list, then
+`net:pois` as the player travels; drop props farther than ~900 m and rebuild them
+when they are sent again) as stylised low-poly geometry, generic per kind so that
+generated structures anywhere look right, with per-id variation: cabin (with porch, chimney smoke, lit window at night), Finn's
+stall, ranger stations, watchtowers (with a climbable stair/ladder volume: register a
 ramp so the player can reach the platform), field-lab tent, hides, camps, ruined
-cabins/stations, lighthouse, gates/signposts, the Old Oak dressing, boardwalk,
+cabins/stations, lighthouse, signposts, standing stones, cairns, the Old Oak dressing, boardwalk,
 collectibles (feather / page / relic models that gently bob and glint within
 `stats.trackSigns` metres), caches, NPCs (procedural characters from `NPCDef.look`,
 idle animation, turn to face the player), seed lures and the garden feeder. API:
@@ -566,7 +656,8 @@ flags, pos: Vector3} | undefined`, `list() → iterable`, `count`.
 Shift), sprint 6.5 (double-tap Shift and hold; drains `stats.stamina`), crouch (C /
 Ctrl toggle, 1.2 m/s, eye height 1.0), jump, step up small obstacles / climb slopes
 with slowdown on steep ground, shrubs and shallow water (reduced by `stats.terrain`),
-sit and wait (X), swim-proof (deep water pushes back gently — no survival mechanics),
+sit and wait (X), wading up to ~1.2 m deep with deep water pushing back gently (no
+swimming, no survival mechanics; there are no world edges),
 head bob, smooth camera, collision via `ctx.world.collide` and
 `ctx.props.platformHeightAt`. Region gate: refuse to walk more than a few metres into
 a region not in `profile.regions` (soft push back + the server's `region` message
@@ -622,10 +713,10 @@ equip coin`), `level → 0..1` (current call-bus loudness).
 
 | name | owner | opened by | content (spec §28–§30) |
 |---|---|---|---|
-| `mainmenu` | c-menu | boot | Continue (if `welcome.hasSave`), New Adventure (confirm → `net.send('hello',{newGame:true})` then `location.assign('?play=1')` after the new `net:welcome`), Journal, Equipment, Skills, Map, Quests, Collection, Settings, and Quit (only when `window.wildcallDesktop` exists → `wildcallDesktop.quit()`); live forest behind it; `closable:false`. Starting play: `ui.close('mainmenu')` then `bus.emit('game:start', {fresh})`. |
+| `mainmenu` | c-menu | boot | Continue (if `welcome.hasSave`), New Adventure (optional world-seed text field, blank = random; confirm if a save exists → `net.send('hello',{newGame:true, seed})` then `location.assign('?play=1')` after the new `net:welcome`), Journal, Equipment, Skills, Map, Quests, Collection, Settings, and Quit (only when `window.wildcallDesktop` exists → `wildcallDesktop.quit()`); live forest behind it; `closable:false`. Starting play: `ui.close('mainmenu')` then `bus.emit('game:start', {fresh})`. |
 | `menu` | c-menu | Tab / K / I / Esc | tabs `character` (level, XP bar, rank, skill points, progression unlocks, currency, reputation, totals), `skills` (five-discipline tree, node states locked/available/purchased, tier requirements, costs, buy), `inventory` (item grid, rarity, description, stats, equip/unequip, sort, filter, capacity, use supplies), `equipment` (six slots, current gear stats, comparison vs. selected, upgrade options), `rank` (current/next rank, requirements with progress, unlocks), `settings` (all of `state.settings`, a fullscreen toggle and "Quit to desktop" when `window.wildcallDesktop` exists, "Return to main menu"); data `{tab}`. |
 | `journal` | c-journal | J | sections `species` (grid by discovery level incl. mysteries with their evidence and an "Identify" button → `ui.open('identify', {mystery})`; species page: illustration, name, rarity, discovery status, habitat, locations, activity patterns from the player's own `phases`, vocalizations with playback, behaviours, photos, observations, identification confidence, editable personal notes), `photos`, `recordings` (playback + spectrogram), `locations`, `history` (Natural History lore), `rare` (Rare Discoveries); data `{section, species}`. Field-guide view of all species of unlocked regions (silhouette until identified; "compare similar"). |
-| `map` | c-journal | M | `welcome.world.mapUrl` image with fog of war from `profile.explored`, player arrow, trails (per `stats.mapDetail`; hidden trails only if in `profile.trails`), discovered landmarks, NPCs, tracked-quest markers, region borders and lock state. Never birds. |
+| `map` | c-journal | M | a pannable, zoomable map of the unbounded world drawn from map tiles (`welcome.world.mapUrl` with `{tx}`/`{tz}`; only tiles containing explored cells are fetched) under sparse fog of war from `profile.explored`, player arrow, the cabin and a "home" bearing when off-screen, trails (per `stats.mapDetail`; hidden trails only if in `profile.trails`), discovered places from `profile.journal.locations`, NPCs, tracked-quest markers, region names over explored areas with lock state, the world seed. Never birds. |
 | `quests` | c-journal | L | active/available/completed quests, objectives + progress, rewards, categories, tracking toggle. |
 | `collection` | c-journal | O | collectibles found/missing by set, rarity, progress. |
 | `identify` | c-encounter | T while observing, or from the journal | Observation & Identification: sketch built from known evidence (`kit.birdIllustration(…, {reveal})`), evidence list, habitat, behaviour, candidate table with confidence, field-guide browser with filters to compare, "Submit identification" (→ `identify`) and "Keep observing"; shows the `identifyResult`. data `{mystery}`. |
@@ -697,9 +788,10 @@ animation. Class prefixes: `kit-`, `tool-`, `hud-`, `enc-`, `menu-`, `jr-`, `bas
 
 ## 6. Engine binary (stage 2)
 
-`go run ./cmd/wildcall [-addr 127.0.0.1:8080] [-seed 20261126] [-save <dir>]
+`go run ./cmd/wildcall [-addr 127.0.0.1:8080] [-seed <text>] [-save <dir>]
 [-daylen 1440] [-dev] [-open] [-parent-stdin]` — serves the embedded `web/` at `/`,
-the WebSocket at `/ws`, the map at `/map.png`, photos at `/photos/<id>.jpg`.
+the WebSocket at `/ws`, map tiles at `/map/<tx>/<tz>.png`, photos at
+`/photos/<id>.jpg`. `-seed` only sets the seed used when no save exists yet.
 
 - `-addr 127.0.0.1:0` picks a free port. As soon as it is accepting connections the
   engine prints exactly one line to stdout: `WILDCALL_LISTENING http://127.0.0.1:<port>`
