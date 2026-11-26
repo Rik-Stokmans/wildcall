@@ -1,0 +1,242 @@
+// Vegetation rendering: one shared geometry per (kind, detail), one material per kind,
+// and per chunk one InstancedMesh per kind present.
+//
+// The foliage shader (a patched MeshLambertMaterial, so lights, fog and shadows behave
+// like everywhere else) adds two things:
+//   * wind: the whole plant bends downwind, with gusts and a small leaf flutter, scaled
+//     by the per-vertex sway weight (aVeg.x), the instance height and state.env.wind.
+//     The offset is computed in world space and converted back into the instance's own
+//     space, so shadows and depth (customDepthMaterial) move with the leaves;
+//   * season: leaf vertices (aVeg.y) blend towards the seasonal colour of their class,
+//     keeping their light/shade structure; plants pick one of two seasonal colours.
+// Per-instance colour (instanceColor) is applied with the per-vertex weight aVeg.z, so
+// bark stays bark while crowns and petals vary.
+import * as THREE from 'three';
+import { VEG_INFO, VEG_KIND_COUNT } from './constants.js';
+import { buildVegModel, detailForLod } from './vegModels.js';
+import { seasonTint, easeTint } from './season.js';
+import { countInstances, fillInstances } from './instances.js';
+import { chunkSphere } from './terrainMesh.js';
+
+const HEADER = /* glsl */`
+attribute vec3 aVeg;
+uniform float uTime;
+uniform float uWind;
+uniform vec2 uWindDir;
+uniform float uBend;
+uniform float uFlutter;
+uniform float uFreq;
+uniform vec3 uSeasonA;
+uniform vec3 uSeasonB;
+uniform vec3 uSeasonRef;
+uniform float uSeasonAmt;
+
+// Wind offset for this vertex in the instance's local space.
+vec3 vegWind(vec3 p) {
+#ifdef USE_INSTANCING
+  float sway = aVeg.x;
+  if (sway <= 0.0 || uWind <= 0.001) return vec3(0.0);
+  vec2 wp = modelMatrix[3].xz + instanceMatrix[3].xz;
+  float ph = mod(dot(wp, vec2(0.071, 0.053)), 6.2831853);
+  float sy = length(instanceMatrix[1].xyz);
+  float gust = 0.55 + 0.45 * sin(uTime * 0.37 + ph * 0.6) * sin(uTime * 0.13 + ph);
+  float lean = uWind * uBend * sy * sway * gust * (0.65 + 0.35 * sin(uTime * uFreq + ph));
+  float fl = uWind * uFlutter * sy * sway * sin(uTime * uFreq * 3.7 + dot(p, vec3(3.1, 2.3, 2.9)) + ph);
+  vec3 w = vec3(uWindDir.x * lean + fl, fl * 0.6 - lean * 0.15, uWindDir.y * lean - fl * 0.7);
+  // instanceMatrix = R(y) * S: columns are orthogonal, so the inverse is cheap.
+  vec3 c0 = instanceMatrix[0].xyz, c1 = instanceMatrix[1].xyz, c2 = instanceMatrix[2].xyz;
+  return vec3(dot(c0, w) / dot(c0, c0), dot(c1, w) / dot(c1, c1), dot(c2, w) / dot(c2, c2));
+#else
+  return vec3(0.0);
+#endif
+}
+`;
+
+const BEGIN = /* glsl */`
+vec3 transformed = vec3(position) + vegWind(position);
+#ifdef USE_ALPHAHASH
+  vPosition = vec3(position);
+#endif
+`;
+
+const COLOR = /* glsl */`
+#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )
+  vColor = vec3(1.0);
+#endif
+#ifdef USE_COLOR
+  vColor *= color;
+#endif
+#ifdef USE_INSTANCING_COLOR
+  vColor *= mix(vec3(1.0), instanceColor, aVeg.z);
+#endif
+#if defined( USE_COLOR ) && defined( USE_INSTANCING )
+  if (uSeasonAmt > 0.0 && aVeg.y > 0.0) {
+    vec2 ip = mod(modelMatrix[3].xz * 0.37 + instanceMatrix[3].xz, 997.0);
+    float pick = fract(sin(dot(ip, vec2(12.9898, 78.233))) * 43758.5453);
+    vec3 target = mix(uSeasonA, uSeasonB, step(0.5, pick));
+    // Keep each vertex's light and shade: scale the seasonal colour by how bright the
+    // vertex is relative to the class's summer reference.
+    const vec3 L = vec3(0.2126, 0.7152, 0.0722);
+    float ratio = clamp(dot(vColor, L) / max(dot(uSeasonRef, L), 1e-3), 0.35, 1.9);
+    vColor = mix(vColor, target * ratio, uSeasonAmt * aVeg.y);
+  }
+#endif
+`;
+
+function patch(shader, uniforms) {
+  Object.assign(shader.uniforms, uniforms);
+  shader.vertexShader = HEADER + shader.vertexShader
+    .replace('#include <begin_vertex>', BEGIN)
+    .replace('#include <color_vertex>', COLOR);
+}
+
+/**
+ * Builds the shared vegetation resources.
+ * @returns {VegetationKit}
+ */
+export function createVegetationKit() {
+  const shared = {
+    uTime: { value: 0 },
+    uWind: { value: 0.3 },
+    uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
+  };
+  // One live tint per season class, shared by every kind of that class.
+  const tints = new Map();
+  const classUniforms = (cls) => {
+    let u = tints.get(cls);
+    if (!u) {
+      const ref = seasonTint(cls, 1); // summer
+      const sumRef = ref.a.slice();
+      u = {
+        live: { a: [0, 0, 0], b: [0, 0, 0], amt: 0 },
+        uSeasonA: { value: new THREE.Color() },
+        uSeasonB: { value: new THREE.Color() },
+        uSeasonRef: { value: new THREE.Color(sumRef[0], sumRef[1], sumRef[2]) },
+        uSeasonAmt: { value: 0 },
+      };
+      tints.set(cls, u);
+    }
+    return u;
+  };
+
+  const materials = [];
+  const depthMaterials = [];
+  for (let k = 0; k < VEG_KIND_COUNT; k++) {
+    const info = VEG_INFO[k];
+    const cu = classUniforms(info.season);
+    const uniforms = {
+      ...shared,
+      uBend: { value: info.bend },
+      uFlutter: { value: info.flutter },
+      uFreq: { value: info.freq },
+      uSeasonA: cu.uSeasonA, uSeasonB: cu.uSeasonB, uSeasonRef: cu.uSeasonRef, uSeasonAmt: cu.uSeasonAmt,
+    };
+    // Single-sided on purpose: blades and petals are built with both windings already.
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    mat.onBeforeCompile = (shader) => patch(shader, uniforms);
+    mat.customProgramCacheKey = () => 'wc-veg';
+    materials.push(mat);
+    const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    depth.onBeforeCompile = (shader) => patch(shader, uniforms);
+    depth.customProgramCacheKey = () => 'wc-veg-depth';
+    depthMaterials.push(depth);
+  }
+
+  const geometries = new Map();
+  /** Shared geometry of a kind at a detail level (built on first use, kept for the session). */
+  function geometryFor(kind, detail) {
+    const key = kind * 4 + detail;
+    let g = geometries.get(key);
+    if (g) return g;
+    const m = buildVegModel(kind, detail);
+    g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(m.position, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(m.normal, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(m.color, 3));
+    g.setAttribute('aVeg', new THREE.BufferAttribute(m.veg, 3));
+    g.setIndex(new THREE.BufferAttribute(m.index, 1));
+    g.userData.model = m;
+    geometries.set(key, g);
+    return g;
+  }
+
+  const counts = new Uint32Array(VEG_KIND_COUNT);
+  const bounds = { minY: 0, maxY: 0, reach: 0 };
+
+  return {
+    materials,
+    /**
+     * Builds the InstancedMeshes of one chunk's vegetation.
+     * @param {import('./chunkCodec.js').ChunkData} chunk
+     * @param {{decor:number, shadows:boolean}} quality
+     * @returns {THREE.InstancedMesh[]}
+     */
+    buildChunk(chunk, quality) {
+      const out = [];
+      const veg = chunk.veg;
+      if (!veg.count) return out;
+      countInstances(veg, quality.decor, counts);
+      const ox = chunk.cx * 64, oz = chunk.cz * 64;
+      for (let k = 0; k < VEG_KIND_COUNT; k++) {
+        const n = counts[k];
+        if (!n) continue;
+        const geo = geometryFor(k, detailForLod(k, chunk.lod));
+        const matrices = new Float32Array(n * 16);
+        const colors = new Float32Array(n * 3);
+        const written = fillInstances(veg, k, ox, oz, quality.decor, geo.userData.model, matrices, colors, bounds);
+        if (!written) continue;
+        const mesh = new THREE.InstancedMesh(geo, materials[k], written);
+        mesh.instanceMatrix = new THREE.InstancedBufferAttribute(matrices, 16);
+        mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
+        mesh.count = written;
+        const s = chunkSphere(bounds.minY, bounds.maxY, bounds.reach);
+        mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(s.x, s.y, s.z), s.r);
+        mesh.customDepthMaterial = depthMaterials[k];
+        mesh.castShadow = !!quality.shadows && VEG_INFO[k].shadow;
+        mesh.receiveShadow = !!quality.shadows;
+        mesh.matrixAutoUpdate = false;
+        mesh.name = 'veg:' + VEG_INFO[k].name;
+        out.push(mesh);
+      }
+      return out;
+    },
+
+    /**
+     * Per-frame animation state.
+     * @param {number} time   seconds
+     * @param {number} wind   0..1 (state.env.wind)
+     * @param {number} season core.Season
+     * @param {number} dt     seconds since the last frame
+     */
+    update(time, wind, season, dt) {
+      shared.uTime.value = time;
+      // Ease towards the weather's wind so a change never makes the forest jump.
+      const k = 1 - Math.exp(-dt * 0.6);
+      shared.uWind.value += ((0.12 + 0.88 * clamp01(wind)) - shared.uWind.value) * k;
+      // A prevailing south-westerly that wanders slowly.
+      const a = 0.9 + Math.sin(time * 0.011) * 0.5;
+      shared.uWindDir.value.set(Math.cos(a), Math.sin(a));
+      const tk = 1 - Math.exp(-dt * 0.35);
+      for (const [cls, u] of tints) {
+        if (!cls) continue;
+        easeTint(u.live, seasonTint(cls, season), tk);
+        u.uSeasonA.value.setRGB(u.live.a[0], u.live.a[1], u.live.a[2]);
+        u.uSeasonB.value.setRGB(u.live.b[0], u.live.b[1], u.live.b[2]);
+        u.uSeasonAmt.value = u.live.amt;
+      }
+    },
+
+    /** Jumps straight to a season's colours (first frame, no wash-in). */
+    snapSeason(season) {
+      for (const [cls, u] of tints) {
+        if (!cls) continue;
+        easeTint(u.live, seasonTint(cls, season), 1);
+        u.uSeasonA.value.setRGB(u.live.a[0], u.live.a[1], u.live.a[2]);
+        u.uSeasonB.value.setRGB(u.live.b[0], u.live.b[1], u.live.b[2]);
+        u.uSeasonAmt.value = u.live.amt;
+      }
+    },
+  };
+}
+
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v || 0; }

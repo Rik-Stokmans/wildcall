@@ -8,6 +8,9 @@ export const DEFAULT_SETTINGS = {
   volAmbient: 0.7,
   volMusic: 0.35,
   volUI: 0.6,
+  volNarrator: 0.9,
+  narrator: 'normal', // off | sparse | normal | chatty  — how often the narrator speaks
+  narratorVoice: '',  // preferred system voice name ('' = pick the best British voice)
   sensitivity: 1.0,
   invertY: false,
   fov: 70,            // naked-eye vertical FOV, degrees

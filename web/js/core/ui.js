@@ -68,7 +68,11 @@ export function createUI(bus, state, input) {
       if (!s) { console.warn(`[ui] unknown screen "${name}"`); return false; }
       const at = stack.indexOf(name);
       if (at >= 0) stack.splice(at, 1);
-      else if (!s.overlay) { while (stack.length) hide(stack.pop()); }
+      else if (!s.overlay) {
+        // A normal screen replaces whatever is open — except the title screen, which
+        // stays underneath so that closing the screen returns to it.
+        while (stack.length && !(stack.length === 1 && stack[0] === 'mainmenu' && name !== 'mainmenu')) hide(stack.pop());
+      }
       stack.push(name);
       if (s.root) s.root.hidden = false;
       sync();
@@ -98,7 +102,7 @@ export function createUI(bus, state, input) {
         else ui.open('menu', { tab: 'character' });
         return;
       }
-      if (state.mode === 'mainmenu') return;
+      if (state.mode === 'mainmenu' && ui.top === 'mainmenu') return;
       const top = screens.get(ui.top);
       if (top && !top.closable) return;
       const [name, data] = ACTION_SCREENS[action];

@@ -71,7 +71,7 @@ html, body {
   outline: none;
 }
 
-#tool-overlay, #hud, #screens, #toasts {
+#tool-overlay, #hud, #screens, #toasts, #narrator {
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -80,6 +80,7 @@ html, body {
 #hud { z-index: var(--z-hud); }
 #screens { z-index: var(--z-screen); }
 #toasts { z-index: var(--z-toast); }
+#narrator { z-index: calc(var(--z-hud) + 1); }
 
 /* A screen root: created by a screen module, shown/hidden by core/ui.js via [hidden]. */
 #screens > .screen {

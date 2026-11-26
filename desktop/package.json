@@ -1,0 +1,23 @@
+{
+  "name": "wildcall",
+  "productName": "Wildcall",
+  "version": "0.1.0",
+  "description": "WILDCALL - a cozy first-person naturalist RPG",
+  "author": "Rik Stokmans",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "build:engine": "node scripts/build-engine.mjs",
+    "dist:mac": "node scripts/build-engine.mjs --mac && node scripts/make-icon.mjs && electron-builder --mac --config electron-builder.config.cjs",
+    "dist:win": "node scripts/build-engine.mjs --win && node scripts/make-icon.mjs && electron-builder --win --config electron-builder.config.cjs",
+    "dist": "node scripts/build-engine.mjs && node scripts/make-icon.mjs && electron-builder --mac --win --config electron-builder.config.cjs",
+    "smoke": "node --test test/smoke.test.mjs"
+  },
+  "devDependencies": {
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0"
+  }
+}

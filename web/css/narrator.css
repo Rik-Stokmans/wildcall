@@ -1,0 +1,66 @@
+/* narrator.css — owned by the narrator task; see docs/contract.md §8.
+   The narrator's caption: lower centre, above the HUD interaction prompt, in the
+   journal face, italic cream on a soft dark-forest scrim. Never takes input. */
+
+#narrator {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.nar-caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(15vh + 64px); /* clear of the interaction prompt and tool bar */
+  transform: translate(-50%, 6px);
+  max-width: min(42em, 84vw);
+  padding: 10px 22px 11px;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(36, 64, 47, .62) 0%, rgba(28, 42, 34, .48) 70%, rgba(28, 42, 34, 0) 100%);
+  box-shadow: 0 0 34px 10px rgba(28, 42, 34, .28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .7s var(--ease), transform .9s var(--ease);
+  text-align: center;
+}
+
+.nar-caption.nar-in {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.nar-caption.nar-out {
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity .8s var(--ease), transform 1s var(--ease);
+}
+
+.nar-text {
+  margin: 0;
+  font-family: var(--font-journal);
+  font-style: italic;
+  font-size: clamp(16px, 1.45vw, 21px);
+  line-height: 1.42;
+  letter-spacing: .01em;
+  color: var(--cream);
+  text-shadow: 0 1px 2px rgba(20, 30, 24, .85), 0 0 14px rgba(20, 30, 24, .55);
+}
+
+.nar-line {
+  display: block;
+  white-space: nowrap;
+}
+
+/* While a screen is open the caption sits a little lower and softer. */
+body:has(#screens > .screen:not([hidden])) .nar-caption {
+  bottom: 6vh;
+}
+
+@media (max-width: 720px) {
+  .nar-line { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nar-caption, .nar-caption.nar-in, .nar-caption.nar-out { transform: translate(-50%, 0); }
+}

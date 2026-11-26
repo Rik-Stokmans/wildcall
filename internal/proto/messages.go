@@ -200,6 +200,7 @@ const (
 	STeleport = "teleport" // Teleport
 	SLure     = "lure"     // LureMsg: seed placed / expired
 	SPois     = "pois"     // PoisMsg: points of interest and trails that came into range
+	SNarrate  = "narrate"  // Narration: a line from the narrator
 	SError    = "error"    // ErrorMsg
 )
 
@@ -422,6 +423,22 @@ type LureMsg struct {
 	Pos    core.Vec3 `json:"pos"`
 	Kind   string    `json:"kind"`
 	Active bool      `json:"active"`
+}
+
+// Narration is one line of the narrator: an original, warm, wry nature-documentary
+// voice that thinks aloud as the player explores (docs/contract.md §8). The client
+// speaks it and shows it as a caption. It must never reveal a species the player has
+// not identified.
+type Narration struct {
+	ID   uint32 `json:"id"`
+	Text string `json:"text"`
+	// Kind: ambient|sound|sighting|identify|discovery|place|weather|time|advice|rare|quest|base
+	Kind string `json:"kind"`
+	// Priority: 0 idle musing, 1 reaction to something happening, 2 a discovery,
+	// 3 a milestone. A higher priority may interrupt a lower one.
+	Priority int `json:"priority"`
+	// TTL is how many seconds the line stays relevant if it has to wait its turn.
+	TTL float32 `json:"ttl"`
 }
 
 type ErrorMsg struct {

@@ -42,6 +42,7 @@ pinned ids) → the game spec (what the player should experience).
 | `field` | `internal/field` | perception: hearing/clues, movement cues, observation/evidence, ID confidence, photo & recording scoring, rare discoveries |
 | `server` (stage 2) | `internal/game`, `internal/server`, `internal/save`, `cmd/wildcall` | session orchestration, WebSocket/HTTP, persistence, main |
 | `desktop` | `desktop/`, `.github/workflows/` | Electron shell, packaging for macOS + Windows, CI builds (§7) |
+| `narrator` | `internal/narrator`, `web/js/narrator/`, `web/css/narrator.css` | the narrator: line bank + director (Go), speech + captions (client) (§8) |
 
 ### Client (`web/`, embedded into the Go engine binary, shown inside the desktop app window)
 
@@ -832,3 +833,37 @@ with the last lines of its output.
   test ./...`, then build the macOS and Windows apps on native runners and upload them
   as artifacts (and attach them to a GitHub release on `v*` tags).
 - The same client also runs in a normal browser for development (`-dev -open`).
+
+## 8. Narrator (task `narrator`)
+
+An original narrator accompanies the player: a warm, unhurried, gently wry
+nature-documentary voice that *thinks aloud* as you explore — never an imitation of
+any real person's voice or name. It makes the world feel observed and alive without
+ever doing the player's work for them.
+
+- `internal/narrator` (Go, pure, depends only on `core` and `proto`): an authored line
+  bank plus the director that decides what is worth saying and when. API:
+  `narrator.New(seed int64) *Narrator`, `(*Narrator).Offer(ev Event, now float64)
+  (proto.Narration, bool)` and `(*Narrator).Idle(ctx Context, now float64)
+  (proto.Narration, bool)` for unprompted musings; `State()/Restore()` so recently
+  used lines survive a save. `Event` describes what just happened in terms the
+  session already has (a heard call with its clue fields, a sighting, an
+  identification result, a flushed bird, a photo or recording result, a place or
+  region discovered, weather/phase changes, rank/level, cabin arrival, long stillness).
+- **Never spoils.** For a bird the player has not identified, lines may only draw on
+  what the player has perceived (the clue's pitch/pattern/habitat/distance, the
+  evidence gathered so far) — "A high, insistent trill, low in the thicket.
+  Something small, I'd wager, with a great deal to say." Species names, families and
+  facts appear only for species in the player's journal. Rarity is never announced.
+- Pacing: at most one line every ~35 s (priority 0), sooner for higher priorities;
+  never repeats a line within a long window; falls quiet when little is happening;
+  never comments on every bird. Lines are short (one or two sentences, ≤ 25 words).
+- `web/js/narrator/` + `css/narrator.css`: speaks `net:narrate` lines with the Web
+  Speech API using the best available British English system voice (prefer a calm
+  male voice; `settings.narratorVoice` overrides), rate ~0.92, volume
+  `settings.volNarrator × volMaster`, and shows each line as an elegant caption in
+  `#narrator` (always shown, even when no voice exists). Honours `settings.narrator`
+  (off / sparse / normal / chatty), queues by priority and TTL, and stays silent while
+  the player is focus-listening, recording, or in a dialogue. `ctx.narrator = { say(text,
+  opts), stop(), voices() }`. The voice backend is isolated behind one small function
+  so a recorded or neural voice pack can replace it later.

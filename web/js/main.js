@@ -22,6 +22,7 @@ const MODULES = [
   './birds/index.js',        // ctx.birds   procedural bird models + animation
   './player/index.js',       // ctx.player  first-person controller + ctx.tools
   './audio/index.js',        // ctx.audio   spatial audio, call synth, ambience, music
+  './narrator/index.js',     // ctx.narrator  spoken narration + captions
   './ui/kit.js',             // ctx.kit     shared UI kit (icons, bird illustrations, widgets)
   './ui/hud/index.js',       // HUD, clue panel, toasts, prompts, quest tracker
   './ui/encounter/index.js', // observation & identification, dialogue, rewards, rare item, region, rank-up
@@ -120,6 +121,13 @@ async function boot() {
   // --- core message plumbing ---------------------------------------------
   net.on('profile', (p) => { state.profile = p; bus.emit('profile', p); });
   net.on('env', (e) => { state.env = e; bus.emit('env', e); });
+  // Points of interest and trails stream in as the player travels the generated world.
+  net.on('pois', (m) => {
+    for (const p of m.pois || []) state.pois[p.id] = p;
+    const known = new Set(state.trails.map((t) => t.id));
+    for (const t of m.trails || []) if (!known.has(t.id)) state.trails.push(t);
+    bus.emit('pois', m);
+  });
   net.on('error', (e) => { console.warn('[server]', e.msg); bus.emit('toast', { kind: 'warn', title: e.msg, text: '' }); });
   net.on('toast', (t) => bus.emit('toast', t));
   bus.on('net:close', () => {
