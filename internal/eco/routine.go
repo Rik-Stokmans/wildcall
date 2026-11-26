@@ -817,11 +817,13 @@ func (s *Sim) spotNear(b *bird, p *profile, target core.Vec3, kind core.PerchKin
 			}
 		}
 	}
-	// Right next to the leader on the same perch: a tree perch shifted sideways is
-	// still in the tree, and the leader's own spot is valid.
-	j := float32(0.4)
+	// Right next to the leader on the same perch. Tree perches sit exactly on a drawn
+	// limb, so a follower may only shuffle a few centimetres along from the leader or it
+	// would hang in the air beside the branch; on the ground or water there is room to
+	// spread out.
+	j := float32(0.1)
 	if kind == core.PerchGround || kind == core.PerchShore || kind == core.PerchWater {
-		j = 0
+		j = 0.35
 	}
 	return core.Perch{Pos: core.V(target.X+j*sin32(a), target.Y, target.Z-j*cos32(a)), Kind: kind, Cover: b.destCover}
 }
