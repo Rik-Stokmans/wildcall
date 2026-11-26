@@ -183,7 +183,8 @@ type CookMsg struct {
 	Qty    int    `json:"qty"`
 }
 
-// DebugMsg.Cmd: xp|credits|time|weather|season|tp|unlock|give|identify|skillpoints|rank|spawn|rep
+// DebugMsg.Cmd: xp|credits|time|weather|season|tp|unlock|give|identify|skillpoints|rank|spawn|rep|
+// forage|nest|buff|seed (see internal/game/debug.go for arguments)
 type DebugMsg struct {
 	Cmd  string   `json:"cmd"`
 	Args []string `json:"args"`
@@ -452,7 +453,7 @@ type LureMsg struct {
 type Narration struct {
 	ID   uint32 `json:"id"`
 	Text string `json:"text"`
-	// Kind: ambient|sound|sighting|identify|discovery|place|weather|time|advice|rare|quest|base
+	// Kind: ambient|sound|sighting|identify|discovery|place|weather|time|advice|rare|quest|base|activity
 	Kind string `json:"kind"`
 	// Priority: 0 idle musing, 1 reaction to something happening, 2 a discovery,
 	// 3 a milestone. A higher priority may interrupt a lower one.

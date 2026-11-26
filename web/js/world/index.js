@@ -23,6 +23,7 @@ import { createVegetationKit } from './vegetation.js';
 import { createChunkRenderer } from './chunkRenderer.js';
 import { createWater } from './water.js';
 import { createGroundCover } from './groundCover.js';
+import { collectFrameStats, formatStats } from './debugStats.js';
 
 /** Meshing budget per frame while the game waits for the world (ms). */
 const BOOT_BUILD_MS = 12;
@@ -224,6 +225,23 @@ export default {
         return store.raycast(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, maxDist, hit)
           ? new THREE.Vector3(hit.x, hit.y, hit.z)
           : null;
+      },
+
+      /**
+       * Debug only (computed on demand, never per frame): renders one extra frame with
+       * per-object counting and returns {total, byCategory, byGroup, text} — draw calls
+       * and triangles per category (terrain, trees.<detail>.<part>, ground.<layer>.r<ring>,
+       * water, forage, props, birds, …) in the main and the shadow pass; 'post' is the
+       * rest of the frame (full-screen passes).
+       */
+      debugStats() {
+        const frameNow = () => {
+          if (ctx.post && typeof ctx.post.render === 'function') ctx.post.render(0);
+          else { ctx.renderer.info.reset(); ctx.renderer.render(scene, ctx.camera); }
+        };
+        const s = collectFrameStats(ctx.renderer, scene, frameNow);
+        s.text = formatStats(s);
+        return s;
       },
 
       /** Streaming diagnostics. */
