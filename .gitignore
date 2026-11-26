@@ -1,0 +1,7 @@
+.DS_Store
+/save/
+/wildcall
+/bin/
+*.test
+*.out
+node_modules/
