@@ -7,6 +7,7 @@
 //   WILDCALL_ENGINE_CWD   working directory for the above (default: repo root)
 //   WILDCALL_USER_DATA    override the userData (and so save) directory
 //   WILDCALL_SMOKE=1      hidden window, no dialogs, verify the page + preload bridge, then exit 0/1
+//   WILDCALL_SMOKE_DEEP=1 with SMOKE: also wait until the game reaches its title screen (needs WebGL)
 
 const { app, BrowserWindow, Menu, dialog, ipcMain, session } = require('electron');
 const path = require('node:path');
@@ -145,6 +146,32 @@ function createWindow(url) {
             info.api.isFullscreen !== 'function' || typeof fsState !== 'boolean' || info.api.node !== 'undefined') {
           fail('Smoke: bridge wrong', JSON.stringify(info));
           return;
+        }
+        // WILDCALL_SMOKE_DEEP=1: also wait for the game itself to come up - the client
+        // connected to the engine over its WebSocket, received the world and reached the
+        // title screen. Needs WebGL; where there is none (some CI machines) the shallow
+        // check stands and the result says so.
+        if (process.env.WILDCALL_SMOKE_DEEP === '1') {
+          const deep = await win.webContents.executeJavaScript(`(async () => {
+            const gl = !!document.createElement('canvas').getContext('webgl2');
+            const t0 = Date.now();
+            let mode = 'none';
+            while (Date.now() - t0 < 90000) {
+              mode = (window.wildcall && window.wildcall.state && window.wildcall.state.mode) || 'none';
+              if (mode === 'mainmenu' || mode === 'play') break;
+              await new Promise((r) => setTimeout(r, 500));
+            }
+            const st = window.wildcall && window.wildcall.state;
+            return { webgl2: gl, mode, seconds: Math.round((Date.now() - t0) / 100) / 10,
+              species: st && st.species ? st.species.length : 0,
+              chunks: window.wildcall && window.wildcall.world && window.wildcall.world.debug ? window.wildcall.world.debug.chunks : 0,
+              bootText: (document.getElementById('boot-status') || {}).textContent || '' };
+          })()`);
+          info.deep = deep;
+          if (deep.webgl2 && deep.mode !== 'mainmenu' && deep.mode !== 'play') {
+            fail('Smoke: the game did not reach the title screen', JSON.stringify(deep));
+            return;
+          }
         }
         process.stdout.write(`SMOKE_OK ${JSON.stringify(info)}\n`);
         shutdown(0);

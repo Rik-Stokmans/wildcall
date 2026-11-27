@@ -47,6 +47,16 @@ jobs:
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Launch the packaged app (smoke test)
+        working-directory: desktop
+        env:
+          WILDCALL_SMOKE: '1'
+          WILDCALL_SMOKE_DEEP: '1'
+        run: |
+          APP=$(ls -d dist/mac-$(uname -m | sed s/x86_64/x64/)/Wildcall.app dist/mac/Wildcall.app 2>/dev/null | head -1)
+          export WILDCALL_USER_DATA="$RUNNER_TEMP/wildcall-smoke"
+          "$APP/Contents/MacOS/Wildcall" | tee smoke.txt
+          grep -q SMOKE_OK smoke.txt
       - uses: actions/upload-artifact@v4
         with:
           name: wildcall-mac
@@ -72,6 +82,24 @@ jobs:
         working-directory: desktop
       - run: npm run dist:win
         working-directory: desktop
+      - name: Engine tests on Windows
+        run: go test ./internal/game/ ./internal/save/ ./internal/server/ ./internal/world/
+      - name: Launch the packaged app (smoke test)
+        working-directory: desktop
+        shell: pwsh
+        env:
+          WILDCALL_SMOKE: '1'
+          WILDCALL_SMOKE_DEEP: '1'
+        run: |
+          $env:WILDCALL_USER_DATA = Join-Path $env:RUNNER_TEMP 'wildcall-smoke'
+          $exe = Join-Path (Get-Location) 'dist\win-unpacked\Wildcall.exe'
+          if (-not (Test-Path $exe)) { throw "not found: $exe" }
+          $p = Start-Process -FilePath $exe -PassThru -Wait -RedirectStandardOutput smoke.txt -RedirectStandardError smoke-err.txt
+          Get-Content smoke.txt
+          Get-Content smoke-err.txt | Select-Object -Last 30
+          if ($p.ExitCode -ne 0) { throw "Wildcall.exe exited with $($p.ExitCode)" }
+          if (-not (Select-String -Path smoke.txt -Pattern 'SMOKE_OK' -Quiet)) { throw 'no SMOKE_OK in output' }
+          if (Get-Process -Name wildcall -ErrorAction SilentlyContinue) { throw 'engine process left running' }
       - uses: actions/upload-artifact@v4
         with:
           name: wildcall-windows
