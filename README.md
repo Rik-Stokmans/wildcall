@@ -75,9 +75,14 @@ Three.js + Web Audio client renders it; an Electron shell packages both into one
 
 ## Optional asset packs
 
+Both packs are generated or fetched locally, are git-ignored, and are embedded into
+any app you build on that machine. Builds from GitHub Actions do not contain them.
+
 - **Narrator voice** — `tools/voice/` pregenerates every narrator line into
   `web/voice/` (needs an OpenRouter API key in `.env`). Without it the narrator uses
   the system's speech synthesis.
-- **Real bird recordings** — `tools/birdsong/` plans and fetches openly licensed
-  recordings into `web/birdsong/` with full credits. Without them calls are
+- **Real bird recordings** — `node tools/birdsong/fetch.mjs --fetch` downloads and
+  trims the openly licensed recordings listed in `tools/birdsong/plan.md` into
+  `web/birdsong/` with full credits (`CREDITS.md`). Most are CC BY-SA: if you
+  redistribute them, keep the attribution and the licence. Without them calls are
   synthesised.
