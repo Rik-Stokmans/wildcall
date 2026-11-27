@@ -106,7 +106,11 @@ type ItemDef struct {
 	Special  string       `json:"special"`
 	Upgrades []UpgradeDef `json:"upgrades"`
 	Stack    int          `json:"stack"` // max stack size (supplies, ingredients, food); 0 = not stackable
-	Use      string       `json:"use"`   // use action: "film" | "seed" | "eat" | ""
+	// W and H are the item's footprint in backpack grid cells (1x1 if zero). Big gear
+	// takes real room: the player has to fit things in.
+	W   int    `json:"w"`
+	H   int    `json:"h"`
+	Use string `json:"use"` // use action: "film" | "seed" | "eat" | ""
 	// Buff is the timed effect of eating or drinking this (Kind "food", and raw
 	// ingredients that can be eaten as they are).
 	Buff   *BuffDef `json:"buff,omitempty"`
@@ -390,9 +394,14 @@ type LedgerEntry struct {
 	Reason string `json:"reason"` // player-facing: "Quest: The Unseen Singer", "Bought Explorer Binoculars"
 }
 
+// ItemStack is one stack of an item lying in a grid (the backpack or cabin storage).
+// X, Y is its top-left cell; R means it is turned a quarter turn (its footprint is HxW).
 type ItemStack struct {
 	Item string `json:"item"`
 	Qty  int    `json:"qty"`
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	R    bool   `json:"r"`
 }
 
 type Film struct {
@@ -596,4 +605,17 @@ type QuestState struct {
 	Progress map[string]int `json:"progress"` // objective id → count
 	Tracked  bool           `json:"tracked"`
 	Day      int            `json:"day"`
+	// Area is where the quest's quarry can be found in this world, set by the session
+	// while the quest is active (nil = no particular place). It never names a species.
+	Area *SearchArea `json:"area,omitempty"`
+}
+
+// SearchArea is a place a quest points the player to: a plain-language name ("the
+// bramble beside the old trail") and a circle on the ground (world metres) the
+// client can show on the compass, minimap and map.
+type SearchArea struct {
+	Name   string  `json:"name"`
+	X      float32 `json:"x"`
+	Z      float32 `json:"z"`
+	Radius float32 `json:"radius"`
 }

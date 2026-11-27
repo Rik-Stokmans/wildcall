@@ -1,6 +1,7 @@
 // Pure clue logic: store, fading, distance bands and the lines of a clue card.
 // A clue never names a species unless clue.known is set (server rule); the card
 // builder additionally only uses names the caller resolves from that field.
+import { layerText, clueElevAngle } from '../soundring/ring-math.js';
 
 /** "about 30-45 m". Returns '' when the distance is unknown (0,0). */
 export function distanceBand(min, max) {
@@ -10,11 +11,23 @@ export function distanceBand(min, max) {
   const lo = r5(Math.min(lo0, hi0)), hi = r5(Math.max(lo0, hi0));
   if (lo === hi) return `about ${hi} m`;
   if (lo <= 0) return `within ${hi} m`;
+  // Close by, a band reads worse than one number: "about 10 m" (the middle of the band).
+  if (hi <= 30) return `about ${r5((Math.min(lo0, hi0) + Math.max(lo0, hi0)) / 2)} m`;
   return `about ${lo}–${hi} m`;
 }
 
 const ELEVATION_WORDS = { above: 'from above', level: 'at eye level', below: 'from below' };
-export function elevationText(e) { return ELEVATION_WORDS[e] || ''; }
+const DEG = Math.PI / 180;
+/** Above / below the ear in words: the engine's numeric angle when it sends one
+ *  (elevAngle, radians, + up), else its above|level|below word. */
+export function elevationText(e, angle) {
+  const a = typeof angle === 'number' && Number.isFinite(angle) ? angle : null;
+  if (a == null) return ELEVATION_WORDS[e] || '';
+  const m = Math.abs(a);
+  if (m < 6 * DEG) return 'at eye level';
+  if (a > 0) return m < 20 * DEG ? 'a little above you' : m < 45 * DEG ? 'above you' : 'high above you';
+  return m < 20 * DEG ? 'a little below you' : m < 45 * DEG ? 'below you' : 'right below you';
+}
 
 function cap(s) {
   s = String(s || '').replace(/_/g, ' ');
@@ -36,11 +49,16 @@ export function clueCard(clue, resolve = {}) {
   const facts = [];
   const add = (key, text) => { if (text) facts.push({ key, text }); };
   add('dist', distanceBand(clue.distMin, clue.distMax));
-  add('elev', elevationText(clue.elevation));
+  // [soundring] where to look: the layer ("low, near the ground") once the engine sends
+  // it (clue.layer, or Habitat Reading's perch hint), else above / level / below.
+  const layer = layerText(clue);
+  add('layer', cap(layer));
+  if (!layer || !/(low|high|head|branches|canopy)/.test(layer)) {
+    add('elev', elevationText(clue.elevation, clueElevAngle(clue)));
+  }
   add('pitch', clue.pitch ? `${cap(clue.pitch)} pitch` : '');
   add('pattern', cap(clue.pattern));
   add('habitat', cap(clue.habitat));
-  add('perch', cap(clue.perch));
   return {
     title, subtitle,
     quest: clue.mystery && !speciesName ? (resolve.quest?.(clue.mystery) || '') : '',
@@ -80,6 +98,34 @@ export function selectClueCards(live, opts = {}) {
   return { shown, hidden: Math.max(0, sorted.length - shown.length) };
 }
 
+/**
+ * "One at a time" (the default): the single card of the voice being followed (the id the
+ * sound ring's follower gives; see soundring/follow.js), every other live voice folded
+ * into the count. Without a followed id (no sound ring) it falls back to the first card
+ * selectClueCards would show.
+ *
+ * @param live     ClueStore.all() entries, strongest first (may include the followed
+ *                 voice held past its expiry)
+ * @param followId the followed clue id, or 0
+ * @param opts     { now, quarry, tutorial } (now: to count only voices still sounding)
+ * @returns {{shown: object[], hidden: number, fresh: boolean}} fresh = one of the folded
+ *          voices is one the player has never heard before
+ */
+export function oneClueCard(live, followId, opts = {}) {
+  const list = Array.isArray(live) ? live.filter(Boolean) : [];
+  let pick = followId ? list.find((e) => e.id === followId) : null;
+  if (!pick) pick = selectClueCards(list, { max: 1, quarry: opts.quarry, tutorial: opts.tutorial }).shown[0] || null;
+  const now = opts.now;
+  let hidden = 0, fresh = false;
+  for (const e of list) {
+    if (e === pick) continue;
+    if (now != null && e.expires <= now) continue;
+    hidden++;
+    if (e.clue?.new && !e.clue?.known) fresh = true;
+  }
+  return { shown: pick ? [pick] : [], hidden, fresh };
+}
+
 /** "+1 more sound" / "+3 more sounds", or '' for none. */
 export function moreSoundsText(n) {
   n = n | 0;
@@ -104,17 +150,20 @@ export class ClueStore {
   upsert(clue, now) {
     const ttl = clue.ttl > 0 ? clue.ttl : 3;
     const prev = this.map.get(clue.id);
-    const entry = { clue, id: clue.id, born: prev ? prev.born : now, expires: now + ttl, ttl };
+    const entry = { clue, id: clue.id, born: prev ? prev.born : now, heard: now, expires: now + ttl, ttl };
     this.map.set(clue.id, entry);
     return { entry, isNew: !prev };
   }
 
-  /** Drop expired clues; returns the removed ids. */
-  prune(now) {
+  /** Drop expired clues; returns the removed ids. `holdId` (the voice being followed)
+   *  is kept past its expiry: its card stays through the silence between calls. */
+  prune(now, holdId = 0) {
     const gone = [];
-    for (const [id, e] of this.map) if (e.expires <= now) { this.map.delete(id); gone.push(id); }
+    for (const [id, e] of this.map) if (e.expires <= now && id !== holdId) { this.map.delete(id); gone.push(id); }
     return gone;
   }
+
+  get(id) { return this.map.get(id) || null; }
 
   /** Opacity 0..1: full until the last `fade` seconds, then linear fade-out. */
   alpha(entry, now) {
@@ -124,9 +173,10 @@ export class ClueStore {
     return left >= f ? 1 : left / f;
   }
 
-  /** Every live clue, strongest first (no slot cap): the panel folds the extras. */
-  all(now) {
-    const live = [...this.map.values()].filter((e) => e.expires > now);
+  /** Every live clue, strongest first (no slot cap): the panel folds the extras.
+   *  `holdId` is included even when it has expired. */
+  all(now, holdId = 0) {
+    const live = [...this.map.values()].filter((e) => e.expires > now || (holdId && e.id === holdId));
     live.sort((a, b) => (b.clue.strength - a.clue.strength) || (a.id - b.id));
     return live;
   }

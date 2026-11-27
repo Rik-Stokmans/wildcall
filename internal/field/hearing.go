@@ -63,6 +63,33 @@ const (
 	clueTTLMax = 16 // seconds
 )
 
+// Close range (hearing.go, "ears that let you home in"). Real ears place a nearby
+// voice well: within a stone's throw the direction is good to a few degrees, the
+// distance to a couple of metres and the height is obvious. Skill matters for far
+// voices; close up everyone hears this well. The caps below are the reported ±spread
+// (spreadSigmas × sigma) whatever the skill; skill and focus can only do better.
+const (
+	nearSpreadDeg  = 5   // ± spread of the bearing within nearSpreadR (and closer)
+	nearSpreadR    = 12  // m
+	midSpreadDeg   = 11  // ± spread at midSpreadR
+	midSpreadR     = 25  // m
+	farBlendR      = 50  // m: from here on the clue is as vague as the skill makes it
+	focusNearCut   = 0.7 // focused listening narrows every close-range estimate further
+	nearHearR      = 40  // m: within this everyone gets an elevation and a distance band
+	nearBandRel    = 0.13
+	nearBandR      = 15 // m: within this the band's half-width is nearBandRel of the distance
+	midBandRel     = 0.30
+	bandBlendR     = 80  // m: beyond this the band is as wide as DistAcc makes it
+	elevNearDeg    = 4   // elevation sigma within nearSpreadR
+	elevMidDeg     = 7   // ... at midSpreadR
+	elevEdgeDeg    = 10  // ... at nearHearR
+	elevSkillDeg   = 14  // ... beyond nearHearR, for a skilled listener (DirAccuracy >= elevationAcc)
+	coarseGround   = 0.4 // m above the ground: "low, on or near the ground" below this
+	coarseLow      = 2.2 // m: "low, knee to head height" below this
+	coarseBranches = 6   // m: "up in the branches" below this, "high in the crown" above
+	errClampSigmas = maxErrSigmas
+)
+
 // Heard is the result of Hear. Occ, Dist, Range and Noise are filled whether or not
 // the call is audible (the session wants Occ for proto.CallMsg either way); the
 // rest is only meaningful when Hear returned true.
@@ -94,6 +121,116 @@ type Heard struct {
 
 	sigma float32 // bearing error sigma used, radians (the ClueBoard refines with it)
 	dir16 bool    // direction word resolution
+
+	// What the ClueBoard needs to sharpen a repeated hearing (Heard.sharpen): the
+	// listener's ear, the true bearing and elevation, the normalised error draws, the
+	// distance band's relative half-width and offset draw, and the elevation sigma.
+	ear      core.Vec3
+	truth    float32 // true bearing, rad
+	errN     float32 // bearing error in sigmas (clamped)
+	elevTrue float32 // true elevation angle, rad
+	elevErrN float32 // elevation error in sigmas (clamped)
+	elevSig  float32 // elevation sigma, rad (0 = no elevation estimate)
+	bandRel  float32 // distance band relative half-width (0 = no band)
+	bandU    float32 // -1..1 offset draw of the band centre
+	sharp    float32 // the sharpening factor last applied (1 = a single hearing)
+}
+
+// Ear is the listener's ear position for this hearing.
+func (h *Heard) Ear() core.Vec3 { return h.ear }
+
+// sharpen rebuilds the clue's direction, distance band and elevation with every
+// uncertainty multiplied by f (0 < f <= 1): the ClueBoard calls it when the same
+// singer has been heard again, from the same spot or (better) from a new one. The
+// error draws are kept, so a sharper clue is the same estimate, only tighter.
+func (h *Heard) sharpen(f float32) {
+	if !(f > 0) || f > 1 {
+		f = 1
+	}
+	h.sharp = f
+	sig := h.sigma * f
+	h.Clue.Bearing = wrapTwoPi(h.truth + h.errN*sig)
+	h.Clue.Spread = sig * spreadSigmas
+	h.Clue.Dir = directionWord(h.Clue.Bearing, h.dir16)
+	if h.bandRel > 0 {
+		h.Clue.DistMin, h.Clue.DistMax = bandFor(h.Dist, h.bandRel*f, h.bandU)
+	}
+	if h.elevSig > 0 {
+		es := h.elevSig * f
+		h.Clue.Elev = clamp(h.elevTrue+h.elevErrN*es, -math.Pi/2, math.Pi/2)
+		h.Clue.ElevSpread = es * spreadSigmas
+	}
+}
+
+// nearSigma narrows a bearing sigma for a voice d metres away: at most
+// nearSpreadDeg of spread within nearSpreadR, midSpreadDeg at midSpreadR, blending
+// back to the skill's own value by farBlendR.
+func nearSigma(skill, d float32) float32 {
+	capAt := func(spreadDeg float32) float32 { return rad(spreadDeg) / spreadSigmas }
+	switch {
+	case d <= nearSpreadR:
+		return minf(skill, capAt(nearSpreadDeg))
+	case d <= midSpreadR:
+		t := (d - nearSpreadR) / (midSpreadR - nearSpreadR)
+		return minf(skill, capAt(lerp(nearSpreadDeg, midSpreadDeg, t)))
+	case d < farBlendR:
+		t := (d - midSpreadR) / (farBlendR - midSpreadR)
+		t = t * t * (3 - 2*t)
+		return lerp(minf(skill, capAt(midSpreadDeg)), skill, t)
+	}
+	return skill
+}
+
+// nearBand narrows the distance band's relative half-width for a voice d metres
+// away: nearBandRel within nearBandR, midBandRel at nearHearR, blending back to the
+// skill's own width by bandBlendR.
+func nearBand(skill, d float32) float32 {
+	switch {
+	case d <= nearBandR:
+		return minf(skill, nearBandRel)
+	case d <= nearHearR:
+		t := (d - nearBandR) / (nearHearR - nearBandR)
+		return minf(skill, lerp(nearBandRel, midBandRel, t))
+	case d < bandBlendR:
+		t := (d - nearHearR) / (bandBlendR - nearHearR)
+		return lerp(minf(skill, midBandRel), skill, t)
+	}
+	return skill
+}
+
+// elevSigmaAt is the elevation sigma for a voice d metres away (0 = no estimate
+// for this listener).
+func elevSigmaAt(d float32, skilled bool) float32 {
+	switch {
+	case d <= nearSpreadR:
+		return rad(elevNearDeg)
+	case d <= midSpreadR:
+		return rad(lerp(elevNearDeg, elevMidDeg, (d-nearSpreadR)/(midSpreadR-nearSpreadR)))
+	case d <= nearHearR:
+		return rad(lerp(elevMidDeg, elevEdgeDeg, (d-midSpreadR)/(nearHearR-midSpreadR)))
+	case skilled:
+		return rad(elevSkillDeg)
+	}
+	return 0
+}
+
+// coarseLayer says, in plain words, which layer of the wood a voice comes from:
+// what anyone can tell of a nearby singer (where to look), without the detail
+// Habitat Reading adds.
+func coarseLayer(b core.BirdState, above float32) string {
+	switch {
+	case b.Act.Airborne():
+		return "on the wing"
+	case b.Act == core.ActSwimming:
+		return "out on the water"
+	case above < coarseGround:
+		return "low, on or near the ground"
+	case above < coarseLow:
+		return "low, knee to head height"
+	case above < coarseBranches:
+		return "up in the branches"
+	}
+	return "high in the crown"
 }
 
 // Hear decides whether the listener hears an EvCall and, if so, builds the audio clue
@@ -138,32 +275,54 @@ func Hear(c *Context, ev core.EcoEvent, bird core.BirdState, p proto.Pose, rng *
 	}
 	acc = clamp01(acc)
 	sigma := rad(lerp(sigmaVagueDeg, sigmaPreciseDeg, acc)) * (faintErrBase - faintErrSlope*strength)
-	bearing := core.HeadingTo(ear, ev.Pos)
-	if rng != nil {
-		bearing += clamp(float32(rng.NormFloat64()), -maxErrSigmas, maxErrSigmas) * sigma
+	// Close by, anyone can place a voice: the error falls to a few degrees.
+	sigma = nearSigma(sigma, h.Dist)
+	near := h.Dist <= nearHearR
+	if p.Focus && h.Dist < farBlendR {
+		sigma *= focusNearCut
 	}
-	bearing = wrapTwoPi(bearing)
-	h.sigma, h.dir16 = sigma, acc >= preciseDirAcc
+	h.ear, h.truth = ear, core.HeadingTo(ear, ev.Pos)
+	if rng != nil {
+		h.errN = clamp(float32(rng.NormFloat64()), -errClampSigmas, errClampSigmas)
+	}
+	h.sigma, h.dir16 = sigma, acc >= preciseDirAcc || h.Dist <= midSpreadR
 
 	cl := proto.Clue{
 		ID:         ev.Bird,
-		Bearing:    bearing,
-		Spread:     sigma * spreadSigmas,
-		Dir:        directionWord(bearing, h.dir16),
 		Confidence: confidenceWord(strength),
 		Strength:   strength,
 		TTL:        clamp(ev.Dur+clueTTLPad, clueTTLMin, clueTTLMax),
 	}
 
-	if st.DistAcc > distGate {
-		da := st.DistAcc
+	if st.DistAcc > distGate || near {
+		da := clamp01(st.DistAcc)
 		if p.Focus {
-			da += focusDistBonus
+			da = clamp01(da + focusDistBonus)
 		}
-		cl.DistMin, cl.DistMax = distanceBand(h.Dist, clamp01(da), rng)
+		rel := nearBand(lerp(bandWide, bandTight, da), h.Dist)
+		if p.Focus && h.Dist < bandBlendR {
+			rel *= focusNearCut + (1-focusNearCut)*0.5
+		}
+		h.bandRel = rel
+		if rng != nil {
+			h.bandU = float32(rng.Float64())*2 - 1
+		}
 	}
-	if acc >= elevationAcc {
-		cl.Elevation = elevationWord(elevationOf(ear, ev.Pos))
+	h.elevTrue = elevationOf(ear, ev.Pos)
+	if near || acc >= elevationAcc {
+		cl.Elevation = elevationWord(h.elevTrue)
+		h.elevSig = elevSigmaAt(h.Dist, acc >= elevationAcc)
+		if p.Focus {
+			h.elevSig *= focusNearCut
+		}
+		if rng != nil {
+			h.elevErrN = clamp(float32(rng.NormFloat64()), -errClampSigmas, errClampSigmas)
+		}
+	}
+	above := ev.Pos.Y - c.Terrain.HeightAt(ev.Pos.X, ev.Pos.Z)
+	if near {
+		// Where to look, in plain words: everyone can tell the layer of a close voice.
+		cl.Perch = coarseLayer(bird, above)
 	}
 
 	evid := map[string]string{}
@@ -187,7 +346,7 @@ func Hear(c *Context, ev core.EcoEvent, bird core.BirdState, p proto.Pose, rng *
 	}
 	// Habitat Reading: rank 1 suggests the perch while focusing, rank 2 always.
 	if (st.PerchHint >= 1 || (p.Focus && st.HabitatInfo >= 1)) && bird.ID != 0 {
-		cl.Perch = perchHint(bird, ev.Pos.Y-c.Terrain.HeightAt(ev.Pos.X, ev.Pos.Z))
+		cl.Perch = perchHint(bird, above)
 	}
 	if st.Instinct >= 1 && isUnusual(sp, bird.Flags) {
 		cl.Unusual = true
@@ -205,6 +364,7 @@ func Hear(c *Context, ev core.EcoEvent, bird core.BirdState, p proto.Pose, rng *
 	}
 
 	h.Clue, h.Evidence = cl, evid
+	h.sharpen(1)
 	return h, true
 }
 
@@ -303,16 +463,29 @@ func elevationWord(pitch float32) string {
 // is deliberately off by a random fraction of the half-width so the middle of the
 // band is not a give-away.
 func distanceBand(dist, acc float32, rng *rand.Rand) (lo, hi float32) {
-	rel := lerp(bandWide, bandTight, acc)
-	centre := dist
+	var u float32
 	if rng != nil {
-		centre *= 1 + (float32(rng.Float64())*2-1)*bandOffset*rel
+		u = float32(rng.Float64())*2 - 1
 	}
+	return bandFor(dist, lerp(bandWide, bandTight, acc), u)
+}
+
+// bandFor is distanceBand for a given relative half-width rel and offset draw u
+// (-1..1). Close bands are rounded to the metre ("8-12 m"), far ones to 5 or 10 m.
+func bandFor(dist, rel, u float32) (lo, hi float32) {
+	centre := dist * (1 + u*bandOffset*rel)
 	lo, hi = centre*(1-rel), centre*(1+rel)
 	// Guard the invariant against rounding: the truth stays inside.
 	lo, hi = minf(lo, dist), maxf(hi, dist)
-	step := float32(5)
-	if hi >= 100 {
+	var step float32
+	switch {
+	case hi < 20:
+		step = 1
+	case hi < 50:
+		step = 2
+	case hi < 100:
+		step = 5
+	default:
 		step = 10
 	}
 	lo = float32(math.Floor(float64(lo/step))) * step

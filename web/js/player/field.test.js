@@ -7,7 +7,7 @@ import {
 } from './field.js';
 
 // JSON tags of internal/proto.Pose and proto.Photo, in declaration order.
-const POSE_KEYS = ['x', 'y', 'z', 'yaw', 'pitch', 'speed', 'move', 'crouch', 'sit', 'focus', 'tool', 'raised', 'fov', 'zoom', 'sharp', 'noise'];
+const POSE_KEYS = ['x', 'y', 'z', 'yaw', 'pitch', 'speed', 'move', 'crouch', 'sit', 'prone', 'focus', 'tool', 'raised', 'fov', 'zoom', 'sharp', 'noise'];
 const PHOTO_KEYS = ['x', 'y', 'z', 'yaw', 'pitch', 'fov', 'aspect', 'sharp', 'shake', 'img'];
 
 test('pose rate: 10 Hz in play, 2 Hz otherwise', () => {

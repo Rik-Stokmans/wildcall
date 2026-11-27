@@ -62,6 +62,11 @@ export function buildMarkers({ locations, pois, npcs, flags, quests, questStates
       }
       if (pos) out.push({ key: `quest:${def.id}:${obj.id}`, type: 'quest', x: pos.x, z: pos.z, icon: 'quest', label: obj.text, sub: def.name });
     }
+    // [search-area hook] the place the quest points to (QuestState.area: a named circle, never a bird)
+    const area = state.status === 'active' ? state.area : null;
+    if (area && Number.isFinite(area.x) && Number.isFinite(area.z)) {
+      out.push({ key: `quest:${def.id}:area`, type: 'quest', x: area.x, z: area.z, icon: 'quest', label: area.name ? area.name[0].toUpperCase() + area.name.slice(1) : def.name, sub: def.name, radius: area.radius || 0 });
+    }
   }
   return out;
 }

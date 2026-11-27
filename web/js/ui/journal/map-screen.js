@@ -5,12 +5,14 @@
 
 import { el, fill, icon, button } from '../kit.js';
 import { createFog, tilesToFetch, tileUrl, TILE_SIZE, CELL_SIZE } from './fog.js';
-import { worldToScreen, viewRect, panBy, zoomAt, wheelFactor, scaleBar, edgeArrow, MIN_SCALE, MAX_SCALE } from './mapmath.js';
+import { worldToScreen, screenToWorld, viewRect, panBy, zoomAt, wheelFactor, scaleBar, edgeArrow, MIN_SCALE, MAX_SCALE } from './mapmath.js';
 import { regionLabels } from './regions.js';
 import { buildMarkers, visibleTrails, trailSegments, quietLabels } from './map-data.js';
 import { createTileCache } from './tile-cache.js';
 import { formatDistance, clamp } from './format.js';
 import { screenRoot, sheet, uiSound } from './widgets.js';
+// Player waypoints on the map (owned by the minimap module).
+import { createMapWaypoints } from '../minimap/map-waypoints.js';
 
 const PAPER = '#D9C7A0';
 let fontJournal = null;
@@ -65,6 +67,11 @@ export function createMapScreen(ctx, memory, mapWorld) {
       button('', { variant: 'secondary', small: true, icon: 'minus', title: 'Zoom out', onClick: () => zoomCentre(1 / 1.5) })),
     button('Legend', { variant: 'ghost', small: true, icon: 'info', onClick: () => { legend.hidden = !legend.hidden; } }));
   const stage = el('div', { class: 'jr-map-stage' }, wrap, hint, controls, legend, scaleEl, seedEl);
+  // [minimap module hook] waypoints: flag pins over the map, the list/edit panel and "Mark here".
+  const wps = createMapWaypoints(ctx, { toScreen: (x, z) => worldToScreen(view, size.w, size.h, x, z), playerPos, centreOn: (p) => centreOn(p, null), requestDraw: () => { dirty = true; } });
+  wrap.insertBefore(wps.layer, player);
+  stage.appendChild(wps.panel);
+  controls.insertBefore(wps.markButton, controls.children[2] || null);
   fill(frame.body, stage);
 
   function buildLegend() {
@@ -79,6 +86,7 @@ export function createMapScreen(ctx, memory, mapWorld) {
         row(icon('lock', 15), 'A region still closed to you'),
         row(el('span', { class: 'jr-lg-line' }), 'Trail'),
         row(el('span', { class: 'jr-lg-line dashed' }), 'Secret trail you uncovered'),
+        row(el('span', { class: 'mm-lg-pin' }), 'Your waypoint: click the map to drop one'), // [minimap hook]
         row(el('span', { class: 'jr-lg-paper' }), 'Parchment: not explored yet')),
       el('small', 'Birds are never marked. Listen and look.'));
     box.hidden = true;
@@ -407,17 +415,27 @@ export function createMapScreen(ctx, memory, mapWorld) {
   wrap.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.button !== 1) return;
     anim = null;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: 0, button: e.button, onUi: !!e.target?.closest?.('button') };
     try { wrap.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     wrap.classList.add('dragging');
   });
   wrap.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
+    drag.moved = Math.max(drag.moved, Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy));
     view = panBy(view, e.clientX - drag.x, e.clientY - drag.y);
     drag.x = e.clientX; drag.y = e.clientY;
     dirty = true;
   });
-  const endDrag = (e) => { if (drag && e.pointerId === drag.id) { drag = null; wrap.classList.remove('dragging'); } };
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    // [minimap hook] a click without movement drops / selects a waypoint (dragging never does)
+    if (e.type === 'pointerup' && drag.button === 0 && !drag.onUi && drag.moved < 5) {
+      const r = wrap.getBoundingClientRect();
+      const sx = e.clientX - r.left, sy = e.clientY - r.top;
+      wps.click(sx, sy, screenToWorld(view, size.w, size.h, sx, sy));
+    }
+    drag = null; wrap.classList.remove('dragging');
+  };
   wrap.addEventListener('pointerup', endDrag);
   wrap.addEventListener('pointercancel', endDrag);
   wrap.addEventListener('wheel', (e) => {
@@ -428,6 +446,7 @@ export function createMapScreen(ctx, memory, mapWorld) {
     dirty = true;
   }, { passive: false });
   wrap.addEventListener('dblclick', (e) => {
+    wps.cancelClick(); // [minimap hook] a double click zooms, it does not drop a waypoint
     const r = wrap.getBoundingClientRect();
     view = zoomAt(view, size.w, size.h, e.clientX - r.left, e.clientY - r.top, 1.8);
     dirty = true;
@@ -457,7 +476,7 @@ export function createMapScreen(ctx, memory, mapWorld) {
       if (t >= 1) anim = null;
       dirty = true;
     }
-    if (dirty) { dirty = false; draw(); placeMarkers(); placeEdge(); }
+    if (dirty) { dirty = false; draw(); placeMarkers(); placeEdge(); wps.place(size.w, size.h); }
     placePlayer();
     raf = requestAnimationFrame(frameLoop);
   }
@@ -470,6 +489,7 @@ export function createMapScreen(ctx, memory, mapWorld) {
     open(data = {}) {
       isOpen = true;
       refreshData();
+      wps.open(); // [minimap hook]
       measure();
       const me = playerPos();
       if (data.focus && Number.isFinite(data.focus.x)) {
@@ -482,6 +502,7 @@ export function createMapScreen(ctx, memory, mapWorld) {
     },
     close() {
       isOpen = false;
+      wps.close(); // [minimap hook]
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
       memory.save();

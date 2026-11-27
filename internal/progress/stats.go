@@ -112,7 +112,9 @@ var statLimits = map[string][2]float64{
 	"familiarity": {0.5, 3},
 	"rainProof":   {0, 1},
 	// Pack, navigation, general
-	"capacity":    {4, 40},
+	"capacity":    {9, 100}, // derived: packW x packH (statsWith); no modifier may touch it
+	"packW":       {3, 10},
+	"packH":       {3, 8},
 	"compass":     {0, 2},
 	"mapDetail":   {0, 2},
 	"lensInspect": {0, 3},
@@ -298,7 +300,11 @@ func statsWith(p *proto.Profile, equip map[string]string, buffs []proto.Buff) co
 	a.add(rankPerks[p.Rank], 1)
 	a[statIndex["discount"]] += float64(RepDiscount(p.Rep[FactionOutfitters]))
 
-	return a.stats()
+	s := a.stats()
+	// Capacity is no longer a stat of its own: it is the backpack grid's cell count,
+	// kept for display and for older code paths.
+	s.Capacity = float32(roundInt(s.PackW) * roundInt(s.PackH))
+	return s
 }
 
 // bestBuff is the buff of a slot that lasts longest (nil if there is none).
@@ -310,6 +316,14 @@ func bestBuff(buffs []proto.Buff, slot string) *proto.Buff {
 		}
 	}
 	return best
+}
+
+// BaseStats is core.BaseStats() as this package derives it: Capacity is the cell
+// count of the base pack grid (PackW x PackH), not core's slot-era value.
+func BaseStats() core.Stats {
+	s := core.BaseStats()
+	s.Capacity = float32(roundInt(s.PackW) * roundInt(s.PackH))
+	return s
 }
 
 // Recompute refreshes everything derived in the profile: Stats, XPNext, and
@@ -326,12 +340,6 @@ func Recompute(p *proto.Profile) {
 	p.Film.Cap = roundInt(p.Stats.FilmCap) + extra
 	syncLevel(p)
 }
-
-// Capacity is the number of backpack slots (stacks) the player can carry.
-func Capacity(p *proto.Profile) int { return roundInt(p.Stats.Capacity) }
-
-// FreeSlots is how many more stacks fit in the backpack.
-func FreeSlots(p *proto.Profile) int { return max(0, Capacity(p)-len(p.Inventory)) }
 
 func roundInt(f float32) int { return int(math.Round(float64(f))) }
 

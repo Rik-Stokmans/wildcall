@@ -10,7 +10,8 @@ import (
 // Observation tuning (spec §6, §13; contract §3.3.3).
 //
 // With base stats, 8× glasses on a robin on an exposed branch at 25 m (clarity ≈
-// 0.77) yield size, shape, primary, secondary, bill and marking in ≈ 11 s; a wren
+// 0.79) yield size, shape, primary, secondary, bill and marking in ≈ 9 s (6×
+// glasses at 35-40 m: ≈ 10 s); a wren
 // deep in a shrub (clarity ≈ 0.38) stops after size, shape and primary until it
 // comes out.
 const (
@@ -35,7 +36,7 @@ const (
 	lostConeMult = 1.2 // … as long as it stays within this × half-FOV of the axis
 
 	// Evidence: progress fills at clarity × ObserveSpeed / revealTime per second.
-	revealTime    = 1.3 // seconds of perfect clarity per piece of evidence
+	revealTime    = 1.2 // seconds of perfect clarity per piece of evidence
 	progressCarry = 0.5 // overflow kept after a reveal, so tick length does not waste watching time
 
 	// Clarity gates per evidence key (contract §3.3.3).
@@ -461,6 +462,13 @@ func (w *Watch) evidenceFor(c *Context, sp *core.Species, species int) map[strin
 // bird's current state is still unrevealed (so key == "" && waiting means "held back
 // by clarity"). Flight style can only be judged while the bird is airborne.
 func nextTrait(ev map[string]string, sp *core.Species, clarity float32, airborne bool) (key string, waiting bool) {
+	// A bird on the wing shows what only flight can show first: following a flushed
+	// bird with the glasses is how its flight style is learned (flight.go).
+	if _, have := ev["flight"]; airborne && !have && sp.TraitValue("flight") != "" {
+		if gate, _ := EvidenceGate("flight"); clarity >= gate {
+			return "flight", true
+		}
+	}
 	for _, k := range traitOrder {
 		if _, have := ev[k]; have {
 			continue

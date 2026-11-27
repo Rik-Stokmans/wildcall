@@ -85,15 +85,15 @@ func valleyQuests() []proto.QuestDef {
 			Ordered: true, Tutorial: true, AutoStart: true,
 			Objectives: []proto.ObjectiveDef{
 				o("hear", KindHear, tutorialSpecies, 1, "Hear the unknown singer",
-					"Walk the trail slowly and stop often. Hold F to listen for a long, fast, rattling song from low cover: bramble, fern, fallen wood."),
+					"Mara's singer lives beside the old trail, on the way from the cabin to the Woodland Entrance. Walk the trail and stop now and then: a loud, fast, rattling song, every ten seconds or so. The ring around the crosshair points to every voice you hear; hold F to listen closely."),
 				o("investigate", KindObserve, tutorialSpecies, 1, "Investigate the sound",
-					"Follow the direction the sound gives you. Crouch (C) as you get near, do not walk straight at it, and watch the undergrowth for something small on the move."),
+					"Turn until the ring's mark is straight ahead and walk that way. Each time he sings the mark gets tighter and the sound card tells you how far: stop at about 10 to 15 m. He sings LOW, knee to head height, from the top of a stump, a log, a bush or a low rock: look below the trees, not up into them, for something tiny popping up to sing."),
 				o("record", KindRecord, tutorialSpecies, 1, "Record its song",
-					"Take out the recorder (3), face the singer and click to start. Stay still until it has sung a whole phrase, then click again. If it has gone quiet, sit (X) close by and wait; it sings most freely at dawn."),
+					"Take out the recorder (3), face him and click to start. Stay still until he has sung a whole phrase, then click again. Crouch (C) or stand still and he will let you come within a few metres; walk straight at him and he flits to his next post."),
 				o("identify", KindIdentify, tutorialSpecies, 1, "Identify the bird",
-					"Watch it through your binoculars (1, hold the right mouse button) until you have a few pieces of evidence. Then press T and weigh up the candidates."),
+					"Raise your binoculars (1, hold the right mouse button) on him and keep watching until you have a few pieces of evidence. If he flits away, follow the ring: he only moves between the same few low posts close by. Then press T and weigh up the candidates."),
 				o("photograph", KindPhoto, tutorialSpecies, 1, "Photograph it",
-					"Camera (2): hold the right mouse button to raise it, left click to shoot. It likes to hop up onto a stump or a stem to sing. Wait for that."),
+					"Camera (2): hold the right mouse button to raise it, scroll to zoom in on him, left click to shoot. He keeps coming back to the same few low posts beside the trail (the quest marks the place): crouch near one and wait for him to hop up and sing."),
 			},
 			// 60 starting credits + 260 puts the Explorer binoculars within reach at
 			// Finn's (spec §27 stage 9), and the skill point can be spent at once.

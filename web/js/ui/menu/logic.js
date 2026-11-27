@@ -160,11 +160,17 @@ export function sortStacks(stacks, items, sort) {
 }
 
 /**
- * Backpack usage. Equipped items live outside Inventory and do not count; gadgets and
- * keepsakes do, one slot per stack (the server's rule: each ItemStack occupies a slot).
+ * Backpack usage in grid cells: each stack covers its item's footprint (ItemDef w x h,
+ * turned if r); equipped items are in no grid. `capacity` is the cell count
+ * (stats.capacity = packW x packH). Without `items` every stack counts as one cell.
  */
-export function capacityUsage(profile, capacity) {
-  const used = (profile?.inventory || []).length;
+export function capacityUsage(profile, capacity, items) {
+  const defs = items ? byId(items) : null;
+  let used = 0;
+  for (const s of profile?.inventory || []) {
+    const d = defs?.[s.item];
+    used += d ? Math.max(1, d.w | 0) * Math.max(1, d.h | 0) : 1;
+  }
   const cap = Math.round(capacity || 0);
   return { used, cap, full: cap > 0 && used >= cap };
 }

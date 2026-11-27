@@ -80,13 +80,50 @@ window.S = (() => {
 })();`;
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Silent by default: these hidden windows run next to a person playing the real game.
+// The audio engine still runs (meters, events, tests); only the output is muted. --sound 1 to hear it.
+if (arg('sound', '') !== '1') app.commandLine.appendSwitch('mute-audio');
 app.commandLine.appendSwitch('force-device-scale-factor', arg('dpr', '1')); // 1 = screenshots are exactly width x height
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
+// At most a few of these hidden game windows render at once (default 2; WILDCALL_SHOT_SLOTS
+// to change): each one costs a real game's worth of GPU and CPU, and a person may be playing
+// the actual game on this machine. Extra runs wait their turn.
+const SLOT_DIR = path.join(require('os').tmpdir(), 'wildcall-shot-slots');
+const SLOTS = Math.max(1, parseInt(process.env.WILDCALL_SHOT_SLOTS || '2', 10) || 2);
+let slotFile = '';
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+async function acquireSlot() {
+  fs.mkdirSync(SLOT_DIR, { recursive: true });
+  const t0 = Date.now();
+  let told = false;
+  for (;;) {
+    for (let i = 0; i < SLOTS; i++) {
+      const f = path.join(SLOT_DIR, 'slot-' + i);
+      try {
+        fs.writeFileSync(f, String(process.pid), { flag: 'wx' });
+        slotFile = f;
+        if (told) console.log(`slot free after ${Math.round((Date.now() - t0) / 1000)} s`);
+        return;
+      } catch {
+        let pid = 0;
+        try { pid = parseInt(fs.readFileSync(f, 'utf8'), 10) || 0; } catch { /* just released */ }
+        if (pid && !alive(pid)) { try { fs.unlinkSync(f); } catch { /* someone else did */ } }
+      }
+    }
+    if (!told) { told = true; console.log(`waiting for a free slot (${SLOTS} game windows may render at once)…`); }
+    await new Promise((r) => setTimeout(r, 400 + Math.random() * 400));
+  }
+}
+const releaseSlot = () => { if (slotFile) { try { fs.unlinkSync(slotFile); } catch { /* gone */ } slotFile = ''; } };
+process.on('exit', releaseSlot);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { releaseSlot(); process.exit(1); });
+
 app.whenReady().then(async () => {
   if (app.dock) app.dock.hide();
+  await acquireSlot();
   fs.mkdirSync(out, { recursive: true });
   const win = new BrowserWindow({
     width, height, useContentSize: true, show: false, paintWhenInitiallyHidden: true,
@@ -96,6 +133,20 @@ app.whenReady().then(async () => {
   const errors = [];
   wcn.on('console-message', (e) => {
     const level = e.level, message = e.message || '';
+    // Metric lines (tools/soak) are printed as they come, in full, never de-duplicated.
+    // Each metric line gets the page's renderer and the GPU process's cumulative CPU
+    // seconds appended: CPU time, unlike wall time, does not grow when the machine is busy.
+    if (message.startsWith('INFO SOAK')) {
+      let proc = '';
+      try {
+        const pid = wcn.getOSProcessId();
+        const ms = app.getAppMetrics();
+        const r = ms.find((m) => m.pid === pid), g = ms.find((m) => m.type === 'GPU');
+        proc = ` | proc rendererCpuS=${r?.cpu?.cumulativeCPUUsage?.toFixed(2) ?? '?'} gpuCpuS=${g?.cpu?.cumulativeCPUUsage?.toFixed(2) ?? '?'}`;
+      } catch { /* metrics unavailable */ }
+      console.log(message + proc);
+      return;
+    }
     if ((level === 'error' || level === 3 || level === 'warning' && /threw|failed/.test(message)) && !/Electron Security Warning/.test(message)) errors.push(message);
   });
   const ev = (code) => wcn.executeJavaScript(`(async () => { const wc = window.wildcall; ${code} })()`, true);

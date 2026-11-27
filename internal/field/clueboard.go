@@ -21,6 +21,15 @@ const (
 	// spread. A bird that has moved more than clueSamePlace metres starts afresh.
 	clueRefineFloor = 0.45
 	clueSamePlace   = 5
+	// Hearing the same unmoved singer again sharpens the clue (Heard.sharpen) by
+	// 1/sqrt(1 + clueRepeatW·repeats + clueFixW·fixes): a repeat from the same spot
+	// helps a little, a hearing from a new spot at least clueNewSpot metres from the
+	// last one ("triangulation") helps a lot, down to clueFixFloor.
+	clueRepeatW  = 0.5
+	clueFixW     = 2.0
+	clueNewSpot  = 3
+	clueFixFloor = 0.35
+	clueMaxCount = 8 // repeats and fixes stop counting here
 )
 
 // ClueBoard holds the audio clues the player is currently attending to. The player
@@ -39,6 +48,10 @@ type liveClue struct {
 	sigma  float32   // single-estimate bearing sigma at the last update
 	weight float32   // accumulated precision (1/sigma²) of the bearing estimate
 	dir16  bool
+
+	ear     core.Vec3 // where the listener stood at the last update
+	repeats int       // hearings of this unmoved source after the first, from the same spot
+	fixes   int       // hearings from a new spot (>= clueNewSpot from the previous one)
 }
 
 func (l *liveClue) effective() float32 {
@@ -67,7 +80,7 @@ func (b *ClueBoard) Offer(h Heard, slots float32) []proto.Clue {
 		out = append(out, b.evict(b.weakest()))
 	}
 
-	fresh := liveClue{clue: h.Clue, pos: h.Pos, sigma: h.sigma, dir16: h.dir16}
+	fresh := liveClue{clue: h.Clue, pos: h.Pos, sigma: h.sigma, dir16: h.dir16, ear: h.ear}
 	if h.sigma > 0 {
 		fresh.weight = 1 / (h.sigma * h.sigma)
 	}
@@ -75,7 +88,25 @@ func (b *ClueBoard) Offer(h Heard, slots float32) []proto.Clue {
 	if i := b.index(h.Clue.ID); i >= 0 {
 		old := &b.live[i]
 		if old.pos.Dist(h.Pos) <= clueSamePlace && old.weight > 0 && fresh.weight > 0 {
-			refine(&fresh, old)
+			if h.ear != (core.Vec3{}) {
+				// A full hearing: sharpen it by how often and from where it was heard.
+				fresh.repeats, fresh.fixes = old.repeats, old.fixes
+				if old.ear.DistXZ(h.ear) >= clueNewSpot {
+					fresh.fixes = min(fresh.fixes+1, clueMaxCount)
+				} else {
+					fresh.repeats = min(fresh.repeats+1, clueMaxCount)
+				}
+				f := 1 / sqrt32(1+clueRepeatW*float32(fresh.repeats)+clueFixW*float32(fresh.fixes))
+				floor := float32(clueRefineFloor)
+				if fresh.fixes > 0 {
+					floor = clueFixFloor
+				}
+				hh := h
+				hh.sharpen(maxf(f, floor))
+				fresh.clue = hh.Clue
+			} else {
+				refine(&fresh, old)
+			}
 		}
 		b.live[i] = fresh
 		return append(out, fresh.clue)

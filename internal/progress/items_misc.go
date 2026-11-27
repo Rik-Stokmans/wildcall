@@ -6,8 +6,8 @@ import "github.com/Rik-Stokmans/wildcall/internal/proto"
 const FilmPerRoll = 12
 
 // gadgetItems work passively while carried in the backpack (not in cabin storage)
-// and each costs a slot to carry: with eight slots to begin with, which ones come
-// along is the tradeoff. They have no slot and no upgrades.
+// and each takes its footprint in the pack grid (items_size.go): with a 5x4
+// satchel to begin with, which ones come along is the tradeoff. They have no slot and no upgrades.
 func gadgetItems() []proto.ItemDef {
 	return []proto.ItemDef{
 		{
@@ -17,7 +17,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 90, ReqRank: 1, Source: "shop", Icon: "headphones",
 			Mods: mods{"noiseReduce": 0.15, "dirAccuracy": 0.08, "focusBonus": 0.1},
 			Pros: []string{"Ignores 15% of wind, rain and water noise", "Tighter bearings on what you hear", "Focused listening reaches farther"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 		},
 		{
 			ID: "pocket_guide", Name: "Pocket Field Guide",
@@ -26,7 +26,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 60, ReqRank: 1, Source: "shop", Icon: "bird",
 			Mods: mods{"idAssist": 0.4},
 			Pros: []string{"A longer, better-ordered list of candidates when you identify a bird"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 		},
 		{
 			ID: "pocket_barometer", Name: "Pocket Barometer",
@@ -35,7 +35,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 70, ReqRank: 1, Source: "shop", Icon: "wind",
 			Mods: mods{"forecast": 3},
 			Pros: []string{"Three hours of weather forecast"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 		},
 		{
 			ID: "field_stool", Name: "Folding Stool & Scrim",
@@ -44,7 +44,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 80, ReqRank: 1, Source: "shop", Icon: "camp",
 			Mods: mods{"camp": 0.3, "settle": 0.15},
 			Pros: []string{"Sitting down to wait works noticeably better", "Wary birds settle 15% sooner"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 		},
 		{
 			ID: "tripod", Name: "Folding Tripod",
@@ -53,7 +53,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 150, ReqRank: 2, Source: "shop", Icon: "camera",
 			Mods: mods{"camStability": 0.25, "binoStability": 0.2, "longLens": 0.2, "camReady": 0.25, "moveSpeed": -0.03},
 			Pros: []string{"Much steadier camera and binoculars", "Tames the shake of long lenses"},
-			Cons: []string{"The camera takes longer to bring up", "Slows your walking a little", "Takes up a pack slot"},
+			Cons: []string{"The camera takes longer to bring up", "Slows your walking a little", packRoomCon},
 		},
 		{
 			ID: "audio_analyzer", Name: "Audio Analyzer",
@@ -62,7 +62,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 260, ReqRank: 2, Source: "shop", Icon: "note",
 			Mods: mods{"audioAssist": 1, "pitchInfo": 1, "distAcc": 0.1},
 			Pros: []string{"Sound clues show the pitch of a call", "Recordings become stronger identification evidence", "A better estimate of distance"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 		},
 		{
 			ID: "spectrogram_device", Name: "Spectrogram Device",
@@ -71,7 +71,7 @@ func gadgetItems() []proto.ItemDef {
 			Price: 340, ReqRank: 3, Source: "shop", Icon: "wave",
 			Mods: mods{"spectrogram": 1, "patternInfo": 1, "audioAssist": 0.5},
 			Pros: []string{"Live spectrogram on the recorder", "Sound clues show the pattern of a call", "Recordings become stronger identification evidence"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 		},
 		{
 			ID: "explorers_lens", Name: "Explorer's Lens",
@@ -80,7 +80,7 @@ func gadgetItems() []proto.ItemDef {
 			Source: "loot", Icon: "lens",
 			Mods: mods{"lensInspect": 1, "trackSigns": 8},
 			Pros: []string{"Inspecting feathers, tracks and feeding signs yields extra clues", "Signs on the ground catch your eye from 8 m farther"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 			History: "Marsh surveyors read reedbeds the way others read newspapers: a chewed stem, a moulted feather, a line of prints in the mud. " +
 				"This lens went out with them every morning, and its case still smells faintly of peat.",
 			Special: "Look closely: with the lens in your pack, every feather, track and feeding sign you examine tells you more — what dropped " +
@@ -99,7 +99,7 @@ func keepsakeItems() []proto.ItemDef {
 			Source: "loot", Icon: "journal",
 			Mods: mods{"trailSense": 15, "journalInfo": 1},
 			Pros: []string{"Its sketch maps put the home valley's secret paths on your map", "While carried, hidden trails and secret places reveal from 15 m farther", "Its notes add a layer of detail to your own journal entries"},
-			Cons: []string{"Takes up a pack slot"},
+			Cons: []string{packRoomCon},
 			History: "The working notebook of the naturalist who watched this valley before you. The entries grow shorter and more hurried " +
 				"towards the end, and then simply stop. Pages have been torn out along the way; they turn up wherever the writer " +
 				"once sat down to rest.",

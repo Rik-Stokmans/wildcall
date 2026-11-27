@@ -57,6 +57,7 @@ export function renderSettings(ctx, st) {
   const voiceSelect = () => {
     let voices = [];
     try { voices = ctx.narrator?.voices?.() || []; } catch { voices = []; }
+    if (!voices.length) return null; // recorded voice only: nothing to choose
     const cur = state.settings.narratorVoice || '';
     const opts = [el('option', { value: '' }, 'Automatic (best British voice)')];
     for (const v of voices) opts.push(el('option', { value: v.name }, `${v.name} (${v.lang})`));
@@ -74,12 +75,12 @@ export function renderSettings(ctx, st) {
     const pack = ctx.narrator?.voicePack;
     return el('div', { class: 'menu-setting menu-voice-in-use' },
       el('span', { class: 'menu-setting-name' }, 'Voice in use',
-        el('small', recorded ? 'The narrator\'s recorded lines; new lines fall back to the system voice' : 'Spoken by your system\'s speech synthesis')),
+        el('small', recorded ? 'The narrator\'s recorded lines' : 'No recorded voice loaded: captions only')),
       el('span', { class: 'menu-pill' + (recorded ? '' : ' amber'), title: recorded && pack?.voice ? `${pack.voice}${pack.lines ? `, ${pack.lines} lines` : ''}` : '' },
-        recorded ? 'Recorded voice' : 'System voice'));
+        recorded ? 'Recorded voice' : 'Captions only'));
   };
   const narratorCard = section('Narrator', el('div', { class: 'menu-card menu-settings-card' },
-    segmented('narrator', 'How often he speaks', [['off', 'Off'], ['sparse', 'Sparse'], ['normal', 'Normal'], ['chatty', 'Chatty']]),
+    segmented('narrator', 'Inner voice (spoken thoughts)', [['off', 'Off'], ['sparse', 'Sparse'], ['normal', 'Normal'], ['chatty', 'Chatty']]),
     slider(['volNarrator', 'Narrator volume', 0, 1, 0.01, pct]),
     voiceInUse(),
     voiceSelect()));
@@ -92,16 +93,46 @@ export function renderSettings(ctx, st) {
       segmented('quality', 'Graphics quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]),
       toggle('hints', 'Tutorial hints', 'Gentle first-time tips'),
       toggle('subtitles', 'Sound captions', 'Describe sounds in the clue panel'))),
+    // [birds module hook] spotting aids (docs: web/js/birds/visibility.js).
+    section('Spotting', el('div', { class: 'menu-card menu-settings-card' },
+      toggle('birdOutline', 'Bird outline', 'A soft light edge on birds in clear sight'),
+      toggle('leafFade', 'Leaf windows', 'Leaves right in front of a nearby bird thin out'),
+      toggle('songRipples', 'Song ripples', 'Faint rings where a nearby bird is singing'), // [songsight hook]
+      toggle('flightTrails', 'Flight trails', 'A faint streak behind a bird you scared off'))), // [birds flight hook]
+    // [soundring hook] the ring around the centre of the view that shows where calls come from.
+    section('Hearing aids', el('div', { class: 'menu-card menu-settings-card' },
+      toggle('soundRing', 'Sound ring', 'Where each call comes from, around the centre of the view'),
+      soundRingSize(ctx, sfx),
+      // one card for the voice being followed (Q pins it), or a card for every voice
+      segmented('clueCards', 'Clue cards', [['one', 'One at a time'], ['all', 'All']]))),
+    // [minimap module hook] the corner map: on/off, heading-up or north-up, and its range.
+    section('Minimap', el('div', { class: 'menu-card menu-settings-card' },
+      toggle('minimap', 'Minimap', 'A small map in the top-left corner'),
+      toggle('minimapRotate', 'Turns with you', 'Off: north stays up'),
+      ctx.minimap ? minimapRange(ctx) : null)),
     section('Game', el('div', { class: 'menu-card menu-settings-card menu-system' },
       fullscreenButton(ctx, desktop),
       st.fromMain ? null : button('Return to main menu', { icon: 'home', onClick: () => { sfx(ctx, 'click'); location.assign(location.pathname); } }),
       desktop ? button('Quit to desktop', { icon: 'close', variant: 'danger', onClick: () => desktop.quit?.() }) : null)));
 
   const right = el('div', { class: 'menu-col', 'data-scroll': 'set-r' },
+    // [toolkeys module hook] what each piece of equipment does, with its keys and mouse buttons
+    ctx.toolkeys?.referenceCard ? section('Equipment', ctx.toolkeys.referenceCard({ plain: true, title: false })) : null,
     controlsReference(KEYMAP).map((sec) => section(sec.title, el('div', { class: 'menu-card menu-keys' }, sec.rows.map((r) =>
       el('div', { class: 'menu-keyrow' }, el('span', r.text), el('span', { class: 'menu-keycaps' }, r.keys.map((k) => el('kbd', k)))))))));
 
   return el('div', { class: 'menu-cols menu-settings' }, left, right);
+}
+
+/** [minimap module hook] Near / far range of the minimap (kept by ctx.minimap, not a setting key). */
+function minimapRange(ctx) {
+  const wrap = el('div', { class: 'menu-seg', role: 'group', 'aria-label': 'Minimap range' });
+  const mark = () => wrap.querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === ctx.minimap.zoom));
+  for (const [v, text] of [[0, 'Near'], [1, 'Far']]) {
+    wrap.appendChild(el('button', { type: 'button', dataset: { v }, onclick: () => { ctx.minimap.setZoom(v); mark(); sfx(ctx, 'click'); } }, text));
+  }
+  mark();
+  return el('div', { class: 'menu-setting' }, el('span', { class: 'menu-setting-name' }, 'Range', el('small', '120 m or 300 m around you')), wrap);
 }
 
 /** Paint the filled portion of a range track via a CSS variable. */
@@ -120,4 +151,17 @@ function fullscreenButton(ctx, desktop) {
     } catch { /* fullscreen can be refused; nothing to do */ }
   };
   return button('Toggle fullscreen', { icon: 'eye', onClick: toggle });
+}
+
+/** [soundring hook] Small / normal / large sound ring (settings.soundRingSize, default normal). */
+function soundRingSize(ctx, sfx) {
+  const { state } = ctx;
+  const cur = () => state.settings.soundRingSize || 'normal';
+  const wrap = el('div', { class: 'menu-seg', role: 'group', 'aria-label': 'Sound ring size' });
+  const mark = () => wrap.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === cur()));
+  for (const [v, text] of [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large']]) {
+    wrap.appendChild(el('button', { type: 'button', dataset: { v }, onclick: () => { state.setSetting('soundRingSize', v); mark(); sfx(ctx, 'click'); } }, text));
+  }
+  mark();
+  return el('div', { class: 'menu-setting' }, el('span', { class: 'menu-setting-name' }, 'Ring size'), wrap);
 }

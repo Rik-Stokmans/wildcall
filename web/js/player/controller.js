@@ -7,12 +7,16 @@ import {
 } from './look.js';
 import {
   createSprintState, runKeyDown, runKeyUp, stepGait, targetSpeed, terrainFactor, tooSteep,
-  approachVelocity, moveMode, eyeHeightFor, bobParams, advanceStride, bobOffset, landingNoise,
+  approachVelocity, moveMode, bobParams, advanceStride, bobOffset, landingNoise,
   waterPushBack, refuseWaterStep, JUMP_SPEED, GRAVITY, STILL_SPEED, EYE_HEIGHT, STEP_UP,
 } from './movement.js';
 import {
   findLedge, mantlePose, mantleDuration, pushClimb, collectTops, topAt, weatherSlow,
 } from './mantle.js';
+import {
+  createStance, nextStance, setStance, stepEye, settleRoll, crawlDirFactor, crawlBob,
+  tooSteepToLie, PRONE_MAX_DEPTH,
+} from './stance.js';
 import {
   buildPose, poseInterval, pickInteractable, gateStep, cinematicPose, chooseCinematicPath, cinematicObstacles, easeYaw, REGION_WATER,
 } from './field.js';
@@ -49,7 +53,10 @@ export function createController(ctx, getTools) {
     yaw: 0, pitch: 0,
     vx: 0, vz: 0, vy: 0,
     grounded: true, onPlatform: false,
-    crouching: false, sitting: false,
+    crouching: false, sitting: false, prone: false,
+    roll: 0,             // camera roll (rad): stance settle + elbow-crawl sway
+    eyeVel: 0,           // m/s of the eye height (drives the settle roll)
+    crawlRoll: 0,        // current elbow-crawl roll amplitude (rad)
     gait: 'walk', move: 'still', speed: 0, stillTime: 0,
     stride: 0, bobAmp: 0, eyeH: EYE_HEIGHT, viewY: 0,
     noise: 0,
@@ -68,6 +75,9 @@ export function createController(ctx, getTools) {
   const tops = [];
   let topsT = 0, topsX = Infinity, topsZ = Infinity;
   const sprint = createSprintState();
+  // Stance: stand | crouch | prone | sit, with the eye-height path between them.
+  const stance = createStance();
+  const lane = { dx: 0, dz: -1 };   // prone sight lane for the ground cover (reused)
   const gate = { safe: null, inside: false };
   const cine = { t: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, init: false, path: null, planned: false };
   let poseT = 0, interactT = 0, regionT = 0;
@@ -126,12 +136,12 @@ export function createController(ctx, getTools) {
 
   /** Try to climb onto what is straight ahead. Returns true when a climb starts. */
   function tryMantle() {
-    if (mantle || !s.grounded || s.sitting || ctx.time < s.climbAgain) return false;
+    if (mantle || !s.grounded || s.sitting || s.prone || ctx.time < s.climbAgain) return false;
     s.climbAgain = ctx.time + 0.4;
     const dir = headingDir(s.yaw);
     const to = findLedge(feet, dir, climbSupport);
     if (!to) return false;
-    if (s.crouching) s.crouching = false;
+    if (s.crouching) setPosture('stand');
     mantle = { t: 0, dur: mantleDuration(to.rise), from: { x: feet.x, y: feet.y, z: feet.z }, to };
     s.vx = s.vz = s.vy = 0;
     s.pushT = 0;
@@ -173,7 +183,7 @@ export function createController(ctx, getTools) {
     s.pitch = 0;
     s.vx = s.vz = s.vy = 0;
     s.grounded = true;
-    s.sitting = false;
+    if (s.sitting || s.prone) setPosture('stand');
     s.spawned = true;
     s.needsGround = true;
     s.viewY = feet.y;
@@ -203,15 +213,36 @@ export function createController(ctx, getTools) {
 
   bus.on('action:run', () => runKeyDown(sprint, ctx.time));
   bus.on('action-up:run', () => runKeyUp(sprint));
+  /** Where the player is, for the stance rules (water depth, ground grade). */
+  function stanceWorld() {
+    const ground = heightAt(feet.x, feet.z);
+    return { grounded: s.grounded && !mantle, depth: s.onPlatform ? 0 : Math.max(0, -ground), slope: s.onPlatform ? 0 : gradeHere() };
+  }
+  function gradeHere() {
+    const e = 0.5;
+    const gx = (heightAt(feet.x + e, feet.z) - heightAt(feet.x - e, feet.z)) / (2 * e);
+    const gz = (heightAt(feet.x, feet.z + e) - heightAt(feet.x, feet.z - e)) / (2 * e);
+    return Math.hypot(gx, gz);
+  }
+  /** Switch stance; keeps the crouching/sitting/prone flags in step. */
+  function setPosture(to) {
+    if (!setStance(stance, to, ctx.time, s.eyeH)) return;
+    s.crouching = to === 'crouch';
+    s.sitting = to === 'sit';
+    s.prone = to === 'prone';
+    bus.emit('stance', { stance: to });
+  }
   bus.on('action:crouch', () => {
-    if (s.busy) return;
-    if (s.sitting) { s.sitting = false; s.crouching = true; return; }
-    s.crouching = !s.crouching;
+    if (s.busy || mantle) return;
+    setPosture(nextStance(stance.stance, 'crouch', stanceWorld()));
+  });
+  bus.on('action:prone', () => {
+    if (s.busy || mantle || state.mode !== 'play') return;
+    setPosture(nextStance(stance.stance, 'prone', stanceWorld()));
   });
   bus.on('action:sit', () => {
     if (s.busy || !s.grounded) return;
-    s.sitting = !s.sitting;
-    if (s.sitting) { s.crouching = false; }
+    setPosture(nextStance(stance.stance, 'sit', stanceWorld()));
   });
   bus.on('action:jump', () => { if (!s.busy) s.jumpQueued = true; });
   bus.on('action:interact', () => {
@@ -256,7 +287,7 @@ export function createController(ctx, getTools) {
     const { f, r } = readMove();
     const moving = (f !== 0 || r !== 0);
 
-    if (s.sitting && (moving || s.jumpQueued)) { s.sitting = false; s.jumpQueued = false; }
+    if (s.sitting && (moving || s.jumpQueued)) { setPosture('stand'); s.jumpQueued = false; }
 
     // Wish direction: forward = HeadingDir(yaw), right = HeadingDir(yaw + π/2).
     const fw = headingDir(s.yaw);
@@ -269,14 +300,17 @@ export function createController(ctx, getTools) {
     const focus = !!tools?.focus;
     s.gait = stepGait(sprint, {
       moving, runHeld: state.mode === 'play' && !s.busy && input.isDown('run'),
-      crouching: s.crouching, canSprint: !raised && !focus,
+      crouching: s.crouching, prone: s.prone, canSprint: !raised && !focus,
     }, dt, num(stats.stamina, 6));
 
     // Terrain slowdown from the slope ahead, scrub and water underfoot.
     const ground = heightAt(feet.x, feet.z);
     const depth = s.onPlatform ? 0 : Math.max(0, -ground);
     // Deep-ish water makes crouching impossible (no swimming, no going under).
-    if (s.crouching && depth > 0.6) s.crouching = false;
+    if (s.crouching && depth > 0.6) setPosture('stand');
+    // Lying flat: no crawling into water, and ground too steep to lie on slides the
+    // player back up into a crouch.
+    if (s.prone && (depth > PRONE_MAX_DEPTH || (!s.onPlatform && tooSteepToLie(gradeHere())))) setPosture('crouch');
 
     let grade = 0;
     if (moving && !s.onPlatform) grade = (heightAt(feet.x + wx * 0.6, feet.z + wz * 0.6) - ground) / 0.6;
@@ -287,7 +321,8 @@ export function createController(ctx, getTools) {
     // Rain and strong wind slow the walk a little unless rain gear covers it (spec §20.2).
     const wx2 = weatherSlow(state.env, num(stats.rainProof, 0));
     const tSpeed = moving
-      ? targetSpeed(s.crouching ? 'crouch' : s.gait, { moveSpeed: num(stats.moveSpeed, 1) * wx2, terrainFactor: tf, focus, raised })
+      ? targetSpeed(s.prone ? 'crawl' : s.crouching ? 'crouch' : s.gait, { moveSpeed: num(stats.moveSpeed, 1) * wx2, terrainFactor: tf, focus, raised })
+        * (s.prone ? crawlDirFactor(f, r) : 1)
       : 0;
 
     // Smooth acceleration; little control while airborne.
@@ -368,13 +403,14 @@ export function createController(ctx, getTools) {
       s.jumpQueued = false;
       if (s.grounded && state.mode === 'play') {
         // Jump while walking into a ledge, rock or low wall: climb onto it instead.
-        if (f > 0 && tryMantle()) return;
-        if (s.crouching) s.crouching = false;              // first press stands up
+        if (s.prone) setPosture('stand');                   // up in two stages, no jump
+        else if (f > 0 && tryMantle()) return;
+        else if (s.crouching) setPosture('stand');         // first press stands up
         else if (dNow < 0.9) { s.vy = JUMP_SPEED; s.grounded = false; }
       }
     }
     // Or simply keep walking into it for a moment.
-    if (state.mode === 'play' && !s.busy) {
+    if (state.mode === 'play' && !s.busy && !s.prone) {
       const want = moving ? Math.hypot(tvx, tvz) : 0;
       const pc = pushClimb(s.pushT, f, want > 0.3 ? moved / Math.max(dt, 1e-4) : 9, s.grounded, dt);
       s.pushT = pc.pushT;
@@ -407,17 +443,25 @@ export function createController(ctx, getTools) {
     const actual = dt > 0 ? moved / dt : 0;
     s.speed += (actual - s.speed) * damp(12, dt);
     if (s.speed < 0.02) s.speed = 0;
-    s.move = moveMode(s.speed, s.gait, s.crouching, s.sitting);
+    s.move = moveMode(s.speed, s.gait, s.crouching, s.sitting, s.prone);
     s.stillTime = s.speed < STILL_SPEED ? s.stillTime + dt : 0;
     s.noise = Math.max(0, s.noise - dt * 2);
 
     // Head bob and footsteps.
-    const bp = bobParams(s.grounded ? s.speed : 0, s.crouching, raised);
+    // Prone: a slow elbow-crawl sway instead of a walking bob; each elbow plant is a
+    // soft 'footstep' (move 'crouch' so the audio module plays its quietest rustle;
+    // crawl: true marks it as a crawl for anyone who wants to tell them apart).
+    const bp = s.prone ? crawlBob(s.grounded ? s.speed : 0, raised) : bobParams(s.grounded ? s.speed : 0, s.crouching, raised);
     s.bobAmp += (bp.amp - s.bobAmp) * damp(6, dt);
+    s.crawlRoll += ((bp.roll || 0) - s.crawlRoll) * damp(4, dt);
     if (bp.freq > 0) {
       const st = advanceStride(s.stride, bp.freq, dt);
       s.stride = st.phase;
-      if (st.step && s.grounded) bus.emit('footstep', { surface: surfaceHere(), move: s.move });
+      if (st.step && s.grounded) {
+        bus.emit('footstep', s.prone
+          ? { surface: surfaceHere(), move: 'crouch', crawl: true }
+          : { surface: surfaceHere(), move: s.move });
+      }
     } else if (s.bobAmp < 0.002) {
       s.stride = 0;
     }
@@ -429,7 +473,10 @@ export function createController(ctx, getTools) {
   }
 
   function updateEye(dt) {
-    s.eyeH += (eyeHeightFor(s.crouching, s.sitting) - s.eyeH) * damp(7, dt);
+    const prevH = s.eyeH;
+    s.eyeH = stepEye(stance, s.eyeH, dt);
+    const v = dt > 0 ? (s.eyeH - prevH) / dt : 0;
+    s.eyeVel += (v - s.eyeVel) * damp(10, dt);
     // Step-ups and stairs are smoothed; falls are followed closely.
     s.viewY += (feet.y - s.viewY) * damp(s.grounded ? 14 : 30, dt);
     if (s.viewY < feet.y - 0.6) s.viewY = feet.y - 0.6;
@@ -468,7 +515,7 @@ export function createController(ctx, getTools) {
     poseT = 0;
     net.send('pose', buildPose({
       eye, yaw: s.yaw, pitch: s.pitch, speed: s.speed, move: s.move,
-      crouch: s.crouching, sit: s.sitting, focus: !!tools?.focus,
+      crouch: s.crouching, sit: s.sitting, prone: s.prone, focus: !!tools?.focus,
       tool: tools?.active || 'none', raised: !!tools?.raised,
       fov: num(tools?.fov, camera.fov), zoom: num(tools?.zoom, 1), sharp: num(tools?.sharp, 1),
       noise: s.noise,
@@ -562,8 +609,12 @@ export function createController(ctx, getTools) {
       camera.position.set(eye.x + right.x * side, eye.y + bob, eye.z + right.z * side);
       const yaw = s.yaw + (sway?.yaw || 0);
       const pitch = clampPitch(s.pitch + (sway?.pitch || 0));
+      // A tiny roll: the body leaning as it lowers or rises, and the shoulders rolling
+      // with each elbow plant while crawling. Never more than a couple of degrees.
+      const rollT = settleRoll(s.eyeVel) + Math.sin(s.stride * Math.PI * 2) * s.crawlRoll;
+      s.roll += (rollT - s.roll) * damp(8, dt);
       camera.rotation.order = 'YXZ';
-      camera.rotation.set(pitch, -yaw, 0, 'YXZ');
+      camera.rotation.set(pitch, -yaw, s.roll, 'YXZ');
     },
   };
 
@@ -579,6 +630,18 @@ export function createController(ctx, getTools) {
     get move() { return s.move; },
     get crouching() { return s.crouching; },
     get sitting() { return s.sitting; },
+    get prone() { return s.prone; },
+    /** stand | crouch | prone | sit */
+    get stance() { return stance.stance; },
+    /** ctx.time of the last stance change (the stance indicator fades after it). */
+    get stanceChangedAt() { return stance.changedAt; },
+    /** Prone and low: the view heading the ground cover opens a sight lane along, else null. */
+    get sightLane() {
+      if (!s.prone || s.eyeH > 0.6) return null;
+      const d = headingDir(s.yaw);
+      lane.dx = d.x; lane.dz = d.z;
+      return lane;
+    },
     get stamina() { return sprint.stamina; },
     get sprinting() { return sprint.sprinting; },
     get grounded() { return s.grounded; },

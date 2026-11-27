@@ -274,13 +274,14 @@ func TestForagingFullPack(t *testing.T) {
 		}
 	}
 	for i := 0; progress.FreeSlots(s.p) > 0; i++ {
-		def, _ := progress.Item(other[i])
-		s.p.Inventory = append(s.p.Inventory, proto.ItemStack{Item: other[i], Qty: def.Stack})
+		def, _ := progress.Item(other[i%len(other)])
+		if _, err := progress.AddToPack(s.p, def.ID, def.Stack); err != nil {
+			t.Fatalf("fill the pack: %v", err)
+		}
 	}
-	progress.Recompute(s.p)
 	before := profileJSON(s)
 	r := h.forage(fp.ID)
-	if r.OK || !strings.Contains(strings.ToLower(r.Reason), "full") {
+	if r.OK || !strings.Contains(strings.ToLower(r.Reason), "full") || !strings.Contains(r.Reason, "would make room") {
 		t.Fatalf("pick into a full pack: %+v", r)
 	}
 	if profileJSON(s) != before {

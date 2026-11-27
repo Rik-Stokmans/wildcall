@@ -88,6 +88,7 @@ type Session struct {
 	seedText string
 	world    *world.World
 	sim      *eco.Sim
+	follow   followWatch // flushed birds the player may be following (followflight.go)
 	clock    *env.Clock
 	narr     *narrator.Narrator
 	p        *proto.Profile
@@ -150,6 +151,7 @@ type Session struct {
 	heardBirds   map[uint32]bool
 	investigated map[uint32]bool
 	mysteryBird  map[string]birdRef
+	singer       singerState // the tutorial's findable wren (singer.go)
 
 	lures  []lure
 	lureID uint32
@@ -181,6 +183,7 @@ type Session struct {
 	poiBuf                          []core.POI
 	trailBuf                        []core.Trail
 	bytesOut                        int64
+	dev                             devStats // -dev soak metrics (devstats.go)
 }
 
 type birdRef struct {
@@ -333,6 +336,7 @@ func (s *Session) install(sd int64, seedText string, p *proto.Profile, clock *en
 	}
 	s.worldPtr.Store(s.world)
 	s.sim = eco.New(s.world, s.species, sd)
+	s.follow = followWatch{} // flushes being followed belong to the old world
 	s.clock = clock
 	s.narr = narrator.New(sd)
 	if ns != nil {
@@ -363,6 +367,8 @@ func (s *Session) install(sd int64, seedText string, p *proto.Profile, clock *en
 	s.havePose = false
 	// Populate the ecosystem now (the first Step activates every cell around home).
 	s.sim.Step(0.001, s.clock.Env(), core.Observer{})
+	s.singer = singerState{}
+	s.syncSinger()
 	if progress.HasCabin(p, progress.CabinGarden) {
 		s.addGardenFeeder()
 	}
@@ -518,6 +524,8 @@ func init() {
 		proto.CEquip:        (*Session).msgEquip,
 		proto.CUnequip:      (*Session).msgUnequip,
 		proto.CMove:         (*Session).msgMove,
+		proto.CPlace:        (*Session).msgPlace,
+		proto.CTidy:         (*Session).msgTidy,
 		proto.CUse:          (*Session).msgUse,
 		proto.CSkill:        (*Session).msgSkill,
 		proto.CCabin:        (*Session).msgCabin,

@@ -11,16 +11,20 @@ import (
 //
 //	size × foliage × light × weather × motion × optics
 //
-// Reference points this tuning hits with base stats in daylight:
-//   - 8× binoculars, robin on an exposed branch (cover 0.2) at 25 m: ≈ 0.77
-//   - same view, a wren deep in a shrub (cover 0.6, skulking 0.9):   ≈ 0.38 (no marking)
-//   - naked eye, robin in the open: ≈ 0.22 at 14 m (size and shape only),
-//     ≈ 0.45 at 10 m (colours), ≈ 0.70 at 6 m
+// Reference points this tuning hits with base stats in daylight (the client draws
+// birds a little larger than life and parts the leaves in front of nearby birds,
+// so the naked eye reaches further than it would in a real wood):
+//   - 8× binoculars, robin on an exposed branch (cover 0.2) at 25 m: ≈ 0.79
+//   - 6× binoculars, robin on an exposed branch at 30-40 m: ≈ 0.76-0.72, every
+//     trait in ≈ 10 s
+//   - same view, a wren deep in a shrub (cover 0.6, skulking 0.9):   ≈ 0.39 (no marking)
+//   - naked eye, robin in the open: noticed to ≈ 22 m, ≈ 0.22 at 20 m (size and
+//     shape), ≈ 0.36 at 17 m (colours), ≈ 0.58 at 12 m, ≈ 0.80 at 7 m
 const (
 	// Apparent size. A bird of refLength is workable to nakedEyeRange metres with
 	// the unaided eye; reach scales with magnification and (length/ref)^sizeCurve,
-	// so a heron reads at ~55 m and a buzzard through 6× glasses at ~200 m.
-	nakedEyeRange = 14   // metres (× Stats.NakedEye)
+	// so a heron reads at ~80 m and a buzzard through 6× glasses at ~280 m.
+	nakedEyeRange = 20   // metres (× Stats.NakedEye)
 	refLength     = 0.14 // metres: robin-sized
 	sizeCurve     = 0.7
 	wingspanShare = 0.6  // an airborne bird presents this share of its wingspan
@@ -28,8 +32,8 @@ const (
 
 	// Foliage. A bird's own cover hides it in proportion to how deep it sits:
 	// hide = cover × (coverBold + coverSkulk·Skulking); factor = (1 − occlusion) × (1 − coverCut·hide).
-	coverBold   = 0.45 // a bold bird sits at the edge of a bush …
-	coverSkulk  = 0.55 // … a skulker deep inside it
+	coverBold   = 0.3  // a bold bird sits at the edge of a bush or on an open twig …
+	coverSkulk  = 0.62 // … a skulker deep inside it
 	coverCut    = 0.9
 	hiddenCover = 0.92 // a bird that has ducked into hiding counts as at least this covered
 	roostCover  = 0.15 // extra cover for a roosting bird, tucked away
@@ -181,6 +185,11 @@ func viewOf(c *Context, p proto.Pose, pos core.Vec3, extent, foliage, motion flo
 // the line of sight and the cover of its own perch. Shared with photo scoring.
 func sightline(c *Context, eye core.Vec3, b core.BirdState, sp *core.Species) float32 {
 	occ := clamp01(c.Terrain.Occlusion(eye, b.Pos))
+	// A trunk the client draws hides what is squarely behind it (the world's crown
+	// occlusion does not count wood): no evidence through solid wood.
+	if tt, ok := c.Terrain.(trunkTerrain); ok && occ < 1 {
+		occ = maxf(occ, clamp01(tt.TrunkOcclusion(eye, b.Pos.Add(core.V(0, trunkBodyY, 0)))))
+	}
 	hide := clamp01(b.Cover) * (coverBold + coverSkulk*clamp01(sp.Behavior.Skulking))
 	switch {
 	case b.Act.Airborne():
@@ -227,3 +236,13 @@ func blockedReason(v View, focus float32) string {
 	}
 	return worst.name
 }
+
+// trunkTerrain is implemented by a terrain that can tell how much of a target the
+// tree trunks in a sight line hide (world.World.TrunkOcclusion); optional, so test
+// terrains without trees need nothing.
+type trunkTerrain interface {
+	TrunkOcclusion(from, to core.Vec3) float32
+}
+
+// trunkBodyY lifts the trunk test from a bird's feet to its body (m).
+const trunkBodyY = 0.08

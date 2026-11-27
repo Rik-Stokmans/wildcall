@@ -88,7 +88,7 @@ func (s *Sim) mixedTick(dt float32) {
 
 // mixedCandidate: a bird that may join (or stay in) a mixed flock right now.
 func (s *Sim) mixedCandidate(b *bird) bool {
-	if !b.alive || !s.prof[b.sp].mixed || b.fear >= fearWary || b.lure != 0 {
+	if !b.alive || b.circ != 0 || !s.prof[b.sp].mixed || b.fear >= fearWary || b.lure != 0 {
 		return false
 	}
 	switch b.mode {
@@ -101,13 +101,19 @@ func (s *Sim) mixedCandidate(b *bird) bool {
 
 func woodHab(h core.Habitat) bool { return h == core.HabWoodland || h == core.HabConifer }
 
-// formMixed tries to gather a mixed flock: around the observer first, else around
-// a random member-species bird anywhere in the active area. It reports success.
+// formMixed tries to gather a mixed flock: around the observer first (so the
+// player can find it), failing that around a random member-species bird anywhere
+// in the active area. It reports success.
 func (s *Sim) formMixed() bool {
-	centre, r := s.centre, float32(mixedSearch)
-	if !s.obs.Present || s.chance(0.25) {
-		centre, r = core.Vec3{}, 0 // anywhere
+	if s.obs.Present && s.formMixedNear(s.centre, mixedSearch) {
+		return true
 	}
+	return s.formMixedNear(core.Vec3{}, 0) // anywhere
+}
+
+// formMixedNear tries to gather a mixed flock around a calm member-species bird
+// within r metres of centre (r = 0: anywhere).
+func (s *Sim) formMixedNear(centre core.Vec3, r float32) bool {
 	// The nucleus: a random calm member-species bird in the wood.
 	var cand [64]int32
 	k := 0

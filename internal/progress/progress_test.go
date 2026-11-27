@@ -143,7 +143,7 @@ func TestUniqueItemsHaveStoryAndEffects(t *testing.T) {
 
 func TestStartingKitNeutral(t *testing.T) {
 	p := NewProfile("Test")
-	if got, want := p.Stats, core.BaseStats(); got != want {
+	if got, want := p.Stats, BaseStats(); got != want {
 		t.Errorf("starting stats differ from base:\n got %+v\nwant %+v", got, want)
 	}
 	if p.Level != 1 || p.Rank != 1 || p.Credits != 60 {
@@ -540,14 +540,14 @@ func TestCarriedGadgetsCountOnceAndStoredDoNot(t *testing.T) {
 
 func TestCapacityAndStacking(t *testing.T) {
 	p := NewProfile("t")
-	if Capacity(p) != 8 {
-		t.Fatalf("capacity %d", Capacity(p))
+	if w, h := PackSize(p); w != 5 || h != 4 || Capacity(p) != 20 || p.Stats.Capacity != 20 {
+		t.Fatalf("satchel grid %dx%d capacity %d", w, h, Capacity(p))
 	}
-	// supplies stack: 8 rolls take two slots (stack of 6)
+	// supplies stack: 8 rolls take two stacks (stack of 6), one cell each
 	if _, err := AddItem(p, "film_roll", 8); err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Inventory) != 2 || Carried(p, "film_roll") != 8 {
+	if len(p.Inventory) != 2 || Carried(p, "film_roll") != 8 || FreeSlots(p) != 18 {
 		t.Fatalf("inventory %+v", p.Inventory)
 	}
 	if _, err := AddItem(p, "film_roll", 4); err != nil {
@@ -556,30 +556,29 @@ func TestCapacityAndStacking(t *testing.T) {
 	if len(p.Inventory) != 2 || p.Inventory[0].Qty != 6 || p.Inventory[1].Qty != 6 {
 		t.Fatalf("top-up: %+v", p.Inventory)
 	}
-	// fill the pack with distinct gear, the rest overflows to storage
+	// gear takes its footprint: 2x2 + 1x2 + 1x1 + 2x3 = 13 cells, 15 used in all
 	for _, id := range []string{"headphones", "pocket_guide", "pocket_barometer", "field_stool"} {
 		if stored, err := AddItem(p, id, 1); err != nil || stored != 0 {
-			t.Fatalf("%s: stored %d err %v", id, stored, err)
+			t.Fatalf("%s: stored %d err %v (%+v)", id, stored, err, p.Inventory)
 		}
 	}
-	if len(p.Inventory) != 6 {
-		t.Fatalf("len %d", len(p.Inventory))
+	if FreeSlots(p) != 5 || !PackGrid(p).Valid() {
+		t.Fatalf("free %d: %+v", FreeSlots(p), p.Inventory)
 	}
-	AddItem(p, "seed_mix", 8)
-	AddItem(p, "seed_mix", 8)
-	if len(p.Inventory) != 8 {
-		t.Fatalf("pack should be exactly full: %d", len(p.Inventory))
-	}
+	fillPack(p, "seed_mix", 8)
 	stored, err := AddItem(p, "seed_mix", 3)
-	if err != nil || stored != 3 || Stored(p, "seed_mix") != 3 || len(p.Inventory) != 8 {
-		t.Fatalf("overflow: stored %d err %v inv %d", stored, err, len(p.Inventory))
+	if err != nil || stored != 3 || Stored(p, "seed_mix") != 3 || FreeSlots(p) != 0 {
+		t.Fatalf("overflow: stored %d err %v free %d", stored, err, FreeSlots(p))
+	}
+	if !StorageGrid(p).Valid() {
+		t.Fatalf("storage %+v", p.Storage)
 	}
 	// gear is one of a kind
 	_, err = AddItem(p, "headphones", 1)
 	wantErr(t, err, ErrAlreadyOwned)
 	_, err = AddItem(p, "nonsense", 1)
 	wantErr(t, err, ErrUnknown)
-	// equipped items do not use capacity: the satchel is worn, not carried
+	// equipped items do not take room: the satchel is worn, not carried
 	if Where(p, "canvas_satchel") != "equipped" {
 		t.Error("satchel should be equipped")
 	}
@@ -686,16 +685,7 @@ func TestBackpackSwapCannotOverflow(t *testing.T) {
 	if err := Equip(p, "expedition_pack", false); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; Capacity(p) > len(p.Inventory); i++ {
-		AddItem(p, []string{"film_roll", "seed_mix"}[i%2], 6) // fill with stacks
-		if i > 200 {
-			break
-		}
-	}
-	// fill remaining with gear-less filler by stacking more distinct stacks
-	for len(p.Inventory) < Capacity(p) {
-		p.Inventory = append(p.Inventory, proto.ItemStack{Item: "seed_mix", Qty: 1})
-	}
+	fillPack(p, "seed_mix", 8) // 42 cells of the 7x6 pack, the satchel holds 20
 	snap := snapshot(t, p)
 	if err := Equip(p, "canvas_satchel", false); err == nil {
 		t.Fatal("swapping to a smaller pack with a full bag should fail")
@@ -754,9 +744,7 @@ func TestBuyRules(t *testing.T) {
 	// pack full
 	f := NewProfile("t")
 	f.Credits = 9999
-	for len(f.Inventory) < Capacity(f) {
-		f.Inventory = append(f.Inventory, proto.ItemStack{Item: "film_roll", Qty: 6})
-	}
+	fillPack(f, "film_roll", 6)
 	snap = snapshot(t, f)
 	wantErr(t, Buy(f, "headphones"), ErrPackFull)
 	wantErr(t, Buy(f, "film_roll"), ErrPackFull)
@@ -855,9 +843,7 @@ func TestCabinUpgrades(t *testing.T) {
 func TestApplyReward(t *testing.T) {
 	p := NewProfile("t")
 	// fill the pack so item rewards overflow
-	for len(p.Inventory) < Capacity(p) {
-		p.Inventory = append(p.Inventory, proto.ItemStack{Item: "film_roll", Qty: 6})
-	}
+	fillPack(p, "film_roll", 6)
 	r := proto.Reward{
 		XP: 700, Credits: 100, Rep: map[string]int{"research": 20, "naturalists": 10},
 		Items: []string{"explorer_binoculars", "nonsense"}, SkillPoints: 2,

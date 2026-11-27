@@ -99,6 +99,7 @@ export default {
     const gapHeight = (x, z) => store.heightAt(x, z);
     ground.setGapSource((out, cam, outY) => collectGaps(
       out, cam, ctx.birds?.list?.() || null, isAirborneAct, gapHeight, nestList(), ctx.player?.feet || null, outY,
+      ctx.player?.sightLane || null, // prone: a low sight lane through the grass ahead
     ));
     // Short turf around the cabin and other buildings.
     bus.on('pois', () => ground.setMow(mowField(Object.values(state.pois || {}))));

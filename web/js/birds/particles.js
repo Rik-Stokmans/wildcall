@@ -1,5 +1,7 @@
-// Fixed-capacity particle pools for the birds' water effects (wake rings, bathing and
-// diving splashes). Struct-of-arrays, swap-remove, no allocation after construction.
+// Fixed-capacity particle pools for the birds' effects (wake rings, bathing and diving
+// splashes, flight-trail dabs, leaves and feathers shaken loose by a flush).
+// Struct-of-arrays, swap-remove, no allocation after construction. `k` is a free
+// per-particle value (a kind, a seed) carried along with it.
 // Pure module: the three.js side only reads the arrays.
 
 export class ParticlePool {
@@ -10,12 +12,14 @@ export class ParticlePool {
     this.x = new Float32Array(cap); this.y = new Float32Array(cap); this.z = new Float32Array(cap);
     this.vx = new Float32Array(cap); this.vy = new Float32Array(cap); this.vz = new Float32Array(cap);
     this.age = new Float32Array(cap); this.life = new Float32Array(cap); this.size = new Float32Array(cap);
+    this.k = new Float32Array(cap);
   }
 
   /** Add a particle; returns false when the pool is full (the spawn is skipped). */
-  spawn(x, y, z, vx, vy, vz, life, size) {
+  spawn(x, y, z, vx, vy, vz, life, size, k = 0) {
     if (this.n >= this.cap || !(life > 0)) return false;
     const i = this.n++;
+    this.k[i] = k;
     this.x[i] = x; this.y[i] = y; this.z[i] = z;
     this.vx[i] = vx; this.vy[i] = vy; this.vz[i] = vz;
     this.age[i] = 0; this.life[i] = life; this.size[i] = size;
@@ -50,6 +54,7 @@ export class ParticlePool {
     this.x[i] = this.x[j]; this.y[i] = this.y[j]; this.z[i] = this.z[j];
     this.vx[i] = this.vx[j]; this.vy[i] = this.vy[j]; this.vz[i] = this.vz[j];
     this.age[i] = this.age[j]; this.life[i] = this.life[j]; this.size[i] = this.size[j];
+    this.k[i] = this.k[j];
   }
 }
 

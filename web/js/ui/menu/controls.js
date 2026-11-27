@@ -7,9 +7,10 @@ export const CONTROL_SECTIONS = [
   ['Moving', [
     ['forward', 'Walk forward'], ['back', 'Walk back'], ['left', 'Step left'], ['right', 'Step right'],
     ['run', 'Run (hold)'], ['crouch', 'Crouch (toggle)'], ['jump', 'Jump · climb a ledge'], ['sit', 'Sit and wait (toggle)'],
+    ['prone', 'Lie down (toggle) · move to crawl'],
   ]],
   ['In the field', [
-    ['interact', 'Interact / talk'], ['focus', 'Focused listening (hold)'], ['identify', 'Identify the bird you are watching'],
+    ['interact', 'Interact / talk · open the pack'], ['focus', 'Focused listening (hold)'], ['follow', 'Follow one voice: the sound you are facing'], ['identify', 'Identify the bird you are watching'],
     ['seed', 'Scatter seed mix'], ['note', 'Jot a field note'],
     ['tool-binoculars', 'Binoculars'], ['tool-camera', 'Camera'], ['tool-recorder', 'Recorder'], ['tool-none', 'Hands free'],
   ]],

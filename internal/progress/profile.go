@@ -78,7 +78,8 @@ func NewProfile(name string) *proto.Profile {
 // Normalize makes a profile safe to use and to send: nil maps and slices become
 // empty ones, the four reputation tracks exist, level and rank are in range, the
 // home region is unlocked, the field-kitchen fields are filled in (MigrateLarder:
-// forage records, herbarium, recipes, buffs), and everything derived is recomputed.
+// forage records, herbarium, recipes, buffs), the backpack and storage grids are
+// made valid (RepairGrids), and everything derived is recomputed.
 // Call it on a profile loaded from a save file. It never takes anything away from
 // the player.
 func Normalize(p *proto.Profile) {
@@ -174,6 +175,11 @@ func Normalize(p *proto.Profile) {
 	MigrateLarder(p)
 
 	Recompute(p)
+	// Grid inventory: saves from before it have every stack at 0,0 (and unlimited
+	// storage stacks). Re-pack them; what no longer fits the pack goes to storage.
+	if RepairGrids(p) {
+		Recompute(p)
+	}
 	if p.Film.Used < 0 {
 		p.Film.Used = 0
 	}

@@ -114,6 +114,19 @@ export function createUI(bus, state, input) {
   }
   let lastMenuTab = null;
 
+  // E interacts with whatever is in front of the player; with nothing there it opens the
+  // inventory, and pressing it again closes it.
+  let interactTarget = null;
+  bus.on('interact:target', (t) => { interactTarget = t || null; });
+  bus.on('action:interact', () => {
+    if (state.mode !== 'play' || interactTarget || !screens.has('menu')) return;
+    lastMenuTab = 'inventory';
+    ui.open('menu', { tab: 'inventory' });
+  });
+  bus.on('ui:key', ({ action }) => {
+    if (action === 'interact' && ui.top === 'menu') ui.close('menu');
+  });
+
   // Losing pointer lock during play (the browser's own Esc) pauses into the menu.
   bus.on('pointerlock', ({ locked }) => {
     if (!locked && !input.noLock && state.mode === 'play' && screens.has('menu')) {

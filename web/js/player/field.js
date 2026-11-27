@@ -21,7 +21,7 @@ export function missingToolText(name) {
   if (name === 'recorder') return 'No recorder equipped. Choose one in Equipment (Tab).';
   return '';
 }
-export const MOVES = Object.freeze(['still', 'crouch', 'walk', 'run', 'sprint']);
+export const MOVES = Object.freeze(['still', 'crouch', 'crawl', 'walk', 'run', 'sprint']);
 
 /** Seconds between pose messages for a game mode (contract §4). */
 export function poseInterval(mode) {
@@ -30,7 +30,7 @@ export function poseInterval(mode) {
 
 /**
  * Build a proto.Pose payload. Field names are the JSON tags of internal/proto.Pose.
- * @param {object} p {eye:{x,y,z}, yaw, pitch, speed, move, crouch, sit, focus,
+ * @param {object} p {eye:{x,y,z}, yaw, pitch, speed, move, crouch, sit, prone, focus,
  *                    tool, raised, fov, zoom, sharp, noise}
  */
 export function buildPose(p) {
@@ -44,6 +44,7 @@ export function buildPose(p) {
     move: MOVES.includes(p.move) ? p.move : 'still',
     crouch: !!p.crouch,
     sit: !!p.sit,
+    prone: !!p.prone,
     focus: !!p.focus,
     tool: TOOLS.includes(p.tool) ? p.tool : 'none',
     raised: !!p.raised,

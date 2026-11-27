@@ -89,6 +89,16 @@ func (s *Sim) sing(b *bird, p *profile) {
 	case p.callContact >= 0 && b.cur != memSong && (u < 0.15 || !b.singer && u < 0.4):
 		ci = p.callContact
 	}
+	if ci == 0 && b.mode == mIdle && !b.moving && b.act == core.ActPerched && !b.held {
+		// Once it has started its song it keeps its post a while, phrase after
+		// phrase (once per rest: it does not sit there for ever).
+		b.held = true
+		lo, hi := float32(songHoldMin), float32(songHoldMax)
+		if s.phase != core.PhaseDawn {
+			hi = (lo + hi) / 2 // the longest stints belong to the dawn chorus
+		}
+		b.timer = max32(b.timer, s.rnd(lo, hi))
+	}
 	c := calls[ci]
 	lo, hi := c.Repeat[0], c.Repeat[1]
 	if lo < 1 {

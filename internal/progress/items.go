@@ -16,7 +16,8 @@ import (
 //     makes a stat worse, and its Cons say so in words.
 //   - Tier 4 items are unique finds: never sold, each with a history and something
 //     only it does.
-//   - Gadgets and keepsakes work while carried, and cost a backpack slot to carry.
+//   - Gadgets and keepsakes work while carried, and take room in the backpack grid
+//     (every item has a footprint in cells: items_size.go).
 var items = buildItems()
 
 func buildItems() []proto.ItemDef {
@@ -56,6 +57,7 @@ func buildItems() []proto.ItemDef {
 			it.ReqRank = 1
 		}
 	}
+	applyFootprints(all)
 	return all
 }
 

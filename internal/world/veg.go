@@ -43,15 +43,17 @@ type treeShape struct {
 	isTree, snag bool
 }
 
+// Tree crowns are open and layered (treemodel.go): a line through the middle of
+// one is partly blocked, not walled off.
 var shapes = [core.VegKindCount]treeShape{
-	core.VegOak:        {height: 11, crownY: 0.64, rx: 3.7, ry: 3.1, occ: 0.35, cover: 0.85, isTree: true},
-	core.VegAmberOak:   {height: 11, crownY: 0.64, rx: 3.7, ry: 3.1, occ: 0.35, cover: 0.8, isTree: true},
-	core.VegBirch:      {height: 10, crownY: 0.66, rx: 2.5, ry: 3.0, occ: 0.3, cover: 0.7, isTree: true},
-	core.VegAmberBirch: {height: 10, crownY: 0.66, rx: 2.5, ry: 3.0, occ: 0.3, cover: 0.65, isTree: true},
-	core.VegPine:       {height: 14, crownY: 0.56, rx: 2.9, ry: 5.4, occ: 0.35, cover: 0.8, isTree: true},
-	core.VegSnowPine:   {height: 14, crownY: 0.56, rx: 2.9, ry: 5.4, occ: 0.35, cover: 0.8, isTree: true},
+	core.VegOak:        {height: 11, crownY: 0.64, rx: 3.7, ry: 3.1, occ: 0.3, cover: 0.85, isTree: true},
+	core.VegAmberOak:   {height: 11, crownY: 0.64, rx: 3.7, ry: 3.1, occ: 0.3, cover: 0.8, isTree: true},
+	core.VegBirch:      {height: 10, crownY: 0.66, rx: 2.5, ry: 3.0, occ: 0.26, cover: 0.7, isTree: true},
+	core.VegAmberBirch: {height: 10, crownY: 0.66, rx: 2.5, ry: 3.0, occ: 0.26, cover: 0.65, isTree: true},
+	core.VegPine:       {height: 14, crownY: 0.56, rx: 2.9, ry: 5.4, occ: 0.3, cover: 0.8, isTree: true},
+	core.VegSnowPine:   {height: 14, crownY: 0.56, rx: 2.9, ry: 5.4, occ: 0.3, cover: 0.8, isTree: true},
 	core.VegSnag:       {height: 8, snag: true},
-	core.VegChestnut:   {height: 13, crownY: 0.62, rx: 4.6, ry: 3.6, occ: 0.38, cover: 0.85, isTree: true},
+	core.VegChestnut:   {height: 13, crownY: 0.62, rx: 4.6, ry: 3.6, occ: 0.33, cover: 0.85, isTree: true},
 	// Forage bushes: soft occluders and shrub perches (nominal sizes at scale 1).
 	core.VegBramble:      {height: 1.3, crownY: 0.5, rx: 1.1, ry: 0.65, occ: 0.25, cover: 0.75},
 	core.VegElder:        {height: 3.4, crownY: 0.6, rx: 1.5, ry: 1.3, occ: 0.25, cover: 0.6},
@@ -133,6 +135,7 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 	// --- trees -----------------------------------------------------------------
 	const tn = 12
 	ts := core.ChunkSize / float64(tn)
+	young := false
 	for j := 0; j < tn; j++ {
 		for i := 0; i < tn; i++ {
 			x := bx + (float64(i)+0.1+0.8*r.Float64())*ts
@@ -144,6 +147,13 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 				continue
 			}
 			k, lo, hi := treeKind(core.RegionID(v.reg), core.Habitat(v.hab), v, pick)
+			if treeBase(k) == core.VegPine && edgeNear(gr, x, z) > 0.2 {
+				// No young, low-branched pines crowding a trail or a glade edge: the
+				// trees that line them are mature, bare-stemmed ones.
+				lo = math.Max(lo, 0.95)
+				hi = math.Max(hi, lo)
+				young = true
+			}
 			switch core.RegionID(v.reg) {
 			case core.RegionWindpeak:
 				// Stunted pines towards the treeline.
@@ -155,6 +165,12 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 				lo, hi = lo*f, hi*f
 			}
 			add(k, x, h, z, lerp(lo, hi, sc))
+			if young {
+				young = false
+				if last := &vs.veg[len(vs.veg)-1]; int(last.Variant)%core.TreeVariants == youngPine {
+					last.Variant -= youngPine // the same seed's mature model
+				}
+			}
 		}
 	}
 	// --- understory and ground decor ----------------------------------------------
@@ -171,6 +187,7 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 				continue
 			}
 			n := groundOptions(v, h, opts[:0])
+			thinUnderstorey(n, v, gr, x, z)
 			for _, o := range n {
 				if roll < o.p {
 					if home != nil && nearHomeForage(home, x, z, 1.1) {
@@ -248,6 +265,45 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 	return vs
 }
 
+// youngPine is the pine model variant that is a young, low-branched tree.
+const youngPine = 5
+
+// edgeNear is how strongly (0..1) the spot lies beside a trail, a pad or a glade:
+// the vegetation-clearing weights sampled 5 m around it (within the chunk's grid).
+func edgeNear(gr *grid, x, z float64) float64 {
+	e := 0.0
+	for k := 0; k < 8; k++ {
+		a := float64(k) * math.Pi / 4
+		fx, fz := gr.local(x+5*math.Sin(a), z+5*math.Cos(a))
+		v := &gr.v[gr.nearest(fx, fz)]
+		e = math.Max(e, math.Max(float64(v.keep), math.Max(float64(v.trail), smoothstep(0.3, 0.6, float64(v.clear)))))
+	}
+	return e
+}
+
+// thinUnderstorey keeps the woods airy: the shrub layer of woodland and conifer
+// forest is about a third thinner than its full density, and thinner again along
+// trails and glade edges, so the player can see in between the trunks. Thickets,
+// the fern hollow and the home dressing keep their full density - dense patches
+// are features, not everywhere.
+func thinUnderstorey(o []option, v *gvert, gr *grid, x, z float64) {
+	hab := core.Habitat(v.hab)
+	if hab != core.HabWoodland && hab != core.HabConifer {
+		return
+	}
+	f := 0.64
+	if e := edgeNear(gr, x, z); e > 0 {
+		f *= 1 - 0.45*e
+	}
+	keep := math.Max(smoothstep(0.25, 0.5, float64(v.thicket)), smoothstep(0.1, 0.4, float64(v.fern)))
+	f = lerp(f, 1, keep)
+	for i := range o {
+		if o[i].k == core.VegShrub {
+			o[i].p *= f
+		}
+	}
+}
+
 // treeDensity is the chance that a tree-lattice cell holds a tree.
 func treeDensity(v *gvert, h float64) float64 {
 	if h < 0.5 || v.slope > 0.85 || v.keep > 0.15 || v.trail > 0.05 || v.flags&vfIce != 0 {
@@ -257,9 +313,9 @@ func treeDensity(v *gvert, h float64) float64 {
 	var p float64
 	switch core.Habitat(v.hab) {
 	case core.HabWoodland:
-		p = 0.8
+		p = 0.72 // a high wood with room between the trunks
 	case core.HabConifer:
-		p = 0.78
+		p = 0.74
 		if reg == core.RegionFrostveil || reg == core.RegionWindpeak {
 			p = 0.55
 		}
@@ -297,16 +353,16 @@ func treeKind(reg core.RegionID, hab core.Habitat, v *gvert, u float64) (core.Ve
 	case core.RegionAmberwood:
 		switch {
 		case hab == core.HabConifer && u < 0.7, u < 0.08:
-			return core.VegPine, 0.8, 1.2
+			return core.VegPine, 0.88, 1.2
 		case u < 0.15:
 			return core.VegSnag, 0.8, 1.15
 		case u < 0.21 && hab == core.HabWoodland:
 			// Sweet chestnuts among the oaks (forage: nuts in autumn).
-			return core.VegChestnut, 0.85, 1.2
+			return core.VegChestnut, 0.9, 1.2
 		case u < 0.62:
-			return core.VegAmberOak, 0.8, 1.3
+			return core.VegAmberOak, 0.88, 1.3
 		}
-		return core.VegAmberBirch, 0.8, 1.2
+		return core.VegAmberBirch, 0.88, 1.2
 	case core.RegionFrostveil:
 		if u < 0.06 {
 			return core.VegSnag, 0.7, 1.0
@@ -339,19 +395,19 @@ func treeKind(reg core.RegionID, hab core.Habitat, v *gvert, u float64) (core.Ve
 	if hab == core.HabConifer || v.conifer > 0.45 {
 		switch {
 		case u < 0.84:
-			return core.VegPine, 0.8, 1.25
+			return core.VegPine, 0.88, 1.25
 		case u < 0.94:
-			return core.VegBirch, 0.8, 1.1
+			return core.VegBirch, 0.85, 1.1
 		}
 		return core.VegSnag, 0.8, 1.1
 	}
 	switch {
 	case u < 0.56:
-		return core.VegOak, 0.8, 1.3
+		return core.VegOak, 0.88, 1.3
 	case u < 0.84:
-		return core.VegBirch, 0.8, 1.2
+		return core.VegBirch, 0.88, 1.2
 	case u < 0.93:
-		return core.VegPine, 0.8, 1.2
+		return core.VegPine, 0.88, 1.2
 	}
 	return core.VegSnag, 0.75, 1.1
 }

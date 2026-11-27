@@ -177,6 +177,8 @@ func (s *Session) Debug(cmd string, args ...string) (string, error) {
 		s.tracker.Sync(s.p)
 		s.changed()
 		return "rank " + itoa(r), nil
+	case "singer":
+		return s.debugSinger(args)
 	case "spawn":
 		if len(args) == 0 {
 			return "", gentleErr("usage: spawn <species id>")

@@ -161,6 +161,16 @@ func init() {
 			"And away. A little more stealth, perhaps.",
 			"Too close, too quickly. It'll forgive us, in time.",
 		},
+		// The player flushed a bird but watched it all the way to where it landed.
+		// Never names the bird or the tree: only that it is there, and to go gently.
+		"flush.landed": {
+			"There it goes. And down, just there.",
+			"Watch where it lands. There. Got it.",
+			"Off, and down again. Not far at all.",
+			"Landed. It's watching us now, so slowly does it.",
+			"There. It's not gone, only cautious.",
+			"Down it comes. Let it settle, then try again.",
+		},
 		// A bird settled or came back because the player waited.
 		"settle": {
 			"And it's back. Patience, rewarded.",

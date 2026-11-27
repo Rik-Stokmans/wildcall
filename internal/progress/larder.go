@@ -181,15 +181,21 @@ func CanCook(p *proto.Profile, recipe proto.RecipeDef, qty int) error {
 		}
 		return fail(ErrIngredients, "For %s you still need %s.", out.Name, strings.Join(parts, " and "))
 	}
-	// Room: take the inputs out of a scratch copy of the pack, then see what fits.
-	scratch := &proto.Profile{Inventory: append([]proto.ItemStack(nil), p.Inventory...)}
-	for _, in := range recipe.Inputs {
-		takeFromPack(scratch, in.Item, in.Qty*qty)
-	}
-	if roomFor(scratch, out, Capacity(p)) < recipe.Qty*qty {
-		return fail(ErrPackFull, "There is no room in your pack for the %s. Make some room first.", out.Name)
+	// Room: take the inputs out of a copy of the pack (their cells free up), then
+	// see whether the food fits.
+	if g := cookedPack(p, recipe, qty); g.Room(out.ID, recipe.Qty*qty) < recipe.Qty*qty {
+		return fail(ErrPackFull, "There is no room in your pack for the %s. %s", out.Name, roomHint(g, out))
 	}
 	return nil
+}
+
+// cookedPack is the backpack with the inputs of qty batches taken out.
+func cookedPack(p *proto.Profile, recipe proto.RecipeDef, qty int) *Grid {
+	g := PackGrid(p)
+	for _, in := range recipe.Inputs {
+		g.Remove(in.Item, in.Qty*qty)
+	}
+	return g
 }
 
 // Cook makes qty batches of a recipe (each batch yields recipe.Qty units): the
@@ -203,10 +209,9 @@ func Cook(p *proto.Profile, recipe proto.RecipeDef, qty int) (CookResult, error)
 		return CookResult{}, err
 	}
 	out := itemIndex[recipe.Output]
-	for _, in := range recipe.Inputs {
-		takeFromPack(p, in.Item, in.Qty*qty)
-	}
-	packIn(p, out, recipe.Qty*qty, Capacity(p))
+	g := cookedPack(p, recipe, qty)
+	g.Add(out.ID, recipe.Qty*qty)
+	p.Inventory = g.Stacks
 	res := CookResult{Item: out.ID, Made: recipe.Qty * qty}
 	before := p.Level
 	if xp := AwardXP(p, SrcCook, recipe.ID, XPCook); xp > 0 {
@@ -220,19 +225,23 @@ func Cook(p *proto.Profile, recipe proto.RecipeDef, qty int) (CookResult, error)
 // ---------------------------------------------------------------------------
 // Foraging
 
-// ForageRoom is how many units of an item the backpack can still take.
+// ForageRoom is how many units of an item the backpack can still take as it is
+// packed now (at most 999).
 func ForageRoom(p *proto.Profile, itemID string) int {
 	def := itemIndex[itemID]
 	if def == nil {
 		return 0
 	}
-	return roomFor(p, def, Capacity(p))
+	return PackGrid(p).Room(itemID, 999)
 }
 
 // AddForage puts picked ingredients into the backpack, stacking onto existing
-// stacks first. Unlike AddItem nothing overflows to cabin storage — a forager far
-// from home simply carries what fits: added is how many went in (up to qty), and
-// ErrPackFull comes back, changing nothing, if not even one fits.
+// stacks first, then new stacks wherever they fit. Unlike AddItem nothing
+// overflows to cabin storage — a forager far from home simply carries what fits:
+// added is how many went in (up to qty), and ErrPackFull comes back, changing
+// nothing, if not even one fits; its message says what would make room ("Your pack
+// is full: no room for the Blackberry. Taking out the Field Stool & Scrim would
+// make room.").
 func AddForage(p *proto.Profile, itemID string, qty int) (added int, err error) {
 	def := itemIndex[itemID]
 	if def == nil {
@@ -244,10 +253,12 @@ func AddForage(p *proto.Profile, itemID string, qty int) (added int, err error) 
 	if qty <= 0 {
 		return 0, fail(ErrInvalid, "Nothing to pick.")
 	}
-	left := packIn(p, def, qty, Capacity(p))
+	g := PackGrid(p)
+	left := g.Add(itemID, qty)
 	if left == qty {
-		return 0, fail(ErrPackFull, "Your pack is full. Make room before you pick any %s.", def.Name)
+		return 0, packFull(PackGrid(p), def)
 	}
+	p.Inventory = g.Stacks
 	Recompute(p)
 	return qty - left, nil
 }

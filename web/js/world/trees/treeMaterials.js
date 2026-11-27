@@ -15,6 +15,7 @@
 // never black, a touch of light through the leaves at the edges against the sun, and
 // an alpha test that keeps distant cards solid instead of letting mipmaps eat them.
 import * as THREE from 'three';
+import { LEAF_WINDOWS, LEAF_WINDOW_HEAD, LEAF_WINDOW_VERTEX, LEAF_WINDOW_FRAG_HEAD, LEAF_WINDOW_FRAG } from './leafWindows.js';
 
 const HEADER = /* glsl */`
 attribute vec4 aTree;
@@ -105,6 +106,20 @@ vec3 transformed = vec3(position) + treeWind();
 const BEGIN_MAIN = /* glsl */`
 vec3 transformed = vec3(position) + treeWind();
 #ifdef TREE_CARDS
+  {
+    // Leaf windows around nearby birds (leafWindows.js): the card's world centre and
+    // half-size flag cards that may overlap a window; the fragment cuts per pixel.
+#ifdef USE_INSTANCING
+    mat4 cardM = modelMatrix * instanceMatrix;
+    float cardR = length(aCard) * length(instanceMatrix[1].xyz);
+#else
+    mat4 cardM = modelMatrix;
+    float cardR = length(aCard);
+#endif
+    vec3 wc = (cardM * vec4(transformed, 1.0)).xyz;
+    vec3 wv = (cardM * vec4(transformed + cardOff, 1.0)).xyz;
+${LEAF_WINDOW_VERTEX}
+  }
   transformed += cardOff;
 #endif
 #ifdef USE_INSTANCING
@@ -122,6 +137,7 @@ vec3 transformed = vec3(position) + treeWind();
 
 const DITHER = /* glsl */`
 #include <clipping_planes_fragment>
+${LEAF_WINDOW_FRAG}
 {
   // Interleaved gradient noise: a stable screen-space dither for the LOD cross-fade.
   float tD = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -212,7 +228,7 @@ reflectedLight.indirectDiffuse *= uAmbient;
 `;
 
 function patchVertex(shader, main) {
-  shader.vertexShader = HEADER + (main ? SEASON_UNIFORMS + 'varying vec2 vTreeFade;\n' : '') + shader.vertexShader
+  shader.vertexShader = HEADER + (main ? SEASON_UNIFORMS + LEAF_WINDOW_HEAD + 'varying vec2 vTreeFade;\n' : '') + shader.vertexShader
     .replace('#include <begin_vertex>', main ? BEGIN_MAIN : BEGIN);
   if (main) {
     shader.vertexShader = shader.vertexShader
@@ -221,7 +237,7 @@ function patchVertex(shader, main) {
   }
   shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', ALPHA_TEST + '#include <alphatest_fragment>');
   if (main) {
-    shader.fragmentShader = 'varying vec2 vTreeFade;\n' + shader.fragmentShader
+    shader.fragmentShader = 'varying vec2 vTreeFade;\n' + LEAF_WINDOW_FRAG_HEAD + shader.fragmentShader
       .replace('#include <clipping_planes_fragment>', DITHER)
       .replace('#include <lights_lambert_pars_fragment>', LEAF_LIGHT)
       .replace('#include <aomap_fragment>', AMBIENT);
@@ -244,6 +260,7 @@ export function createTreeMaterial({ cards, map, uniforms }) {
   const defines = cards ? { TREE_CARDS: '' } : {};
   const all = {
     ...uniforms,
+    ...(cards ? LEAF_WINDOWS : {}),
     uWrap: { value: cards ? 0.55 : 0.3 },
     uTrans: { value: cards ? 0.55 : 0 },
     uAmbient: { value: cards ? 1.15 : 1.6 },

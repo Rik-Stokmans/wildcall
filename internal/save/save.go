@@ -39,7 +39,11 @@ import (
 //	2  phase 2: buffs, forage records, recipes, herbarium and nest journal in the
 //	   profile; species facts in the narrator state (all additive: a version 1 file
 //	   loads and is migrated by progress.MigrateLarder)
-const Version = 2
+//	3  grid inventory: inventory and storage stacks carry x, y, r (their cell and
+//	   turn in the backpack / storage grid). Additive: a version 1 or 2 file loads
+//	   with every stack at 0,0, and progress.RepairGrids (via Normalize) re-packs
+//	   it; what no longer fits the backpack goes to cabin storage, nothing is lost
+const Version = 3
 
 // MinVersion is the oldest save format this build still loads.
 const MinVersion = 1

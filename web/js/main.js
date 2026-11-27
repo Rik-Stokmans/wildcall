@@ -22,12 +22,17 @@ const MODULES = [
   './props/index.js',        // ctx.props   structures, NPCs, collectibles, lures, trail markers
   './birds/index.js',        // ctx.birds   procedural bird models + animation
   './nests/index.js',        // ctx.nests   nests in trees, shrubs, reeds, banks and ledges
+  './songsight/index.js',    // soft ripples from a singing bird, so a voice can be traced to its singer
   './forage/index.js',       // ctx.forage  forage plants, picking, cooking, buffs
   './player/index.js',       // ctx.player  first-person controller + ctx.tools
+  './viewmodel/index.js',    // ctx.viewmodel  the tool held in the player's hands, with raise/use animations
   './audio/index.js',        // ctx.audio   spatial audio, call synth, ambience, music
   './narrator/index.js',     // ctx.narrator  spoken narration + captions
   './ui/kit.js',             // ctx.kit     shared UI kit (icons, bird illustrations, widgets)
   './ui/hud/index.js',       // HUD, clue panel, toasts, prompts, quest tracker
+  './ui/toolkeys/index.js',  // key hints for the equipment in hand
+  './ui/soundring/index.js', // the ring around the crosshair that shows where calls come from
+  './ui/minimap/index.js',   // ctx.waypoints + the small map in the corner
   './ui/encounter/index.js', // observation & identification, dialogue, rewards, rare item, region, rank-up
   './ui/menu/index.js',      // main menu + game menu (character, skills, inventory, equipment, rank, settings)
   './ui/journal/index.js',   // journal, map, quest log, collection
@@ -93,7 +98,11 @@ async function boot() {
      * @param {HTMLElement[]} hide  elements to ignore — only the 3D canvas is captured anyway
      */
     capture(width = 640, quality = 0.82) {
-      renderFrame(0);
+      // Photographs show the world as it is: modules hide their on-screen aids (bird
+      // outlines, song ripples, flight trails, held tools) between these two events.
+      ctx.capturing = true;
+      bus.emit('capture:before', {});
+      try { renderFrame(0); } finally { ctx.capturing = false; bus.emit('capture:after', {}); }
       const h = Math.round(width / camera.aspect);
       captureCanvas.width = width; captureCanvas.height = h;
       captureCanvas.getContext('2d').drawImage(canvas, 0, 0, width, h);

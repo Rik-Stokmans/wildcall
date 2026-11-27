@@ -1,7 +1,10 @@
-// Pure logic for the home-base and shop screens: no DOM, no three.js, no imports.
+// Pure logic for the home-base and shop screens: no DOM, no three.js; the only import is
+// the pure grid-inventory logic (ui/menu/packlogic.js).
 // Everything here is derived from the wire types in internal/proto (Profile, ItemDef,
 // UpgradeDef, CabinUpgradeDef, QuestDef, EnvMsg, core.Stats) so it can be tested with
 // plain node --test.
+
+import * as Pack from '../menu/packlogic.js';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -228,22 +231,35 @@ export function countOwned(profile, id) {
 }
 export const isOwned = (profile, id) => countOwned(profile, id) > 0;
 
-/** Backpack usage: every stack takes one slot; equipped items take none. */
-export function capacityInfo(profile, stats) {
-  const used = arr(profile?.inventory).length;
-  const cap = Math.max(0, Math.floor(num(stats?.capacity)));
-  return { used, cap, free: cap > 0 ? Math.max(0, cap - used) : Infinity, full: cap > 0 && used >= cap };
+/** The backpack grid as packlogic sees it, sized by `stats` (packW x packH). */
+function packModel(profile, stats, items) {
+  return Pack.gridModel('inventory', { ...obj(profile), stats: stats || profile?.stats }, items || {});
 }
 
-/** Would one more of this item fit in the backpack (merging into a stack counts)? */
-export function fitsInBackpack(profile, stats, item) {
-  const { full } = capacityInfo(profile, stats);
-  if (!full) return true;
-  if (item?.stack > 1) {
-    return arr(profile?.inventory).some((s) => s.item === item.id && num(s.qty, 1) < item.stack);
-  }
-  return false;
+/**
+ * Backpack usage in grid cells (each stack covers its item's footprint; equipped items
+ * take none). Without `items` every stack counts as one cell.
+ */
+export function capacityInfo(profile, stats, items) {
+  const m = packModel(profile, stats, items);
+  const used = items ? Pack.usedCells(m, items) : arr(profile?.inventory).length;
+  const cap = m.W * m.H;
+  return { used, cap, free: Math.max(0, cap - used), full: used >= cap };
 }
+
+/**
+ * Would one more of this item fit in the backpack as it is packed now (topping up a
+ * stack, or a free spot as it is or turned)? The server's own buy check. Without
+ * `items` the answer is unknown and taken as yes (the server decides).
+ */
+export function fitsInBackpack(profile, stats, item, items) {
+  if (!items || !item) return true;
+  const all = withItem(items, item);
+  return Pack.hasRoomFor(packModel(profile, stats, all), all, item.id);
+}
+
+/** ItemDefs by id, sure to include `item`. */
+const withItem = (items, item) => (items[item.id] ? items : { ...items, [item.id]: item });
 
 export function totalRep(profile) {
   return Object.values(obj(profile?.rep)).reduce((a, b) => a + num(b), 0);
@@ -270,12 +286,17 @@ export function itemRequirements(item, profile, ranks) {
   return out;
 }
 
+export const NO_ROOM_TEXT = 'No room in your pack – make space or send it home';
+
 /**
  * Can the player buy this shop item right now?
- * → { canBuy, price, issues: [{code, text}], requirements: [{code, met, text}], owned }
- * Codes: unsold, owned, rank, rep, credits, capacity.
+ * → { canBuy, price, issues: [{code, text}], requirements: [{code, met, text}], owned, noRoom, tidyFits }
+ * Codes: unsold, owned, rank, rep, credits, capacity. The room check needs `items` (ItemDefs
+ * by id, for the footprints already in the pack); it mirrors the server, which refuses a
+ * buy when the item has no spot as the pack is packed now. tidyFits: a quick tidy would
+ * make room (a hint; the player tidies, the shop never rearranges their pack).
  */
-export function purchaseCheck(item, profile, stats, ranks = []) {
+export function purchaseCheck(item, profile, stats, ranks = [], items = null) {
   const price = unitPrice(item?.price, stats?.discount);
   const requirements = itemRequirements(item, profile, ranks);
   const issues = [];
@@ -287,9 +308,15 @@ export function purchaseCheck(item, profile, stats, ranks = []) {
     for (const r of requirements) if (!r.met) issues.push({ code: r.code, text: r.text });
     const credits = num(profile?.credits);
     if (credits < price) issues.push({ code: 'credits', text: `${formatCredits(price - credits)} more Field Credits needed` });
-    if (!owned && !fitsInBackpack(profile, stats, item)) issues.push({ code: 'capacity', text: 'Your backpack is full' });
+    if (!owned && !fitsInBackpack(profile, stats, item, items)) issues.push({ code: 'capacity', text: NO_ROOM_TEXT });
   }
-  return { canBuy: issues.length === 0, price, issues, requirements, owned };
+  const noRoom = issues.some((i) => i.code === 'capacity');
+  let tidyFits = false;
+  if (noRoom) {
+    const all = withItem(items, item);
+    tidyFits = Pack.fitsAfterTidy(packModel(profile, stats, all), all, item.id);
+  }
+  return { canBuy: issues.length === 0, price, issues, requirements, owned, noRoom, tidyFits };
 }
 
 /** Owned equipment mods including purchased upgrades. */
@@ -388,12 +415,14 @@ export function upgradableItems(profile, items) {
   return out;
 }
 
-/** Moving a stack: may it go there? → {ok, reason} */
-export function moveCheck(item, to, profile, stats) {
-  if (to === 'inventory' && !fitsInBackpack(profile, stats, item)) {
-    return { ok: false, reason: 'Your backpack is full' };
-  }
-  return { ok: true, reason: '' };
+/** Moving a stack with "move": would it fit on the other side? → {ok, reason} (grid rules, packlogic). */
+export function moveCheck(item, to, profile, stats, items) {
+  if (!items || !item) return { ok: true, reason: '' };
+  const all = withItem(items, item);
+  const pack = packModel(profile, stats, all);
+  const store = Pack.gridModel('storage', profile, all);
+  const q = to === 'inventory' ? Pack.quickMoveTarget(store, pack, all, item.id) : Pack.quickMoveTarget(pack, store, all, item.id);
+  return { ok: q.ok, reason: q.reason };
 }
 
 /* ------------------------------------------------------------------ cabin upgrades */

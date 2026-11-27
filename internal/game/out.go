@@ -26,6 +26,7 @@ func (s *Session) send(t string, payload any) {
 		return
 	}
 	s.bytesOut += int64(len(data))
+	s.devCount(t, len(data))
 	s.out.Send(t, data)
 }
 
@@ -34,6 +35,7 @@ func (s *Session) sendRaw(t string, data []byte) {
 		return
 	}
 	s.bytesOut += int64(len(data))
+	s.devCount(t, len(data))
 	s.out.Send(t, data)
 }
 

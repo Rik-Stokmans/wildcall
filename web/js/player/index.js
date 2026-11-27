@@ -4,10 +4,12 @@
 import { createController } from './controller.js';
 import { createTools } from './tools.js';
 import { createNotePrompt } from './note.js';
+import { createStanceBadge } from './stanceBadge.js';
 import { carries } from './field.js';
 
 let controller = null;
 let tools = null;
+let badge = null;
 
 export default {
   name: 'player',
@@ -19,6 +21,7 @@ export default {
     tools = createTools(ctx, controller);
     ctx.tools = tools;
     createNotePrompt(ctx, controller);
+    try { badge = createStanceBadge(document.getElementById('tool-overlay')); } catch { badge = null; }
 
     // Identify (T) is handled by the encounter module (ctx.encounter.openIdentify):
     // a second handler here used to open the screen and the encounter's toggle then
@@ -44,5 +47,7 @@ export default {
     controller.update(dt);
     tools?.update(dt);
     controller.applyCamera(dt, tools?.sway);
+    const api = controller.api;
+    badge?.update(api.stance, ctx.time - api.stanceChangedAt, ctx.state?.mode === 'play');
   },
 };

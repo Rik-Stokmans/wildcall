@@ -117,6 +117,9 @@ test('capacity usage counts stacks', () => {
   const u = L.capacityUsage({ inventory: [1, 2, 3] }, 3);
   assert.deepEqual(u, { used: 3, cap: 3, full: true });
   assert.equal(L.capacityUsage({ inventory: [] }, 8).full, false);
+  // With the item defs it counts grid cells: a 2x3 stool and a 1x1 film roll.
+  const items = { stool: { id: 'stool', w: 2, h: 3 }, film: { id: 'film', w: 1, h: 1 } };
+  assert.deepEqual(L.capacityUsage({ inventory: [{ item: 'stool', r: true }, { item: 'film' }] }, 20, items), { used: 7, cap: 20, full: false });
 });
 
 test('equip/use predicates', () => {

@@ -8,7 +8,9 @@
 // ctx.player / ctx.tools / ctx.audio is not there yet.
 import { el, fill, icon, label, formatClock, WEATHER_NAMES, WEATHER_ICONS } from '../kit.js';
 import { RAD2DEG, tickTable, stripOffset, headingDegrees, arrowDegrees, spreadWidth, landmarkPips, cuePlacement } from './compass.js';
-import { ClueStore, clueCard, selectClueCards, moreSoundsText } from './clues.js';
+import { ClueStore, clueCard, selectClueCards, oneClueCard, moreSoundsText } from './clues.js';
+// [soundring hook] one clue card at a time: the voice being followed (Q pins it).
+import { Pace, CalmCount, otherVoicesText, silentText } from '../soundring/follow.js';
 import { ToastStack, toastSound } from './toasts.js';
 import { trackedQuest, questForMystery, quarryMysteries } from './quest.js';
 import { HintTracker, HINTS } from './hints.js';
@@ -16,8 +18,15 @@ import { sightingView } from './sighting.js';
 import { hudLevel, toastsVisible } from './visibility.js';
 import { forecastSlots } from './weather.js';
 import { nextNudge, nudgeTarget, nudgeBearing, nudgeComplete, tutorialActive } from './nudges.js';
+// [minimap module hook] the player's waypoints as pins on the compass strip.
+import { createCompassWaypoints } from '../minimap/compass-pins.js';
+import { createCompassArea, questSearchArea, areaLine } from './search-area.js'; // [search-area hook]
 
 const FOCUS_TIP_USES = 3;         // after this many uses of focused listening the card tip retires
+const FOLLOW_TIP_USES = 2;        // after this many uses of Q the "stay with this voice" tip retires
+const FIRST_HEARD_GAP = 20;       // seconds between "first heard" flourishes (a hint, a new-voice mention)
+const NEW_VOICE_SECONDS = 6;      // how long the quiet line mentions a new voice
+const ALL_CARDS_MAX = 6;          // "Clue cards: All" never stacks more than this
 
 const HALF_SPAN = (80 / RAD2DEG); // compass strip shows +-80 degrees around the heading
 const SIGHT_STALE = 1.5;          // seconds without a net:sighting before the readout hides
@@ -91,6 +100,8 @@ export default {
       return { t, n };
     });
     const pipPool = [], clueTickPool = [];
+    const waypointPins = createCompassWaypoints(ctx, compassStrip); // [minimap hook]
+    const areaBand = createCompassArea(ctx, compassStrip); // [search-area hook] the quest's search area
     const compassDeg = el('div', { class: 'hud-compass-deg' });
     const compass = el('div', { class: 'hud-part hud-compass' }, compassStrip, el('div', { class: 'hud-compass-caret' }), compassDeg);
 
@@ -215,10 +226,17 @@ export default {
       let rec = cards.get(c.id);
       if (!rec) {
         rec = { n: el('div', { class: 'hud-card' }), arrow: el('span', { class: 'hud-arrow', html: ARROW_SVG }), sig: '' };
+        // [soundring hook] the follow line: "Following · silent for 12 s" / the Q tip.
+        rec.footText = el('span');
+        rec.foot = el('div', { class: 'hud-card-follow', hidden: true }, el('kbd', 'Q'), rec.footText);
+        rec.footSig = '';
         // One "Hold F" line at a time, and only until focus has been used a few times.
         const tipOnScreen = [...cards.values()].some((r) => r.showTip && r.n.isConnected);
         rec.showTip = isNew && !tipOnScreen && hints.count('focusUses') < FOCUS_TIP_USES && hints.tipAvailable('focusTip', 6, 'focusTipRetired');
         if (rec.showTip) hints.tipShown('focusTip');
+        // "Q: stay with this voice", on a few cards until Q has been used a couple of times.
+        rec.followTip = isNew && !rec.showTip && hints.count('followUses') < FOLLOW_TIP_USES && hints.tipAvailable('followTip', 5, 'followTipRetired');
+        if (rec.followTip) hints.tipShown('followTip');
         cards.set(c.id, rec);
       }
       if (rec.sig !== sig) {
@@ -237,7 +255,8 @@ export default {
             view.confidence ? el('span', { class: 'hud-card-conf' }, view.confidence) : null) : null,
           view.quest ? el('div', { class: 'hud-card-quest' }, icon('quest', 11), el('span', view.quest)) : null,
           view.unusual ? el('div', { class: 'hud-card-unusual' }, 'Something unusual…') : null,
-          rec.showTip ? el('div', { class: 'hud-card-tip' }, 'Hold F to listen closely') : null);
+          rec.showTip ? el('div', { class: 'hud-card-tip' }, 'Hold F to listen closely') : null,
+          rec.foot);
       }
       return rec;
     }
@@ -251,32 +270,57 @@ export default {
       }
       return out;
     }
-    let shownIds = new Set();
+    // [soundring hook] "Clue cards: One at a time" (default) shows only the card of the
+    // voice being followed (ctx.soundring.followId; Q pins it); every other voice is on
+    // the sound ring and in one quiet line ("3 other voices"). "All" stacks the cards.
+    const oneCard = () => state.settings?.clueCards !== 'all';
+    const followId = () => ctx.soundring?.followId || 0;
+    const firstHeard = new Pace(FIRST_HEARD_GAP);
+    const others = new CalmCount(6); // "3 other voices" rises at once, falls slowly
+    let shownIds = new Set(), newVoiceUntil = 0, lastFollow = 0, lastPinned = false, lastOne = null, othersAt = 0;
     function syncClues(now) {
-      const pick = selectClueCards(clues.all(now), { max: 2, quarry: quarrySet(), tutorial: tutorialActive(state.profile) });
+      const one = oneCard(), fid = followId();
+      othersAt = now + 0.5;
+      const all = clues.all(now, fid);
+      const opts = { quarry: quarrySet(), tutorial: tutorialActive(state.profile) };
+      const pick = one ? oneClueCard(all, fid, { ...opts, now })
+        : selectClueCards(all, { ...opts, max: Math.min(ALL_CARDS_MAX, clues.cap) });
+      if (one !== lastOne) { lastOne = one; clueList.classList.toggle('one', one); }
       const live = pick.shown;
       const keep = new Set(live.map((e) => e.id));
       shownIds = keep;
       // Cards of sounds that are still live but folded away keep their record (and tip state).
       for (const [id, rec] of cards) if (!keep.has(id)) { rec.n.remove(); if (!clues.map.has(id)) cards.delete(id); }
       live.forEach((entry, i) => {
-        const rec = cardFor(entry, false);
+        const rec = cardFor(entry, now - entry.born < 0.5);
         if (rec.n.parentNode !== clueList || clueList.children[i] !== rec.n) clueList.insertBefore(rec.n, clueList.children[i] || null);
       });
-      const more = moreSoundsText(pick.hidden);
-      moreEl.textContent = more;
+      const more = one ? otherVoicesText(others.update(pick.hidden, now), now < newVoiceUntil && pick.fresh) : moreSoundsText(pick.hidden);
+      if (moreEl.textContent !== more) moreEl.textContent = more;
       moreEl.hidden = !more;
       if (moreEl.parentNode !== clueList || clueList.lastChild !== moreEl) clueList.appendChild(moreEl);
     }
     bus.on('net:clue', (c) => {
       if (!c) return;
       clues.setCap(Math.max(2, Math.round(stats().clueSlots || 2)));
-      const { entry, isNew } = clues.upsert(c, nowT());
-      if (isNew) wantHint('focus');
-      // Seed the card so its first render knows whether it is brand new (tip counting).
-      if (isNew && clues.list(nowT()).some((e) => e.id === entry.id)) cardFor(entry, true);
+      if (!(c.ttl > 0)) { // the engine let this voice go (its slot went to a louder one)
+        const old = clues.get(c.id);
+        if (old) { old.expires = Math.min(old.expires, nowT()); syncClues(nowT()); }
+        return;
+      }
+      const { isNew } = clues.upsert(c, nowT());
+      // First-heard flourishes are paced: the "Hold F" hint or a "A new voice" mention
+      // in the quiet line, at most one every FIRST_HEARD_GAP seconds.
+      if (isNew && firstHeard.ready(nowT())) {
+        if (hints.available('focus') && !wanted.has('focus')) { wantHint('focus'); firstHeard.allow(nowT()); }
+        else if (c.new && !c.known && c.id !== followId()) { newVoiceUntil = nowT() + NEW_VOICE_SECONDS; firstHeard.allow(nowT()); }
+      }
       syncClues(nowT());
     });
+    bus.on('action:follow', () => {
+      if (hints.bump('followUses') >= FOLLOW_TIP_USES) for (const rec of cards.values()) rec.followTip = false;
+    });
+    bus.on('settings', ({ key } = {}) => { if (key === 'clueCards') syncClues(nowT()); });
 
     /* ------------------------------------------------------------ movement cues */
     bus.on('net:cue', (cue) => {
@@ -376,7 +420,9 @@ export default {
     const toastPad = () => { toastRoot.style.paddingTop = questEl.hidden ? '' : `${questEl.offsetHeight + 28}px`; };
     function renderQuest() {
       const q = trackedQuest(state.profile, state.quests);
-      const sig = JSON.stringify(q);
+      const qa = q ? questSearchArea(state.profile) : null; // [search-area hook]
+      const areaText = qa && qa.questId === q.id && q.objectives.length ? areaLine(qa) : '';
+      const sig = JSON.stringify(q) + areaText;
       if (sig === questSig) return;
       questSig = sig;
       if (!q) { questEl.hidden = true; toastPad(); return; }
@@ -385,6 +431,7 @@ export default {
         el('div', { class: 'hud-quest-name' }, icon('quest', 13), el('span', q.name)),
         q.objectives.map((o) => el('div', { class: 'hud-quest-obj' }, el('i'), el('span', o.text))),
         q.quarry && q.objectives.length ? el('div', { class: 'hud-quest-quarry' }, 'In your journal as ', el('b', q.quarry)) : null,
+        areaText ? el('div', { class: 'hud-quest-area' }, areaText) : null, // [search-area hook]
         !q.objectives.length ? el('div', { class: 'hud-quest-obj done' }, el('i'), el('span', 'All objectives done')) : null);
       toastPad();
     }
@@ -479,6 +526,9 @@ export default {
         n.children[1].textContent = p.name;
       });
 
+      waypointPins.update(px, pz, yaw, HALF_SPAN); // [minimap hook] waypoint pins (max 4 nearest)
+      areaBand.update(px, pz, yaw, HALF_SPAN); // [search-area hook]
+
       // live clue bearings: soft unlabeled ticks, width = uncertainty
       const live = clues.list(now);
       while (clueTickPool.length < live.length) { const n = el('div', { class: 'hud-clue-tick' }); compassStrip.appendChild(n); clueTickPool.push(n); }
@@ -508,14 +558,36 @@ export default {
 
     function updateClues(now) {
       const yaw = ctx.player?.yaw ?? 0;
-      const gone = clues.prune(now);
-      if (gone.length) syncClues(now);
-      for (const e of clues.list(now)) {
-        if (!shownIds.has(e.id)) continue;
-        const rec = cards.get(e.id);
-        if (!rec || !rec.n.parentNode) { syncClues(now); continue; }
-        rec.n.style.opacity = String(clues.alpha(e, now));
+      // [soundring hook] the followed voice keeps its card between its calls
+      const fid = followId(), pinned = !!ctx.soundring?.pinned;
+      const gone = clues.prune(now, fid);
+      let resync = gone.length > 0 || fid !== lastFollow || pinned !== lastPinned || (others.lowSince != null && now >= othersAt);
+      if (newVoiceUntil && now >= newVoiceUntil) { newVoiceUntil = 0; resync = true; }
+      lastFollow = fid; lastPinned = pinned;
+      if (resync) syncClues(now);
+      for (const id of shownIds) {
+        const e = clues.get(id);
+        const rec = cards.get(id);
+        if (!e || !rec || !rec.n.parentNode) continue;
+        const mine = id === fid;
+        const alpha = clues.alpha(e, now);
+        const shown = mine ? (pinned || ctx.soundring.followLive ? 1 : 0.72) : alpha; // dimmed between its calls
+        if (rec.alpha !== shown) { rec.alpha = shown; rec.n.style.opacity = String(shown); }
         rec.arrow.style.transform = `rotate(${arrowDegrees(e.clue.bearing, yaw)}deg)`;
+        // highlight the card of the voice the player is facing
+        const facing = ctx.soundring?.facingId === id;
+        if (rec.facing !== facing) { rec.facing = facing; rec.n.classList.toggle('sr-facing', facing); }
+        // the follow line: pinned = "Following (· silent for 12 s)", else the Q tip
+        const hold = mine && pinned;
+        const silent = hold ? silentText(ctx.soundring.silentFor) : '';
+        const text = hold ? `Following · ${silent || 'again to let go'}` : mine && rec.followTip ? 'stay with this voice' : '';
+        const sig = (hold ? 'p' : '') + text;
+        if (rec.footSig !== sig) {
+          rec.footSig = sig;
+          rec.footText.textContent = text;
+          rec.foot.hidden = !text;
+          rec.n.classList.toggle('sr-pinned', hold);
+        }
       }
     }
 

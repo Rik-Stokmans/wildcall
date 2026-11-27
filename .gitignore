@@ -14,3 +14,4 @@ node_modules/
 
 tools/birdsong/.cache/
 tools/voice/samples/
+desktop/dist-next/

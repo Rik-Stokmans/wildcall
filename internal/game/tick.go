@@ -49,6 +49,7 @@ func (s *Session) Tick(dt float32) {
 	for i := range s.evBuf {
 		s.onEvent(ctx, s.evBuf[i], eye)
 	}
+	s.followTick(ctx)
 	s.onSettled(eye)
 	s.board.Advance(dt)
 	s.calls.Advance(dt)
@@ -111,11 +112,13 @@ func (s *Session) Tick(dt float32) {
 		s.autosave()
 	}
 
+	s.syncSinger()
 	s.afterChange()
 	s.flush()
 	if d := time.Since(start).Seconds(); d > s.worstTick {
 		s.worstTick = d
 	}
+	s.devTick(dt, start)
 }
 
 // eye is the player's eye position (the latest pose, or the saved position).
@@ -133,8 +136,8 @@ func (s *Session) observer() core.Observer {
 	}
 	st := s.p.Stats
 	settle, fam := st.Settle, st.Familiarity
-	if s.pose.Sit {
-		// Campcraft: a sit-and-wait setup calms birds faster.
+	if s.pose.Sit || (s.pose.Prone && moveMode(s.pose) == "still") {
+		// Campcraft: a sit-and-wait setup (or lying still in a hide of grass) calms birds faster.
 		settle *= 1 + st.Camp
 		fam *= 1 + st.Camp
 	}
@@ -144,7 +147,7 @@ func (s *Session) observer() core.Observer {
 	}
 	return core.Observer{
 		Present: true, Pos: s.eye(), Vel: s.vel, Speed: s.pose.Speed, Move: moveMode(s.pose),
-		Crouch: s.pose.Crouch, Sitting: s.pose.Sit, Still: s.still, Noise: noise,
+		Crouch: s.pose.Crouch, Sitting: s.pose.Sit, Prone: s.pose.Prone, Still: s.still, Noise: noise,
 		Stealth: st.Stealth, CrouchBonus: st.CrouchBonus, Settle: settle, Familiarity: fam,
 	}
 }
@@ -159,6 +162,11 @@ func moveMode(p proto.Pose) string {
 	}
 	switch p.Move {
 	case "still", "crouch", "walk", "run", "sprint":
+		if p.Prone && p.Move != "still" {
+			return "crawl" // lying flat: any movement is a crawl
+		}
+		return p.Move
+	case "crawl":
 		return p.Move
 	}
 	return ""
@@ -168,6 +176,9 @@ func moveMode(p proto.Pose) string {
 func (s *Session) onEvent(ctx *field.Context, ev core.EcoEvent, eye core.Vec3) {
 	switch ev.Kind {
 	case core.EvCall:
+		if s.singerHushes(ev) { // rivals keep quiet in the tutorial singer's patch (singer_hush.go)
+			return
+		}
 		bird, _ := s.sim.Get(ev.Bird)
 		s.calls.Add(ev, bird.Flags)
 		if s.rec != nil {
@@ -199,10 +210,12 @@ func (s *Session) onEvent(ctx *field.Context, ev core.EcoEvent, eye core.Vec3) {
 		if cue, ok := field.MoveCue(ctx, ev, s.pose, s.rng); ok {
 			s.send(proto.SCue, cue)
 		}
-		if ev.Kind == core.EvFlush && s.havePose && ev.Pos.Dist(eye) < 80 {
-			s.p.Totals.Flushed++
-			s.minor = true
-			s.narrate(narrator.Event{Kind: narrator.Flushed, Known: s.knownSp(s.spAt(ev.Species))})
+		if ev.Kind == core.EvFlush {
+			s.onFlush(ctx, ev, eye) // the client's flight cue, Totals.Flushed, narration (followflight.go)
+		}
+	case core.EvLand:
+		if s.havePose {
+			s.onLand(ctx, ev, eye)
 		}
 	}
 }

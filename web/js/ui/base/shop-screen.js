@@ -4,6 +4,15 @@
 import { el, fill, icon, button, panel, tabs, itemCard, formatMod } from '../kit.js';
 import * as L from './logic.js';
 import { creditsChip, priceTag, itemTitle, prosCons, modChips, deltaRows, reqRow, issueRow, emptyState, sectionTitle, upgradeCard } from './views.js';
+import { footprintMini } from '../menu/packgrid.js';
+import { footprint } from '../menu/packlogic.js';
+
+/** "Takes 2×3 cells" with a little diagram, so players can plan where it goes. */
+function footprintTag(item, long = false) {
+  const { w, h } = footprint(item);
+  return el('span', { class: 'base-fp' + (long ? ' long' : ''), title: `Takes ${w}×${h} cell${w * h === 1 ? '' : 's'} of your pack` },
+    footprintMini(item), long ? `Takes ${w}×${h} cell${w * h === 1 ? '' : 's'} of your pack` : `${w}×${h}`);
+}
 
 const TABS = [
   { id: 'gear', label: 'Gear', icon: 'binoculars' },
@@ -40,13 +49,16 @@ export function createShopScreen(ctx) {
 
   // --- list ------------------------------------------------------------------
   function shopCard(item, selected) {
-    const chk = L.purchaseCheck(item, state.profile, state.stats, state.ranks);
+    const chk = L.purchaseCheck(item, state.profile, state.stats, state.ranks, state.items);
     const locked = chk.requirements.some((r) => !r.met);
-    const card = el('div', { class: 'base-shop-card' + (selected ? ' selected' : '') + (chk.owned ? ' owned' : '') + (locked ? ' locked' : '') + (!chk.canBuy && !chk.owned && !locked ? ' short' : ''),
+    const noRoom = chk.noRoom && !chk.owned && !locked;
+    const card = el('div', { class: 'base-shop-card' + (selected ? ' selected' : '') + (chk.owned ? ' owned' : '') + (locked ? ' locked' : '') + (!chk.canBuy && !chk.owned && !locked ? ' short' : '') + (noRoom ? ' noroom' : ''),
       onclick: () => { snd('click'); view.sel[view.tab] = item.id; render(); } },
       itemCard(item, { price: chk.price, selected, owned: chk.owned }),
+      footprintTag(item),
       chk.owned ? el('span', { class: 'base-ribbon' }, icon('check', 12), 'Owned') : null,
-      locked ? el('span', { class: 'base-ribbon lock' }, icon('lock', 12), 'Locked') : null);
+      locked ? el('span', { class: 'base-ribbon lock' }, icon('lock', 12), 'Locked') : null,
+      noRoom ? el('span', { class: 'base-ribbon room', title: L.NO_ROOM_TEXT }, icon('backpack', 12), 'No room') : null);
     return card;
   }
 
@@ -74,7 +86,7 @@ export function createShopScreen(ctx) {
   }
 
   function renderItemDetail(item) {
-    const chk = L.purchaseCheck(item, state.profile, state.stats, state.ranks);
+    const chk = L.purchaseCheck(item, state.profile, state.stats, state.ranks, state.items);
     const carried = item.kind === 'supply' ? L.countOwned(state.profile, item.id) : 0;
     const discounted = chk.price !== item.price;
     const buy = el('div', { class: 'base-buy' },
@@ -86,9 +98,14 @@ export function createShopScreen(ctx) {
         ? button('Equip', { variant: 'primary', icon: 'check', onClick: () => api.send('equip', { item: item.id }, 'equip') })
         : button(chk.owned ? (state.profile.equipped?.[item.slot] === item.id ? 'Equipped' : 'Owned') : 'Buy', { variant: 'primary', icon: 'credits', disabled: !chk.canBuy,
           onClick: () => api.send('buy', { item: item.id }, 'coin') }),
-      chk.issues.length && !chk.owned ? el('div', { class: 'base-reqs' }, chk.issues.map((i) => issueRow(i.text))) : null);
+      chk.issues.length && !chk.owned ? el('div', { class: 'base-reqs' }, chk.issues.map((i) => issueRow(i.text))) : null,
+      chk.noRoom && !chk.owned ? el('div', { class: 'base-room-hint' }, chk.tidyFits
+        ? [el('span', 'Tidied, your pack would have room for it.'),
+          button('Tidy my pack', { small: true, icon: 'sort', onClick: () => api.send('tidy', { where: 'inventory' }, 'page') })]
+        : el('span', 'Leave something in your cabin storage, or take something out of your pack, to make room.')) : null);
     fill(detail, el('div', { class: 'base-shop-scroll' },
       itemTitle(item),
+      footprintTag(item, true),
       el('p', { class: 'base-desc' }, item.desc),
       prosCons(item),
       chk.requirements.length ? el('div', { class: 'base-block' }, sectionTitle('Requirements'), el('div', { class: 'base-reqs' }, chk.requirements.map(reqRow))) : null,

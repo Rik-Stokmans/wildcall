@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Rik-Stokmans/wildcall/internal/content"
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 	"github.com/Rik-Stokmans/wildcall/internal/progress"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
@@ -527,5 +528,182 @@ func TestNewAdventureFacesMara(t *testing.T) {
 	diff := math.Abs(math.Remainder(float64(w.Spawn.Yaw-want), 2*math.Pi))
 	if diff > 0.05 {
 		t.Fatalf("spawn yaw %.2f, Mara is at heading %.2f", w.Spawn.Yaw, want)
+	}
+}
+
+// newHarnessSeed is newHarness on a world of the given seed text.
+func newHarnessSeed(t *testing.T, seed string) *harness {
+	t.Helper()
+	h := &harness{t: t, dir: t.TempDir(), out: &capture{}}
+	h.s = newSession(t, h.dir, seed, true)
+	h.s.Attach(h.out)
+	h.send(proto.CHello, proto.Hello{Name: "Tester"})
+	if _, ok := h.last(proto.SWelcome); !ok {
+		t.Fatal("no welcome")
+	}
+	return h
+}
+
+// beginnerSearch plays a scripted beginner from Mara's porch: walk towards the
+// quest's search area until the quarry's voice gives a clue, then walk along the
+// clue's bearing, stop about 10 m short of the distance band, look along the bearing
+// at the clue's elevation angle and raise the binoculars. It uses only what the HUD
+// shows (search area, clue bearing, distance band, elevation angle), never the
+// bird's true position. It returns the seconds until the first sighting of the
+// quarry's species (or -1) and whether that bird was the singer.
+func beginnerSearch(t *testing.T, h *harness, limit float32, onlySinger bool) (found float32, singer bool, clues int) {
+	t.Helper()
+	s := h.s
+	st := s.p.Quests[content.TutorialQuest]
+	if st == nil || st.Area == nil {
+		t.Fatalf("no search area on the tutorial: %+v", st)
+	}
+	area := *st.Area
+	feet := s.feet
+	var (
+		haveClue      bool
+		bearing, elev float32
+		goal          float32 // metres still to walk along the bearing
+		stoppedFor    float32
+		lastClue      float32 = -100
+		quarry        string
+	)
+	const dt = 0.1
+	for i := 0; float32(i)*dt < limit; i++ {
+		now := float32(i) * dt
+		if quarry == "" {
+			for k := range s.p.Flags {
+				if strings.HasPrefix(k, quarryPrefix+content.TutorialQuest+":") {
+					quarry = strings.TrimPrefix(k, quarryPrefix+content.TutorialQuest+":")
+				}
+			}
+		}
+		// Decide this tick's movement.
+		var yaw, pitch, speed float32
+		move, tool := "still", "none"
+		switch {
+		case !haveClue:
+			// Towards the area marked on the compass and minimap.
+			to := core.V(area.X, 0, area.Z)
+			yaw = core.HeadingTo(feet, to)
+			if feet.DistXZ(to) > area.Radius*0.6 {
+				speed, move = 1.4, "walk"
+			}
+		case goal > 0:
+			yaw, speed, move = bearing, 1.4, "walk"
+		default:
+			yaw, pitch = bearing, elev
+			stoppedFor += dt
+			if stoppedFor > 1.0 {
+				tool = "binoculars"
+			}
+		}
+		if speed > 0 {
+			step := core.HeadingDir(yaw).Scale(speed * dt)
+			feet = feet.Add(step)
+			feet.Y = s.world.HeightAt(feet.X, feet.Z)
+			if goal > 0 {
+				goal -= speed * dt
+			}
+			stoppedFor = 0
+		}
+		eye := feet.Add(core.V(0, core.EyeHeight, 0))
+		p := proto.Pose{X: eye.X, Y: eye.Y, Z: eye.Z, Yaw: yaw, Pitch: pitch, Speed: speed, Move: move,
+			Tool: tool, Raised: tool != "none", Zoom: 1, FOV: 70, Sharp: 1}
+		if tool == "binoculars" {
+			p.Zoom = s.p.Stats.BinoZoom
+			p.FOV = s.p.Stats.BinoFOV / p.Zoom
+		}
+		h.send(proto.CPose, p)
+		h.tick(1)
+		for _, m := range h.take() {
+			switch m.T {
+			case proto.SClue:
+				c := decodeAs[proto.Clue](t, m.D)
+				if c.TTL <= 0 || quarry == "" || c.Mystery != quarry || onlySinger && c.ID != s.SingerID() {
+					continue
+				}
+				clues++
+				haveClue, bearing, elev, lastClue = true, c.Bearing, c.Elev, now
+				if c.DistMax > 0 {
+					mid := (c.DistMin + c.DistMax) / 2
+					goal = mid - 10
+				} else {
+					goal = 8
+				}
+				if goal < 2 {
+					goal = 0
+				}
+			case proto.SSighting:
+				sg := decodeAs[proto.Sighting](t, m.D)
+				if sg.Bird != 0 && quarry != "" && sg.Mystery == quarry && (!onlySinger || sg.Bird == s.SingerID()) {
+					return now, sg.Bird == s.SingerID(), clues
+				}
+			}
+		}
+		// Lost the voice for a long while: head back towards the area.
+		if haveClue && now-lastClue > 45 {
+			haveClue = false
+		}
+	}
+	return -1, false, clues
+}
+
+// TestBeginnerFindsTheSinger: on five worlds a scripted beginner who only follows
+// what the HUD shows sees the tutorial's singer within three minutes of setting off
+// from Mara's porch, and nothing names the wren on the way.
+func TestBeginnerFindsTheSinger(t *testing.T) {
+	if testing.Short() {
+		t.Skip("plays five worlds")
+	}
+	for _, seed := range singerSeeds {
+		t.Run(seed, func(t *testing.T) {
+			h := newHarnessSeed(t, seed)
+			s := h.s
+			scanFrom := len(h.all)
+			_, _ = h.talkUntil("npc_mara", "mara", "accept:unseen_singer")
+			h.tick(2)
+			found, singer, clues := beginnerSearch(t, h, 180, false)
+			id := s.SingerID()
+			info, _ := s.sim.CircuitOf(id)
+			t.Logf("%s: sighting after %.1f s (the singer: %v), %d quarry clues, singer pushed %d times, %d songs",
+				seed, found, singer, clues, info.Pushes, info.Songs)
+			if found < 0 {
+				t.Fatalf("%s: the beginner saw nothing in 3 minutes", seed)
+			}
+			h.take()
+			for _, mm := range h.all[scanFrom:] {
+				if mm.T == proto.SWelcome || mm.T == proto.SBirds {
+					continue
+				}
+				js := strings.ToLower(stripCandidates(string(mm.D)))
+				if strings.Contains(js, wrenID) || strings.Contains(js, "wren") {
+					t.Errorf("message %q leaks the unidentified wren: %s", mm.T, trimForLog(string(mm.D)))
+				}
+			}
+		})
+	}
+}
+
+// TestBeginnerFindsTheSingerHimself: the same beginner, following only the
+// singer's own voice (as if the other wrens kept quiet), sees him within three
+// minutes on every world: the quest never depends on a wren the ecosystem happens
+// to hold.
+func TestBeginnerFindsTheSingerHimself(t *testing.T) {
+	if testing.Short() {
+		t.Skip("plays five worlds")
+	}
+	for _, seed := range singerSeeds {
+		t.Run(seed, func(t *testing.T) {
+			h := newHarnessSeed(t, seed)
+			_, _ = h.talkUntil("npc_mara", "mara", "accept:unseen_singer")
+			h.tick(2)
+			found, _, clues := beginnerSearch(t, h, 180, true)
+			info, _ := h.s.sim.CircuitOf(h.s.SingerID())
+			t.Logf("%s: saw the singer after %.1f s, %d clues from him, pushed %d times", seed, found, clues, info.Pushes)
+			if found < 0 {
+				t.Fatalf("%s: never saw the singer in 3 minutes", seed)
+			}
+		})
 	}
 }

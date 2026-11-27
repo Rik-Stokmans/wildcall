@@ -157,6 +157,7 @@ type tBuilder struct {
 	leaves  []tleaf
 	anchors []leafAnchor
 	estR    [4]float64
+	cap     int // segment budget while growing (0 = treeMaxSegs)
 }
 
 // grow appends a chain of up to n equal segments of total length from the end of
@@ -169,7 +170,7 @@ func (b *tBuilder) grow(parent int, p, dir v3, length float64, n, order int, ste
 	step := length / float64(n)
 	d := dir.norm()
 	for i := 0; i < n; i++ {
-		if len(b.segs) >= treeMaxSegs {
+		if len(b.segs) >= b.budget() {
 			break
 		}
 		if i > 0 && steer != nil {
@@ -194,7 +195,7 @@ func (b *tBuilder) grow(parent int, p, dir v3, length float64, n, order int, ste
 // branch grows a side chain from the end of segment parent, retrying a few
 // directions (pick returns one per attempt) when the first segment is blocked.
 func (b *tBuilder) branch(parent int, pick func(attempt int) v3, length float64, n, order int, steer func(i int, d v3) v3) []int {
-	if parent < 0 || len(b.segs) >= treeMaxSegs {
+	if parent < 0 || len(b.segs) >= b.budget() {
 		return nil
 	}
 	p := b.segs[parent].b
@@ -204,6 +205,14 @@ func (b *tBuilder) branch(parent int, pick func(attempt int) v3, length float64,
 		}
 	}
 	return nil
+}
+
+// budget is the segment count growth may reach right now.
+func (b *tBuilder) budget() int {
+	if b.cap > 0 && b.cap < treeMaxSegs {
+		return b.cap
+	}
+	return treeMaxSegs
 }
 
 // clear reports whether a new segment p-q of radius r growing from parent keeps
@@ -311,6 +320,94 @@ func (b *tBuilder) placeLeaves(k int, rx, ry [2]float64, lift, outward float64) 
 	}
 }
 
+// leafDepth is the smallest normalised ellipsoid distance from p to the foliage
+// grown so far (< 1 inside a mass).
+func (b *tBuilder) leafDepth(p v3) float64 {
+	best := math.Inf(1)
+	for _, l := range b.leaves {
+		d := p.sub(l.c)
+		if n := math.Sqrt(sq(d.x/l.r.x) + sq(d.y/l.r.y) + sq(d.z/l.r.z)); n < best {
+			best = n
+		}
+	}
+	return best
+}
+
+// bareEnds grows up to n bare limb ends out through the side of the crown: a
+// branch near the crown edge carries on past its foliage as leafless wood, rising
+// at lift radians or more. Real crowns have them (dead or late-leafing ends) and
+// birds use them as look-outs and song posts; here they are the exposed branch
+// and tip perches that keep a perched bird in view. The ends are spread round the
+// crown and stay inside the model's bounds.
+func (b *tBuilder) bareEnds(n int, lift float64) {
+	if n <= 0 || len(b.leaves) == 0 {
+		return
+	}
+	top, reach := 0.0, 0.0
+	for _, l := range b.leaves {
+		top = math.Max(top, l.c.y+l.r.y)
+	}
+	for i := range b.segs {
+		reach = math.Max(reach, math.Hypot(b.segs[i].b.x, b.segs[i].b.z))
+	}
+	type cand struct {
+		seg   int
+		az    float64
+		score float64
+	}
+	var cs []cand
+	for i := range b.segs {
+		s := &b.segs[i]
+		if s.order == 0 || s.order > 2 {
+			continue
+		}
+		h := math.Hypot(s.b.x, s.b.z)
+		if h < 0.4*reach || s.b.y < 0.45*top {
+			continue
+		}
+		cs = append(cs, cand{i, math.Atan2(s.b.x, s.b.z), h/reach + s.b.y/top + 0.3*b.rng.Float64()})
+	}
+	var used []float64
+	for k := 0; k < n && len(b.segs) < treeMaxSegs-1; k++ {
+		best := -1
+		for j, c := range cs {
+			if c.seg < 0 {
+				continue
+			}
+			ok := true
+			for _, a := range used {
+				if math.Abs(math.Remainder(c.az-a, 2*math.Pi)) < 1.1 {
+					ok = false
+				}
+			}
+			if ok && (best < 0 || c.score > cs[best].score) {
+				best = j
+			}
+		}
+		if best < 0 {
+			return
+		}
+		c := cs[best]
+		cs[best].seg = -1
+		from := b.segs[c.seg].b
+		el := lift + b.rng.Range(0, 0.25)
+		az := c.az + b.rng.Range(-0.35, 0.35)
+		d := dirAE(az, el)
+		// Long enough to clear the foliage by a hand's breadth or two.
+		l := 0.6
+		for l < 2.8 && b.leafDepth(from.add(d.scale(l))) < 1.25 {
+			l += 0.2
+		}
+		l += 0.35
+		if end := from.add(d.scale(l)); math.Hypot(end.x, end.z) > 0.56*top || end.y > top-0.2 {
+			continue
+		}
+		if sp := b.grow(c.seg, from, d, l, 2, 2, b.wobble(0.06, 0, 0.04)); len(sp) > 0 {
+			used = append(used, c.az)
+		}
+	}
+}
+
 // emergentTop makes sure the highest twig pokes out above the foliage: a song
 // post on the very top of the tree.
 func (b *tBuilder) emergentTop() {
@@ -401,14 +498,22 @@ func buildTree(kind core.VegKind, variant int) (segs []tseg, leaves []tleaf) {
 	return b.segs, b.leaves
 }
 
-// oak: short stout bole, heavy limbs spreading from a low crown break, secondary
-// branches and twigs carrying a broad dome of foliage clumps.
+// oak: a stout bole clear to 3-4 m (sight lines under the crown), heavy limbs
+// that spread up and out from the crown break, secondary branches and twigs
+// carrying separate foliage clumps towards the limb ends, and a few bare outer
+// limb ends - the exposed perches birds sing and look about from. Variant 5 is a
+// younger tree with a lower crown.
 func (b *tBuilder) oak(variant int) {
 	r := &b.rng
+	v := variant % core.TreeVariants
+	young := v == 5
 	lean := dirAE(r.Range(0, 2*math.Pi), math.Pi/2-r.Range(0.02, 0.07))
-	bole := r.Range(2.9, 3.7)
-	trunk := b.grow(-1, v3{}, lean, bole, 3, 0, b.wobble(0.04, 0, 0.05))
-	if len(trunk) < 3 {
+	bole := r.Range(4.1, 4.7)
+	if young {
+		bole = r.Range(3.2, 3.6)
+	}
+	trunk := b.grow(-1, v3{}, lean, bole, 4, 0, b.wobble(0.04, 0, 0.04))
+	if len(trunk) < 4 {
 		return
 	}
 	az0 := r.Range(0, 2*math.Pi)
@@ -421,23 +526,31 @@ func (b *tBuilder) oak(variant int) {
 	var limbs []limb
 	// Variant 0 is the grand, wide-spreading oak (the Old Oak uses it).
 	spread := 1.0
-	if variant%core.TreeVariants == 0 {
+	if v == 0 {
 		spread = 1.12
 	}
-	// Low heavy limbs reaching out sideways give the crown its broad dome.
+	// The lowest limbs leave the bole at the crown break and climb as they reach
+	// out: the broad dome sits on them, well above head height.
 	low := 1 + r.Intn(2)
-	if variant%core.TreeVariants == 0 {
+	if v == 0 {
 		low = 2
 	}
-	for k := 0; k < low; k++ {
-		limbs = append(limbs, limb{node: trunk[1], az: az0 + math.Pi + float64(k)*2.3 + r.Range(-0.4, 0.4), el: r.Range(0.36, 0.56), length: r.Range(3.4, 4.1) * spread})
+	lowNode, lowEl := trunk[2], [2]float64{0.5, 0.68}
+	if v == 0 {
+		// The grand oak (drawn at two and a half times the size) throws its great
+		// limbs out lower and flatter: it is the wide one you walk under.
+		lowNode, lowEl = trunk[1], [2]float64{0.4, 0.55}
 	}
-	limbs = append(limbs, limb{node: trunk[2], az: az0 + r.Range(-0.5, 0.5), el: r.Range(1.15, 1.35), length: r.Range(5.0, 6.0), leader: true})
+	for k := 0; k < low; k++ {
+		limbs = append(limbs, limb{node: lowNode, az: az0 + math.Pi + float64(k)*2.3 + r.Range(-0.4, 0.4), el: r.Range(lowEl[0], lowEl[1]), length: r.Range(3.5, 4.2) * spread})
+	}
+	limbs = append(limbs, limb{node: trunk[3], az: az0 + r.Range(-0.5, 0.5), el: r.Range(1.15, 1.35), length: r.Range(4.4, 5.2), leader: true})
 	n := 3 + r.Intn(2)
 	for k := 0; k < n; k++ {
 		az := az0 + float64(k+1)*2*math.Pi/float64(n+1) + r.Range(-0.3, 0.3)
-		limbs = append(limbs, limb{node: trunk[2], az: az, el: r.Range(0.6, 0.9), length: r.Range(3.9, 4.8) * spread})
+		limbs = append(limbs, limb{node: trunk[3], az: az, el: r.Range(0.62, 0.92), length: r.Range(3.7, 4.5) * spread})
 	}
+	b.cap = treeMaxSegs - 5 // keep a few segments for the bare outer limb ends
 	var ends [][]int
 	for _, l := range limbs {
 		l := l
@@ -457,12 +570,12 @@ func (b *tBuilder) oak(variant int) {
 			d := b.segs[c[i]].dir()
 			side := sgn(i + li)
 			az, el := azOf(d), elOf(d)
-			length := r.Range(2.0, 2.9) * (1 - 0.18*float64(i))
+			length := r.Range(2.0, 2.8) * (1 - 0.18*float64(i))
 			sec := b.branch(c[i], func(k int) v3 {
-				return dirAE(az+side*(r.Range(0.7, 1.1)+0.25*float64(k)), math.Min(el*0.5+r.Range(-0.05, 0.25), 1.0))
+				return dirAE(az+side*(r.Range(0.7, 1.1)+0.25*float64(k)), math.Min(el*0.5+r.Range(0.05, 0.3), 1.0))
 			}, length, 2, 2, b.wobble(0.12, 0, 0.12))
 			if len(sec) > 0 {
-				sites = append(sites, twigSite{last(sec), 0.8, 1.2, 0.1})
+				sites = append(sites, twigSite{last(sec), 0.8, 1.2, 0.15})
 			}
 		}
 	}
@@ -470,12 +583,16 @@ func (b *tBuilder) oak(variant int) {
 		sites = append(sites, twigSite{last(c), 0.9, 1.4, 0.35})
 	}
 	b.twigRounds(sites, 2)
-	b.placeLeaves(14+r.Intn(5), [2]float64{1.6, 2.1}, [2]float64{1.05, 1.4}, 0.2, 0.25)
+	b.cap = treeMaxSegs
+	b.placeLeaves(11+r.Intn(3), [2]float64{1.4, 1.8}, [2]float64{0.95, 1.2}, 0.25, 0.45)
+	b.bareEnds(2+r.Intn(2), 0.3)
 	b.emergentTop()
 }
 
-// birch: slim, slightly leaning stem running nearly to the top, ascending limbs
-// that arch over into fine drooping ends, a narrow oval crown.
+// birch: slim, slightly leaning stem running nearly to the top with 4-5 m of
+// clean white bark below the first limbs (3.5 m on the younger variants 4 and 5),
+// ascending limbs that arch over into fine drooping ends, a narrow, airy oval
+// crown with a bare twig or two poking out of its side.
 func (b *tBuilder) birch(variant int) {
 	r := &b.rng
 	leanAz := r.Range(0, 2*math.Pi)
@@ -486,8 +603,13 @@ func (b *tBuilder) birch(variant int) {
 	if len(trunk) < 6 {
 		return
 	}
+	first := 3
+	if variant%core.TreeVariants >= 4 {
+		first = 2
+	}
 	az := r.Range(0, 2*math.Pi)
-	for i := 2; i < len(trunk); i++ {
+	b.cap = treeMaxSegs - 4
+	for i := first; i < len(trunk); i++ {
 		h := b.segs[trunk[i]].b.y
 		u := h / 9
 		count := 1
@@ -505,15 +627,22 @@ func (b *tBuilder) birch(variant int) {
 			if len(limb) == 0 {
 				continue
 			}
+			if i == first {
+				// The lowest limbs hold their ends up: no curtain of twigs at eye level.
+				b.anchor(last(limb), 0.8)
+				continue
+			}
 			// Fine drooping ends.
-			b.droop(last(limb), 1+r.Intn(2), 0.8, 1.25)
+			b.droop(last(limb), 1+r.Intn(2), 0.7, 1.1)
 			if len(limb) > 1 && r.Chance(0.5) {
 				b.droop(limb[0], 1, 0.6, 0.9)
 			}
 		}
 	}
+	b.cap = treeMaxSegs
 	b.anchor(last(trunk), 1.3)
-	b.placeLeaves(9+r.Intn(5), [2]float64{0.72, 1.0}, [2]float64{1.0, 1.35}, -0.15, 0.1)
+	b.placeLeaves(8+r.Intn(4), [2]float64{0.68, 0.92}, [2]float64{0.85, 1.15}, 0.05, 0.25)
+	b.bareEnds(1+r.Intn(2), 0.35)
 	b.emergentTop()
 }
 
@@ -527,14 +656,26 @@ func (b *tBuilder) pine(variant int) {
 	if len(trunk) < 8 {
 		return
 	}
-	// Variants 0-3 are mature trees (high, flat-topped crowns), 4-5 younger
-	// conical ones with branches lower down.
-	young := variant%core.TreeVariants >= 4
+	// Variants 0-4 are mature trees (bare to 5-7 m, high crowns of layered pads),
+	// variant 5 a younger conical one with branches lower down.
+	young := variant%core.TreeVariants == 5
 	first := 3 + r.Intn(2)
 	if young {
 		first = 2
 	}
 	az := r.Range(0, 2*math.Pi)
+	if !young {
+		// Dead lower branches: short bare stubs on the clean bole, where the crown
+		// once was - a favourite look-out.
+		for i := 1; i < first; i++ {
+			if !r.Chance(0.55) {
+				continue
+			}
+			az += 2.2 + r.Range(-0.4, 0.4)
+			a := az
+			b.branch(trunk[i], func(t int) v3 { return dirAE(a+float64(t)*0.5*sgn(t), r.Range(-0.05, 0.2)) }, r.Range(0.9, 1.4), 1, 1, nil)
+		}
+	}
 	type pad struct {
 		seg    []int
 		length float64
@@ -584,8 +725,8 @@ func (b *tBuilder) pine(variant int) {
 	for _, p := range pads {
 		s0, s1 := &b.segs[p.seg[0]], &b.segs[last(p.seg)]
 		c := s0.a.lerp(s1.b, 0.68)
-		rx := 0.42*p.length + 0.55
-		b.leaves = append(b.leaves, tleaf{c: c.add(vUp.scale(0.22)), r: v3{rx, r.Range(0.45, 0.68), rx * r.Range(0.85, 1.15)}})
+		rx := 0.38*p.length + 0.48
+		b.leaves = append(b.leaves, tleaf{c: c.add(vUp.scale(0.22)), r: v3{rx, r.Range(0.42, 0.62), rx * r.Range(0.85, 1.15)}})
 	}
 	top := b.segs[last(trunk)].b
 	b.leaves = append(b.leaves, tleaf{c: top.sub(v3{0, 1.15, 0}), r: v3{0.95, 1.0, 0.95}})
@@ -636,11 +777,12 @@ func (b *tBuilder) chestnut(variant int) {
 	if variant%2 == 1 {
 		twist = -twist
 	}
-	trunk := b.grow(-1, v3{}, dirAE(r.Range(0, 2*math.Pi), math.Pi/2-r.Range(0.02, 0.06)), r.Range(3.9, 4.6), 2, 0, nil)
+	trunk := b.grow(-1, v3{}, dirAE(r.Range(0, 2*math.Pi), math.Pi/2-r.Range(0.02, 0.06)), r.Range(4.7, 5.3), 2, 0, nil)
 	if len(trunk) < 2 {
 		return
 	}
 	lead := b.grow(last(trunk), b.segs[last(trunk)].b, dirAE(r.Range(0, 2*math.Pi), math.Pi/2-0.08), r.Range(4.6, 5.4), 3, 0, b.wobble(0.05, twist, 0.05))
+	b.cap = treeMaxSegs - 7
 	nodes := append([]int{trunk[1]}, lead...)
 	az := r.Range(0, 2*math.Pi)
 	var limbs [][]int
@@ -674,8 +816,10 @@ func (b *tBuilder) chestnut(variant int) {
 		sites = append(sites, twigSite{last(l), 0.9, 1.3, 0.3})
 	}
 	b.twigRounds(sites, 2)
+	b.cap = treeMaxSegs
 	b.anchor(last(lead), 1.2)
-	b.placeLeaves(14+r.Intn(5), [2]float64{1.9, 2.5}, [2]float64{1.35, 1.75}, 0.3, 0.25)
+	b.placeLeaves(11+r.Intn(4), [2]float64{1.7, 2.2}, [2]float64{1.2, 1.55}, 0.3, 0.4)
+	b.bareEnds(2+r.Intn(2), 0.3)
 	b.emergentTop()
 }
 
@@ -855,9 +999,9 @@ func newTreeModel(kind core.VegKind, variant int, segs []tseg, leaves []tleaf) *
 	m.wire.Height = float32(m.height)
 	if len(leaves) > 0 {
 		m.crown = lo.lerp(hi, 0.5)
-		// Clumps leave gaps: the envelope that really hides things is a little
-		// smaller than the bounding box.
-		m.crownR = 0.85 * math.Max(hi.x-lo.x, hi.z-lo.z) / 2
+		// Clumps leave gaps (and the outer ones stand apart along their limbs):
+		// the envelope that really hides things is smaller than the bounding box.
+		m.crownR = 0.8 * math.Max(hi.x-lo.x, hi.z-lo.z) / 2
 		m.crownH = 0.9 * (hi.y - lo.y) / 2
 	}
 	m.buildPerchTemplates(kind)

@@ -104,6 +104,7 @@ type bird struct {
 	n      int8  // steps left in the current bout (trips, hover stations, flight legs)
 	stage  uint8 // nest bouts: what the trips are for (nsGather / nsFood / nsSit / nsVisit)
 	singer bool  // holding a breeding territory (refreshed at every bout end): sings more
+	held   bool  // this rest bout has already been stretched for a song (voice.go)
 
 	destKind core.PerchKind
 	sp       int16
@@ -136,6 +137,10 @@ type bird struct {
 	dive   float32 // seconds until it dives for cover from a passing raptor (0 = not pending)
 	fled   bool    // flushed by the observer and not yet back home (Settled)
 	gy     float32 // ground height under the bout's anchor
+	since  float32 // seconds since its last relocation (a flight of more than lingerHop metres; linger.go)
+	circ   uint16  // 1 + index into Sim.circuits for a circuit resident (resident.go); 0 = an ordinary bird
+
+	ff followState // escapes, refuges and flush streaks (followflight.go)
 
 	// The move in progress: from -> to along an arc, with a per-style wobble.
 	from, to     core.Vec3
@@ -199,7 +204,12 @@ func (s *Sim) leader(b *bird) *bird {
 
 // stepBird advances one bird by dt seconds.
 func (s *Sim) stepBird(b *bird, idx int32, dt float32) {
+	if b.circ != 0 {
+		s.stepCircuit(b, idx, dt) // a circuit resident lives by its own round (resident.go)
+		return
+	}
 	p := &s.prof[b.sp]
+	b.since += dt
 
 	if b.singT > 0 {
 		if b.singT -= dt; b.singT <= 0 {
@@ -249,8 +259,9 @@ func (s *Sim) stepBird(b *bird, idx int32, dt float32) {
 		case mHover:
 			s.hoverTick(b, dt)
 		case mAway:
+			s.refugeTick(b, p, dt) // looking back, the landing call, slipping into cover
 			// The countdown only runs once the bird has calmed down at its refuge.
-			if b.fear < fearAlert && !s.nestBlocked(b) {
+			if !b.moving && b.fear < fearAlert && !s.nestBlocked(b) {
 				if b.away -= dt; b.away <= 0 {
 					s.comeHome(b, p)
 				}
@@ -285,6 +296,11 @@ func (s *Sim) voiceTick(b *bird, p *profile, dt float32) {
 		b.callCD -= dt
 	} else if b.quiet <= 0 && b.fear < fearWary {
 		if f := s.voiceFactor(b, p); f > 0 && s.rng.Float32() < s.rate[b.sp]*f*dt {
+			// Song posts are exposed: a bird about to sing deep in the leaves first
+			// hops out to an open perch close by and sings from there (thenSong).
+			if (b.mode == mIdle || b.mode == mGlean) && s.showOff(b, p, singShow, thenSong) {
+				return
+			}
 			s.sing(b, p)
 		}
 	}

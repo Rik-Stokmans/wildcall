@@ -17,10 +17,16 @@
 //   throat (bulge scale) · tailPitch (+ raised) · tailYaw · tailSpread 0..1 ·
 //   flapL/flapR (+ wing up) · sweep 0..1 (wings swept back) · hand (wingtip flex) ·
 //   fold 0..1 (1 = wings closed) · coverLiftL/R (folded wing raised/drooped) ·
-//   legTuck 0..1 · strideL/strideR · twig 0/1 · splash 0..1 · wake 0..1
+//   legTuck 0..1 · strideL/strideR · twig 0/1 · splash 0..1 · wake 0..1 ·
+//   turn (the whole bird turned on its perch about its feet, + to the right)
+//
+// Idle life is deliberately lively (the owner's brief: movement is what the eye
+// catches): quick head turns, tail flicks, wing shuffles and now and then a hop that
+// turns the bird around on its branch. `boost` (inp.boost, ≥ 1) enlarges these small
+// movements for birds that look small on screen so they still read at distance.
 
 import { ACT, FLAG, isAirborneAct, FLIGHT_STYLES, GROUND_MODES } from './constants.js';
-import { flightPose, flightStyleFor, flapRateFor, createFlightPose } from './flight.js';
+import { flightPose, flightStyleFor, flapRateFor, createFlightPose, visibleFlapHz } from './flight.js';
 import { ARCHETYPES, clamp } from './rig.js';
 
 const TAU = Math.PI * 2;
@@ -31,7 +37,7 @@ export const CHANNELS = Object.freeze({
   neckPitch: 10, neckScale: 8, headYaw: 26, headPitch: 22, headRoll: 12,
   jaw: 30, throat: 20, tailPitch: 16, tailYaw: 10, tailSpread: 8,
   flapL: 0, flapR: 0, sweep: 10, hand: 0, fold: 14, coverLiftL: 14, coverLiftR: 14,
-  legTuck: 8, strideL: 30, strideR: 30, twig: 0, splash: 5, wake: 3,
+  legTuck: 8, strideL: 30, strideR: 30, twig: 0, splash: 5, wake: 3, turn: 7,
 });
 const CH = Object.keys(CHANNELS);
 
@@ -41,7 +47,7 @@ const REST = Object.freeze({
   neckPitch: 0, neckScale: 1, headYaw: 0, headPitch: 0, headRoll: 0,
   jaw: 0, throat: 0.85, tailPitch: 0, tailYaw: 0, tailSpread: 0,
   flapL: 0, flapR: 0, sweep: 0, hand: 0, fold: 1, coverLiftL: 0, coverLiftR: 0,
-  legTuck: 0, strideL: 0, strideR: 0, twig: 0, splash: 0, wake: 0,
+  legTuck: 0, strideL: 0, strideR: 0, twig: 0, splash: 0, wake: 0, turn: 0,
 });
 
 export function createPose() { return { ...REST }; }
@@ -58,10 +64,10 @@ export function animProfile(species, rig) {
   const big = L >= 0.3;
   const tailShape = look.tailShape;
   // Tail-flicking is a strong field character of chats, thrushes, wrens and warblers.
-  let flick = 0.12;
-  if (tailShape === 'cocked') flick = 0.5;
-  else if (arch === 'songbird' || arch === 'thrush' || arch === 'warbler') flick = 0.32;
-  else if (arch === 'finch' || arch === 'tit') flick = 0.2;
+  let flick = 0.16;
+  if (tailShape === 'cocked') flick = 0.55;
+  else if (arch === 'songbird' || arch === 'thrush' || arch === 'warbler') flick = 0.38;
+  else if (arch === 'finch' || arch === 'tit') flick = 0.28;
   return {
     arch, flight, ground,
     flapHz: clamp(typeof move.flapHz === 'number' && move.flapHz > 0 ? move.flapHz : 8, 1, 30),
@@ -85,6 +91,9 @@ export function animProfile(species, rig) {
     drummer: look.billShape === 'chisel',
     owl: arch === 'owl',
     soarer: flight === 'soaring',
+    // Perched idle: seconds between hop-turns on the branch and between wing shuffles.
+    turnEvery: big ? [14, 32] : [5, 13],
+    shuffleEvery: big ? [7, 16] : [2.5, 7],
   };
 }
 
@@ -103,6 +112,7 @@ export function createAnimState() {
     strike: -1, strikeTimer: 6,
     dabble: -1, dabbleTimer: 5,
     sing: 0, singSeed: 0, roostSide: 1,
+    turnTimer: 6, turnT: 0, shuffle: -1, shuffleTimer: 3, shuffleSide: 0,
     tgt: createPose(),
     fp: createFlightPose(),
   };
@@ -122,6 +132,11 @@ export function resetAnimState(st, seed, pose) {
   st.strike = -1; st.strikeTimer = 4 + rand(st) * 8;
   st.dabble = -1; st.dabbleTimer = 2 + rand(st) * 6;
   st.sing = 0; st.singSeed = rand(st) * TAU; st.roostSide = rand(st) < 0.5 ? -1 : 1;
+  // Idle-extra timers come from the seed directly so the main random stream (and so
+  // every other behaviour of this individual) is unchanged.
+  const h = Math.imul((seed >>> 0) ^ 0x5bd1e995, 0x27d4eb2d) >>> 0;
+  st.turnTimer = 2 + (h % 1000) / 125; st.turnT = 0;
+  st.shuffle = -1; st.shuffleTimer = 1 + ((h >>> 10) % 1000) / 200; st.shuffleSide = 0;
   Object.assign(st.tgt, REST);
   if (pose) Object.assign(pose, REST);
 }
@@ -137,15 +152,15 @@ const between = (st, a, b) => a + (b - a) * rand(st);
 
 /** Input record (reuse one per renderer). */
 export function createAnimInput() {
-  return { act: 0, flags: 0, speed: 0, vx: 0, vy: 0, vz: 0, yawRate: 0, lookYaw: NaN, y: 0, groundDy: 0 };
+  return { act: 0, flags: 0, speed: 0, vx: 0, vy: 0, vz: 0, yawRate: 0, lookYaw: NaN, y: 0, groundDy: 0, boost: 1 };
 }
 
 // --- behaviour pieces ------------------------------------------------------------
 
-function idleHead(st, P, T, dt, wary, look) {
+function idleHead(st, P, T, dt, wary, look, boost = 1) {
   st.headTimer -= dt;
   if (st.headTimer <= 0) {
-    const range = P.headRange * (wary ? 0.8 : 1);
+    const range = Math.min(P.headRange * (wary ? 0.8 : 1) * boost, P.headRange * 1.4);
     if (wary && Number.isFinite(look) && rand(st) < 0.55) st.headYawT = clamp(look, -range, range);
     else st.headYawT = (rand(st) * 2 - 1) * range * (rand(st) < 0.3 ? 0.25 : 1);
     st.headPitchT = (rand(st) * 2 - 1) * 0.22;
@@ -156,13 +171,48 @@ function idleHead(st, P, T, dt, wary, look) {
   T.headPitch += st.headPitchT;
 }
 
-function tailLife(st, P, T, dt, nervous) {
+function tailLife(st, P, T, dt, nervous, boost = 1) {
   st.flickTimer -= dt * (nervous ? 2 : 1);
-  if (st.flickTimer <= 0) { st.flick = 1; st.flickTimer = between(st, 1.4, 5); }
+  if (st.flickTimer <= 0) { st.flick = 1; st.flickTimer = between(st, 1.0, 3.8); }
   st.flick = Math.max(0, st.flick - dt * 5);
   // A flick is a fast raise then a slower fall: sin of the decaying envelope.
-  T.tailPitch += P.flick * Math.sin(st.flick * Math.PI) * (st.flick > 0 ? 1 : 0);
+  T.tailPitch += P.flick * Math.min(boost, 1.6) * Math.sin(st.flick * Math.PI) * (st.flick > 0 ? 1 : 0);
   if (P.wag) T.tailPitch += 0.32 * Math.sin(st.t * TAU * 2.6); // wagtails never stop pumping
+}
+
+/**
+ * Perched idle extras: a wing shuffle now and then (both folded wings lifted and
+ * settled, or a single-wing flick) and, rarer, a hop that turns the bird on its perch.
+ */
+function perchLife(st, P, T, dt, boost) {
+  st.shuffleTimer -= dt;
+  if (st.shuffle < 0 && st.shuffleTimer <= 0) {
+    st.shuffle = 0;
+    st.shuffleSide = rand(st) < 0.6 ? 0 : rand(st) < 0.5 ? -1 : 1;
+    st.shuffleTimer = between(st, P.shuffleEvery[0], P.shuffleEvery[1]);
+  }
+  if (st.shuffle >= 0) {
+    st.shuffle += dt / 0.32;
+    if (st.shuffle >= 1) st.shuffle = -1;
+    else {
+      const e = Math.sin(st.shuffle * Math.PI) * 0.42 * Math.min(boost, 1.5);
+      if (st.shuffleSide <= 0) T.coverLiftL += e;
+      if (st.shuffleSide >= 0) T.coverLiftR += e;
+      T.fluff += 0.03 * e;
+    }
+  }
+  st.turnTimer -= dt;
+  if (st.turnTimer <= 0 && st.hop < 0) {
+    st.turnTimer = between(st, P.turnEvery[0], P.turnEvery[1]);
+    // Turn by a good amount (often right round), staying within half a turn of the
+    // heading the engine gave it.
+    const amt = between(st, 0.7, 2.9) * (rand(st) < 0.5 ? -1 : 1);
+    let t = st.turnT + amt;
+    if (t > Math.PI) t -= 2 * Math.PI; else if (t < -Math.PI) t += 2 * Math.PI;
+    st.turnT = clamp(t, -2.9, 2.9);
+    if (P.length < 0.3) { st.hop = 0; T.crouch = 0.45; }
+  }
+  T.turn = st.turnT;
 }
 
 function doHops(st, P, T, dt, moving, peckAfter) {
@@ -212,7 +262,7 @@ function doWalk(st, P, T, dt, speed) {
 
 function flying(st, P, T, inp, act, dt, styleOverride) {
   const style = styleOverride || flightStyleFor(act, P.flight);
-  st.phase += dt * P.flapHz * flapRateFor(act);
+  st.phase += dt * visibleFlapHz(P.flapHz * flapRateFor(act), dt); // [flight hook] never faster than the frame rate can show
   const fp = flightPose(style, st.phase, st.fp);
   T.air = 1;
   T.fold = fp.fold;
@@ -257,7 +307,8 @@ export function updateAnim(st, P, inp, dt, out) {
   dt = clamp(dt, 0, 0.1);
   st.t += dt;
   const act = inp.act >= 0 && inp.act < 18 ? inp.act : ACT.PERCHED;
-  if (act !== st.act) { st.act = act; st.actTime = 0; st.hop = -1; st.peck = -1; st.strike = -1; st.dabble = -1; }
+  if (act !== st.act) { st.act = act; st.actTime = 0; st.hop = -1; st.peck = -1; st.strike = -1; st.dabble = -1; st.shuffle = -1; if (act !== ACT.PERCHED) st.turnT = 0; }
+  const boost = inp.boost > 1 ? inp.boost : 1;
   st.actTime += dt;
   const flags = inp.flags | 0;
   const wary = (flags & FLAG.WARY) !== 0;
@@ -386,9 +437,12 @@ export function updateAnim(st, P, inp, dt, out) {
       }
       break;
     default: // PERCHED
-      idleHead(st, P, T, dt, wary, inp.lookYaw);
-      tailLife(st, P, T, dt, wary);
-      if (speed > 0.25) doHops(st, P, T, dt, true, false);
+      idleHead(st, P, T, dt, wary, inp.lookYaw, boost);
+      tailLife(st, P, T, dt, wary, boost);
+      if (speed > 0.25) { st.turnT = 0; doHops(st, P, T, dt, true, false); } else {
+        perchLife(st, P, T, dt, boost);
+        if (st.hop >= 0) doHops(st, P, T, dt, false, false);
+      }
       break;
   }
 

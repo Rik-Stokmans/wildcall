@@ -53,6 +53,8 @@ const (
 	CNote         = "note"         // NoteMsg
 	CForage       = "forage"       // ForageMsg: pick from a forage plant
 	CCook         = "cook"         // CookMsg: prepare a recipe at a kettle or stove
+	CPlace        = "place"        // PlaceItem: move a stack to a cell of the backpack or storage grid
+	CTidy         = "tidy"         // TidyMsg: let the game re-pack a grid neatly
 	CDebug        = "debug"        // DebugMsg (only honoured when the server runs with -dev)
 )
 
@@ -184,6 +186,27 @@ type CookMsg struct {
 	Qty    int    `json:"qty"`
 }
 
+// PlaceItem moves the stack whose top-left cell is (FX, FY) in grid From to cell (X, Y)
+// of grid To, optionally turned (R). From/To: inventory | storage (storage only at the
+// cabin). Dropping onto a stack of the same item merges as far as the stack limit
+// allows; any other overlap or an out-of-bounds placement is refused with an error and
+// nothing changes.
+type PlaceItem struct {
+	From string `json:"from"`
+	FX   int    `json:"fx"`
+	FY   int    `json:"fy"`
+	To   string `json:"to"`
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	R    bool   `json:"r"`
+}
+
+// TidyMsg re-packs a grid (Where: inventory | storage): merges stacks and arranges
+// items compactly, largest first.
+type TidyMsg struct {
+	Where string `json:"where"`
+}
+
 // DebugMsg.Cmd: xp|credits|time|weather|season|tp|unlock|give|identify|skillpoints|rank|spawn|rep|
 // forage|nest|buff|seed (see internal/game/debug.go for arguments)
 type DebugMsg struct {
@@ -221,6 +244,7 @@ const (
 	SNests    = "nests"    // NestsMsg: nests near the player (1 Hz, full list within range)
 	SForaged  = "foraged"  // ForagedMsg: result of a pick
 	SError    = "error"    // ErrorMsg
+	SFlight   = "flight"   // FlightMsg: a flushed bird took off / landed at its refuge
 )
 
 type Welcome struct {
@@ -332,6 +356,12 @@ type Clue struct {
 	New        bool    `json:"new"`        // first time the player hears this unknown voice
 	Unusual    bool    `json:"unusual"`    // Natural Instinct: something about this is out of the ordinary
 	TTL        float32 `json:"ttl"`        // seconds to keep showing
+	// Elev is the perceived elevation of the voice: the pitch angle in radians from
+	// the player's eye (positive = above, already includes the estimate's error), for
+	// drawing up/down on the sound ring around the crosshair. ElevSpread is its ±
+	// uncertainty in radians; ElevSpread 0 means the player cannot tell (Elev is then 0).
+	Elev       float32 `json:"elev,omitempty"`
+	ElevSpread float32 `json:"elevSpread,omitempty"`
 }
 
 // MoveCue is a subtle "something moved" hint (Sharp Eyes / Peripheral Awareness).
@@ -341,6 +371,19 @@ type MoveCue struct {
 	Elev     float32 `json:"elev"`     // pitch rad from the player's eye
 	InView   bool    `json:"inView"`   //
 	Strength float32 `json:"strength"` // 0..1
+}
+
+// FlightMsg marks the two moments of a flush the player can follow: the take-off
+// (Phase "flush": the bird is on its way from From to To, landing in Dur seconds) and
+// the landing (Phase "land": it has just landed at To). Only for flushes within
+// sight range of the player. It never carries anything the birds snapshot does not.
+type FlightMsg struct {
+	Bird  uint32     `json:"bird"`
+	Phase string     `json:"phase"` // flush | land
+	From  [3]float32 `json:"from"`  // take-off point
+	To    [3]float32 `json:"to"`    // landing perch
+	Dur   float32    `json:"dur"`   // flush: seconds until it lands (0 on land)
+	Flock int        `json:"flock"` // flush: flock mates following it (0 = alone)
 }
 
 // Sighting is the live result of watching a bird (spec §6, §13, screen 3).

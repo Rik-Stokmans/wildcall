@@ -113,7 +113,7 @@ func (s *Session) msgForage(d []byte) {
 		return
 	}
 	var got []proto.ItemStack
-	full := false
+	full, fullMsg := false, ""
 	for _, y := range yields {
 		qty := y.Min
 		if y.Max > y.Min {
@@ -121,7 +121,12 @@ func (s *Session) msgForage(d []byte) {
 		}
 		added, err := progress.AddForage(s.p, y.Item, qty)
 		if err != nil {
-			full = full || errors.Is(err, progress.ErrPackFull)
+			if errors.Is(err, progress.ErrPackFull) {
+				full = true
+				if fullMsg == "" {
+					fullMsg = err.Error() // says what would make room
+				}
+			}
 			continue
 		}
 		got = append(got, proto.ItemStack{Item: y.Item, Qty: added})
@@ -131,6 +136,9 @@ func (s *Session) msgForage(d []byte) {
 	}
 	if len(got) == 0 {
 		reason := "Your pack is full. Make some room first."
+		if fullMsg != "" {
+			reason = fullMsg
+		}
 		if !full {
 			reason = "There is nothing to pick there."
 		}

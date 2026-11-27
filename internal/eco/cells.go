@@ -279,6 +279,7 @@ func (s *Sim) buildCell(c *cell) {
 		}
 	}
 	c.perches = c.perches[:n]
+	s.creekSample(c) // a creek the habitat grid missed (creek.go)
 
 	ch := c.key.hash(s.seed)
 	s.loc.Seed(ch, 0x524F53544552) // "ROSTER"
@@ -335,6 +336,7 @@ func (s *Sim) addGroup(c *cell, sp, size int) {
 	if !ok {
 		return
 	}
+	home = s.waterHome(c, p, home, hs) // birds of the water's edge live on the creek (creek.go)
 	arrive := s.lr.Float32() * arriveSpread
 	lead := int16(len(c.roster))
 	for m := 0; m < size && len(c.roster) < maxRoster; m++ {

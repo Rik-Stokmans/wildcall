@@ -1,0 +1,76 @@
+[
+ {
+  "js": "S.time(8); S.weather(0); S.season(1); wc.birds.debugWindows.aids = true;",
+  "wait": 3000
+ },
+ {
+  "js": "S.at('cabin', 12, 5, 135); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'cabin', kind: 'cabin', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-cabin"
+ },
+ {
+  "js": "S.at('old_oak', 16, 5, 200); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'old_oak', kind: 'old oak', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-old_oak"
+ },
+ {
+  "js": "S.at('creekside', 10, 5, 135); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'creekside', kind: 'creek', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-creekside"
+ },
+ {
+  "js": "S.at('hide_creek', 12, 5, 90); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'hide_creek', kind: 'creek', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-hide_creek"
+ },
+ {
+  "js": "S.at('meadow_clearing', 15, 5, 135); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'meadow_clearing', kind: 'meadow', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-meadow_clearing"
+ },
+ {
+  "js": "S.pose(-87, 145, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'meadow_south', kind: 'meadow', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-meadow_south"
+ },
+ {
+  "js": "S.pose(113, 45, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'forest_a', kind: 'forest interior', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-forest_a"
+ },
+ {
+  "js": "S.pose(113, 95, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'forest_b', kind: 'forest interior', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-forest_b"
+ },
+ {
+  "js": "S.pose(-137, -55, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'forest_c', kind: 'forest interior', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-forest_c"
+ },
+ {
+  "js": "S.pose(213, -5, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'forest_d', kind: 'forest interior', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-forest_d"
+ },
+ {
+  "js": "S.pose(163, 45, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'edge_a', kind: 'forest edge', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-edge_a"
+ },
+ {
+  "js": "S.pose(-87, -5, 0, 5); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'edge_b', kind: 'forest edge', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-edge_b"
+ },
+ {
+  "js": "S.at('woodland_entrance', 10, 5, 135); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'woodland_entrance', kind: 'forest edge', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-woodland_entrance"
+ },
+ {
+  "js": "S.at('fern_valley', 12, 5, 135); await S.sleep(3500); const pack = (r) => r.entries.map(e => [e.dist, e.pxFull, e.pxVisible, e.frac, e.spId, e.act, e.scale, e.id]); for (const h of [0,45,90,135,180,225,270,315]) { S.look(h, 5); await S.sleep(450); const r = wc.birds.visibilityAudit(); let off = null; if (wc.birds.debugWindows) { wc.birds.debugWindows.aids = false; await S.sleep(250); off = pack(wc.birds.visibilityAudit()); wc.birds.debugWindows.aids = true; await S.sleep(150); } console.log('INFO SOAK AUDIT ' + JSON.stringify({spot: 'fern_valley', kind: 'forest edge', h, ms: r.ms, s: {n: r.summary.n, ok: r.summary.ok}, e: pack(r), off})); } S.look(0, 5);",
+  "wait": 300,
+  "shot": "audit-fern_valley"
+ }
+]

@@ -105,3 +105,13 @@ export function flapRateFor(act) {
   if (act === ACT.SOARING) return 0.8;
   return 1;
 }
+
+/**
+ * The wingbeat rate actually animated: the species' rate, but never more than about
+ * a third of the frame rate, so every beat shows an up- and a downstroke instead of
+ * strobing. Fast whirrers still read as the fastest wings on screen.
+ */
+export function visibleFlapHz(hz, dt) {
+  const cap = 0.3 / Math.min(Math.max(dt, 1 / 240), 0.1);
+  return hz > cap ? cap : hz;
+}

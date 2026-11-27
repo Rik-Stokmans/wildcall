@@ -9,7 +9,8 @@ export const DEFAULT_SETTINGS = {
   volMusic: 0.35,
   volUI: 0.6,
   volNarrator: 0.9,
-  narrator: 'normal', // off | sparse | normal | chatty  — how often the narrator speaks
+  narrator: 'off',    // off | sparse | normal | chatty  — how often the narrator speaks. Off unless the player turns it on.
+  narratorOptIn: false, // true once the player has switched the narrator on themselves (see createState)
   narratorVoice: '',  // preferred system voice name ('' = pick the best British voice)
   sensitivity: 1.0,
   invertY: false,
@@ -18,11 +19,21 @@ export const DEFAULT_SETTINGS = {
   hints: true,        // tutorial hints
   subtitles: true,    // sound captions in the clue panel
   soundRing: true,    // ring around the centre of the view showing where sounds come from
+  clueCards: 'one',   // one | all — one clue card (the voice being followed, Q pins it) or a card per voice
+  songRipples: true,  // soft rings from a nearby singing bird you have a line of sight to
+  birdOutline: true,  // a soft light edge around birds you have a clear line of sight to
+  leafFade: true,     // leaves right in front of a nearby bird thin out so it is not buried
+  flightTrails: true, // a faint streak of soft dabs behind a bird you scared off (birds/flightfx.js)
+  minimap: true,      // small map in the top-left corner
+  minimapRotate: true, // true = the minimap turns with you (heading up); false = north up
 };
 
 export function createState(bus) {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch { /* ignore */ }
+  // The narrator used to be on by default; it is now opt-in. A saved 'normal' from that
+  // time is not a choice the player made, so it is dropped unless they opted in since.
+  if (saved && !saved.narratorOptIn) delete saved.narrator;
   const state = {
     /** 'boot' | 'mainmenu' | 'play' | 'ui'  — 'ui' while any screen is open in-game. */
     mode: 'boot',
@@ -77,6 +88,7 @@ export function createState(bus) {
     },
     setSetting(key, value) {
       state.settings[key] = value;
+      if (key === 'narrator') state.settings.narratorOptIn = value !== 'off';
       try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); } catch { /* ignore */ }
       bus.emit('settings', { key, value, settings: state.settings });
     },

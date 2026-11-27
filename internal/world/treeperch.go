@@ -2,6 +2,7 @@ package world
 
 import (
 	"math"
+	"sort"
 
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 	"github.com/Rik-Stokmans/wildcall/internal/noise"
@@ -107,7 +108,7 @@ func (m *treeModel) buildPerchTemplates(kind core.VegKind) {
 				case !snag && s.order >= 2 && ld < 0.85 && r >= 0.012:
 					m.canopy = append(m.canopy, perchTmpl{p: p, kind: core.PerchCanopy, cover: 0.62 + 0.28*clamp01((0.85-ld)/0.6)})
 				case !snag && ld >= 1.0 && r >= 0.03 && math.Abs(d.y) <= 0.75 && out && t < 0.95:
-					m.branch = append(m.branch, perchTmpl{p: p, kind: core.PerchBranch, cover: 0.1 + 0.25*clamp01((2.0-ld)/1.0)})
+					m.branch = append(m.branch, perchTmpl{p: p, kind: core.PerchBranch, cover: m.branchCover(p, ld)})
 				}
 				if s.order == 1 && t < 0.7 {
 					// Limb side for cavities.
@@ -145,11 +146,14 @@ func (m *treeModel) buildPerchTemplates(kind core.VegKind) {
 				r := s.rAt(t)
 				p := s.at(t).add(perpUp(d, side).scale(r))
 				if ld := m.leafDepth(p); r >= 0.03 && ld >= 1.0 && m.onSurface(p) {
-					m.branch = append(m.branch, perchTmpl{p: p, kind: core.PerchBranch, cover: 0.1 + 0.25*clamp01((2.0-ld)/1.0)})
+					m.branch = append(m.branch, perchTmpl{p: p, kind: core.PerchBranch, cover: m.branchCover(p, ld)})
 				}
 			}
 		}
 	}
+	// The most exposed branch perches first: an instance takes most of its branch
+	// perches from the front of the list (treePerches).
+	sort.SliceStable(m.branch, func(i, j int) bool { return m.branch[i].cover < m.branch[j].cover })
 	// The very top: the highest wood, a song post.
 	hi := 0
 	for i := range m.segs {
@@ -162,6 +166,63 @@ func (m *treeModel) buildPerchTemplates(kind core.VegKind) {
 	if snag {
 		m.top.kind, m.top.cover = core.PerchSnag, 0
 	}
+}
+
+// skyDirs are the directions branchCover looks along for open sky: straight up,
+// and up-and-out round the compass.
+var skyDirs = func() []v3 {
+	out := []v3{vUp}
+	for k := 0; k < 6; k++ {
+		out = append(out, dirAE(float64(k)*math.Pi/3, 0.6))
+	}
+	return out
+}()
+
+// skyOpen is the share of skyDirs along which a 3 m look from p clears every
+// foliage mass of the model: 1 for a bare twig standing out of the crown, 0 deep
+// under the leaves. (Neighbouring trees are not the model's business.)
+func (m *treeModel) skyOpen(p v3) float64 {
+	open := 0
+	for _, d := range skyDirs {
+		clear := true
+		for _, l := range m.leaves {
+			if rayHitsEllipsoid(p, d, 3, l) {
+				clear = false
+				break
+			}
+		}
+		if clear {
+			open++
+		}
+	}
+	return float64(open) / float64(len(skyDirs))
+}
+
+// rayHitsEllipsoid reports whether the segment p + t·d (0 ≤ t ≤ l) enters foliage
+// mass e.
+func rayHitsEllipsoid(p, d v3, l float64, e tleaf) bool {
+	px, py, pz := (p.x-e.c.x)/e.r.x, (p.y-e.c.y)/e.r.y, (p.z-e.c.z)/e.r.z
+	qx, qy, qz := d.x/e.r.x, d.y/e.r.y, d.z/e.r.z
+	a := qx*qx + qy*qy + qz*qz
+	b := 2 * (px*qx + py*qy + pz*qz)
+	c := px*px + py*py + pz*pz - 1
+	if c <= 0 {
+		return true // starts inside
+	}
+	disc := b*b - 4*a*c
+	if disc < 0 || a < 1e-12 {
+		return false
+	}
+	t := (-b - math.Sqrt(disc)) / (2 * a)
+	return t >= 0 && t <= l
+}
+
+// branchCover is the cover of a branch perch (0.1..0.35): how close the foliage
+// is, eased off where the bird has open sky above and beside it, so a bird on a
+// bare outer limb end reads as exposed.
+func (m *treeModel) branchCover(p v3, ld float64) float64 {
+	near := clamp01((2.0 - ld) / 1.0)
+	return 0.1 + 0.25*near*(1-0.7*m.skyOpen(p))
 }
 
 func (m *treeModel) addCavity(p v3, r, ld float64) {
@@ -244,12 +305,13 @@ func (x *xform) inverse(w v3) v3 {
 
 // Per-instance perch counts and chances.
 const (
-	treeCanopyPerches = 3
+	treeCanopyPerches = 2
+	treeBranchPerches = 2 // one from the most exposed half of the model's list, one from anywhere
 	pForkLive         = 0.5
 	pForkSnag         = 0.35
 	pCavityLive       = 0.22
 	pCavitySnag       = 0.45
-	pBareTip          = 0.25
+	pBareTip          = 0.5
 	cavityMinR        = 0.18 // metres, after scale
 	cavityMinY        = 1.5
 	cavityMaxY        = 9.0
@@ -279,7 +341,10 @@ func treePerches(v *core.Veg, r *noise.RNG, emit func(p v3, kind core.PerchKind,
 		pick(m.tips, 1)
 	} else {
 		pick(m.canopy, treeCanopyPerches)
-		pick(m.branch, 1)
+		if n := len(m.branch); n > 0 {
+			pick(m.branch[:(n+1)/2], treeBranchPerches-1)
+			pick(m.branch, 1)
+		}
 		put(&m.top)
 		if r.Chance(pBareTip) {
 			pick(m.tips, 1)

@@ -204,11 +204,35 @@ func TestNakedEyeRange(t *testing.T) {
 	if last.Sighting.Bird == 0 || len(traitKeys(reveals)) < 2 {
 		t.Errorf("naked eye at 10 m should give size and shape: %v", traitKeys(reveals))
 	}
-	far := birdAt(2, spRobin, north(25, 0), core.ActPerched, 0.1)
+	// A small bird on an open perch is worth watching to about 20 m with the naked
+	// eye: at 17 m size, shape and its main colour.
+	mid := birdAt(3, spRobin, north(17, 0), core.ActPerched, 0.1)
+	var w3 Watch
+	reveals, last, _ = watchFor(c, &w3, lookAt(standing(), mid.Pos), []core.BirdState{mid}, 12)
+	if got := traitKeys(reveals); len(got) < 3 || got[2] != "primary" {
+		t.Errorf("naked eye at 17 m should give size, shape and primary: %v (clarity %.3f)", got, last.Sighting.Clarity)
+	}
+	far := birdAt(2, spRobin, north(26, 0), core.ActPerched, 0.1)
 	var w2 Watch
 	_, last, _ = watchFor(c, &w2, lookAt(standing(), far.Pos), []core.BirdState{far}, 4)
 	if last.Sighting.Bird != 0 {
-		t.Errorf("naked eye at 25 m should not make out a robin (clarity %.3f)", last.Sighting.Clarity)
+		t.Errorf("naked eye at 26 m should not make out a robin (clarity %.3f)", last.Sighting.Clarity)
+	}
+}
+
+// Through 6× glasses an exposed songbird at 30-40 m gives up every visible trait
+// in about ten seconds.
+func TestSixTimesAtFortyMetres(t *testing.T) {
+	for _, d := range []float32{30, 40} {
+		c, _ := newCtx()
+		c.Stats.BinoZoom = 6
+		robin := birdAt(21, spRobin, north(d, 3), core.ActPerched, 0.2)
+		p := lookAt(withBinoculars(standing(), 6), robin.Pos)
+		var w Watch
+		reveals, last, _ := watchFor(c, &w, p, []core.BirdState{robin}, 11)
+		if got := traitKeys(reveals); len(got) != 6 {
+			t.Errorf("6x at %.0f m: %v within 11 s (clarity %.3f, blocked %q)", d, got, last.Sighting.Clarity, last.Sighting.Blocked)
+		}
 	}
 }
 

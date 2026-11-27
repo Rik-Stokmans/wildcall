@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"strconv"
@@ -52,6 +53,11 @@ func New(opt Options) *Server {
 	s.mux.HandleFunc("GET /map/{tx}/{tz}", s.handleMap)
 	s.mux.HandleFunc("GET /photos/{file}", s.handlePhoto)
 	s.mux.Handle("GET /", s.static())
+	if opt.Dev {
+		// Profiling for soak tests (tools/soak); never served without -dev.
+		s.mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+		s.mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	}
 	return s
 }
 

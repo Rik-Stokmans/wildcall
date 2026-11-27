@@ -1,8 +1,8 @@
 // Journal Display, Photography Wall, Storage, Cabin Upgrades and Rest.
-import { el, icon, button, progressBar, stars, formatClock, label, itemCard,
+import { el, icon, button, progressBar, stars, formatClock, label,
   WEATHER_NAMES, WEATHER_ICONS, SEASON_NAMES } from '../kit.js';
 import * as L from './logic.js';
-import { emptyState, sectionTitle, itemDetail, issueRow, priceTag } from './views.js';
+import { emptyState, sectionTitle, issueRow, priceTag } from './views.js';
 
 /* ------------------------------------------------------------------ journal display */
 
@@ -89,35 +89,8 @@ export function renderPhotos(api) {
 
 /* ------------------------------------------------------------------ storage */
 
-function stackRow(api, stack, side) {
-  const item = api.state.items[stack.item];
-  if (!item) return null;
-  const to = side === 'backpack' ? 'storage' : 'inventory';
-  const check = L.moveCheck(item, to, api.profile, api.stats);
-  const selected = api.view.stackSel === item.id;
-  return el('div', { class: 'base-stack-row' + (selected ? ' selected' : '') },
-    el('div', { class: 'base-stack-card', onclick: () => { api.snd('click'); api.view.stackSel = item.id; api.rerender(); } },
-      itemCard(item, { qty: stack.qty, compact: true, selected })),
-    button(side === 'backpack' ? 'Store' : 'Take', { small: true, icon: side === 'backpack' ? 'forward' : 'back', disabled: !check.ok, title: check.reason,
-      onClick: () => api.send('move', { item: item.id, to }, 'click') }));
-}
-
-export function renderStorage(api) {
-  const cap = L.capacityInfo(api.profile, api.stats);
-  const pack = api.profile.inventory || [];
-  const store = api.profile.storage || [];
-  const sel = api.state.items[api.view.stackSel] || null;
-  const col = (title, aside, list, side, empty) => el('div', { class: 'base-col base-storage-col' },
-    sectionTitle(title, aside),
-    el('div', { class: 'base-station-scroll' }, list.length ? list.map((s) => stackRow(api, s, side)) : emptyState(empty)));
-  return el('div', { class: 'base-station base-storage' },
-    el('div', { class: 'base-two base-storage-cols' },
-      col('Backpack', cap.cap ? `${cap.used} / ${cap.cap}` : String(cap.used), pack, 'backpack', 'Your backpack is empty.'),
-      col('Cabin storage', `${store.length} stack${store.length === 1 ? '' : 's'}`, store, 'storage', 'Nothing stored. Leave spare gear and keepsakes here to keep your pack light.')),
-    el('div', { class: 'base-storage-detail' }, sel
-      ? itemDetail(sel, { extra: el('div', { class: 'base-muted' }, `Where: ${L.locateItem(api.profile, sel.id) || 'not owned'}`) })
-      : el('div', { class: 'base-muted' }, 'Select an item to read about it. Equipped gear lives in the Equipment station and does not use pack space.')));
-}
+// The storage station is a pair of grids (pack and chest): see station-storage.js.
+export { renderStorage } from './station-storage.js';
 
 /* ------------------------------------------------------------------ cabin upgrades */
 

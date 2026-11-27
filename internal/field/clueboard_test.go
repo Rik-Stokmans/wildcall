@@ -1,6 +1,7 @@
 package field
 
 import (
+	"math"
 	"testing"
 
 	"github.com/Rik-Stokmans/wildcall/internal/core"
@@ -134,5 +135,37 @@ func TestMoveCue(t *testing.T) {
 	// Calls never produce movement cues.
 	if _, ok := MoveCue(c, ev(core.EvCall, spRobin, north(5, 0)), p, seeded()); ok {
 		t.Errorf("EvCall must not produce a movement cue")
+	}
+}
+
+// TestClueBoardTriangulates: hearing the same singer again from a new spot sharpens
+// the clue more than listening again from where one stands.
+func TestClueBoardTriangulates(t *testing.T) {
+	c, _ := newCtx()
+	b := birdAt(5, spWren, north(30, 0), core.ActPerched, 0.3)
+	rng := seeded()
+	hearFrom := func(dx float32) Heard {
+		p := standing()
+		p.X += dx
+		h, ok := Hear(c, callFrom(b, 3), b, p, rng)
+		if !ok {
+			t.Fatal("inaudible")
+		}
+		return h
+	}
+	var same, moved ClueBoard
+	first := same.Offer(hearFrom(0), 2)[0].Spread
+	moved.Offer(hearFrom(0), 2)
+	var sSame, sMoved float32
+	for i := 1; i <= 3; i++ {
+		sSame = same.Offer(hearFrom(0), 2)[0].Spread
+		sMoved = moved.Offer(hearFrom(float32(i)*4), 2)[0].Spread
+	}
+	t.Logf("30 m: single ±%.1f°, 3 repeats ±%.1f°, 3 new spots ±%.1f°", first*180/math.Pi, sSame*180/math.Pi, sMoved*180/math.Pi)
+	if !(sSame < first && sMoved < sSame) {
+		t.Errorf("spread: first %.3f, repeated %.3f, triangulated %.3f", first, sSame, sMoved)
+	}
+	if l := moved.Live()[0]; l.ElevSpread <= 0 || l.DistMax-l.DistMin > 10 {
+		t.Errorf("a triangulated clue at 30 m should have a tight band and an elevation: %+v", l)
 	}
 }

@@ -75,8 +75,7 @@ func (s *Sim) spawn(c *cell, ri int16, announce bool) int32 {
 // arriveFromAfar starts the bird well outside its territory, high up, flying in to
 // one of its perches.
 func (s *Sim) arriveFromAfar(b *bird, p *profile) {
-	a := unit(hash2(b.seed, uint64(s.env.Day))) * 2 * math.Pi
-	x, z := b.home.X+160*sin32(a), b.home.Z-160*cos32(a)
+	x, z := s.arrivalStart(b) // out of the observer's sight (nopop.go)
 	b.pos = core.V(x, max32(s.t.HeightAt(x, z), 0)+35, z)
 	b.mode = mIdle
 	b.cur = noPerch
@@ -117,8 +116,7 @@ func (s *Sim) despawn(idx int32) {
 func (s *Sim) leave(b *bird) {
 	p := &s.prof[b.sp]
 	s.releaseLure(b)
-	a := unit(hash2(b.seed, 0x4C454156)) * 2 * math.Pi
-	x, z := b.pos.X+220*sin32(a), b.pos.Z-220*cos32(a)
+	x, z := s.leaveTarget(b) // away from the observer (nopop.go)
 	to := core.Perch{Pos: core.V(x, max32(s.t.HeightAt(x, z), 0)+40, z)}
 	b.mode = mLeave
 	b.flags &^= core.FlagHidden
@@ -202,10 +200,13 @@ func (s *Sim) buildMemory(b *bird, p *profile, c *cell) {
 		h := c.perchH[i]
 		hf := p.heightFit(h)
 		pref := p.perchPref[pc.Kind]
-		if pref > 0 {
-			fit := pref * hf
+		if show := p.showPref[pc.Kind]; show > 0 {
+			// Everyday perches (rest, preening, looking about) and the song post are
+			// where the bird shows itself: open perches of the kinds it uses, the
+			// more open the likelier (exposure.go).
+			fit := show * hf
 			bad := fit < suitFit
-			insertCand(gen[:], &nGen, expKey(u, fit*near), int32(i), bad)
+			insertCand(gen[:], &nGen, expKey(u, fit*near*p.expo(pc.Cover, expoGen)), int32(i), bad)
 			// Song posts: prominent perches it likes. A bird of the tree tops sings
 			// from high and open; a low-living one from the top of its thicket.
 			var hi float32
@@ -214,16 +215,25 @@ func (s *Sim) buildMemory(b *bird, p *profile, c *cell) {
 			} else {
 				hi = 1 + clamp((pc.Pos.Y-b.home.Y)/8, 0, 1.5)
 			}
-			insertCand(song[:], &nSong, expKey(u>>16, fit*near*hi*(1.15-pc.Cover)), int32(i), bad)
+			sc := pc.Cover
+			if pc.Kind == core.PerchShrub || pc.Kind == core.PerchReed {
+				sc *= topCover // it sings from the top of the bush (topOf)
+			}
+			insertCand(song[:], &nSong, expKey(u>>16, fit*near*hi*p.expo(sc, expoSong)), int32(i), bad)
+		}
+		if pref > 0 {
 			// Roosts: sheltered.
-			insertCand(roost[:], &nRoost, expKey(u>>32, fit*near*(0.15+pc.Cover)), int32(i), bad)
+			insertCand(roost[:], &nRoost, expKey(u>>32, pref*hf*near*(0.15+pc.Cover)), int32(i), pref*hf < suitFit)
 		}
 		if p.feedSpot[pc.Kind] {
 			// It forages where it likes to be: kinds outside its perch list only when
-			// the territory offers nothing else.
+			// the territory offers nothing else. Ground feeders favour open ground.
 			w := float32(0.03)
 			if pref > 0 {
 				w = 0.3 + pref
+			}
+			if pc.Kind == core.PerchGround || pc.Kind == core.PerchShore {
+				w *= p.expo(pc.Cover, expoFeed)
 			}
 			insertCand(feed[:], &nFeed, expKey(u>>48, w*hf*near), int32(i), pref == 0 || hf < 0.4)
 		}
@@ -254,6 +264,7 @@ func (s *Sim) buildMemory(b *bird, p *profile, c *cell) {
 	}
 	if nSong > 0 {
 		set(memSong, song[0].i)
+		b.mem[memSong] = s.topOf(b.mem[memSong])
 	}
 	if nRoost > 0 {
 		set(memRoost, roost[0].i)

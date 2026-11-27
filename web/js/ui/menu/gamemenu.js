@@ -3,7 +3,7 @@ import { el, fill, button, tabs, panel } from '../kit.js';
 import { keepScroll, sfx } from './common.js';
 import { renderCharacter } from './tab-character.js';
 import { renderSkills } from './tab-skills.js';
-import { renderInventory } from './tab-inventory.js';
+import { renderInventory, closeInventory } from './tab-inventory.js';
 import { renderEquipment } from './tab-equipment.js';
 import { renderRank } from './tab-rank.js';
 import { renderSettings } from './tab-settings.js';
@@ -85,6 +85,6 @@ export function createGameMenu(ctx, session) {
         if (!TABS.find((t) => t.id === st.tab)?.static) render();
       });
     },
-    close() { off?.(); off = null; },
+    close() { off?.(); off = null; closeInventory(st); },
   };
 }

@@ -204,6 +204,9 @@ func (s *Session) turnIn(id string) (proto.RewardsMsg, error) {
 			}
 			if unique(def) {
 				s.send(proto.SRareItem, proto.RareItemMsg{Item: it})
+			} else if progress.Where(s.p, it) == progress.ToStorage {
+				// A full pack sends it home: say so, as giveItems does.
+				s.toast("item", def.Name, "Your pack is full, so it went to the cabin storage.", 0, def.Icon)
 			}
 		}
 	}

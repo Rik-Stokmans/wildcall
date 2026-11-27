@@ -20,6 +20,10 @@ const (
 // the way (ActFlying, ActFleeing...), at the species' cruise speed times mul. When
 // it lands the bird does th.
 func (s *Sim) fly(b *bird, p *profile, to core.Perch, dest int8, act core.BirdAct, mul float32, th then) {
+	if s.linger(b, p, &to, &dest, act, th) {
+		return // stays where it is for now: someone is quietly closing in (linger.go)
+	}
+	b.ff.burst = false // an escape (followflight.go) sets it again after this
 	b.from, b.to = b.pos, to.Pos
 	b.destKind, b.destCover, b.dest = to.Kind, to.Cover, dest
 	dx, dy, dz := b.to.X-b.from.X, b.to.Y-b.from.Y, b.to.Z-b.from.Z
@@ -128,6 +132,9 @@ func (s *Sim) advance(b *bird, p *profile, dt float32) {
 	switch b.mv {
 	case mvFly:
 		e := t * t * (3 - 2*t)
+		if b.ff.burst {
+			e, t = burstEase(b) // an escape: fast away, then steady (followflight.go)
+		}
 		x = lerp(b.from.X, b.to.X, e)
 		z = lerp(b.from.Z, b.to.Z, e)
 		y = lerp(b.from.Y, b.to.Y, e) + b.lift*arcShape(t, b.flat)
@@ -232,10 +239,14 @@ func (s *Sim) arrive(b *bird, p *profile) {
 	case thenHide:
 		b.mode, b.act = mHide, core.ActHiding
 		b.flags |= core.FlagHidden
-		b.timer = s.rnd(8, 20)
+		b.timer = s.rnd(6, 14)
 	case thenRefuge:
 		b.mode, b.act = mAway, s.restAct(b, p)
+		s.refugeLanded(b, p) // look back, call, stay in view (followflight.go)
 	case thenGone:
+		if !s.goneOffstage(b) {
+			break // still in sight of the observer: it flies on (nopop.go)
+		}
 		if i, ok := s.byID[b.id]; ok {
 			s.despawn(i)
 		}

@@ -2,21 +2,23 @@ package progress
 
 import "github.com/Rik-Stokmans/wildcall/internal/proto"
 
-// backpackItems: carrying capacity (spec §9.2 "Backpack"). Base: 8 slots, 12 frames
-// of film. Bigger packs carry more and tire you sooner.
+// backpackItems: carrying capacity (spec §9.2 "Backpack"). The pack is a grid of
+// cells (Stats.PackW x PackH, base 5x4 = the satchel) and every item takes its
+// footprint in it (items_size.go). Base film: 12 frames. Bigger packs carry more
+// and tire you sooner.
 func backpackItems() []proto.ItemDef {
 	return []proto.ItemDef{
 		{
 			ID: "canvas_satchel", Name: "Canvas Satchel",
-			Desc: "A shoulder bag of waxed canvas. Eight pockets' worth of room and nothing to slow you down.",
+			Desc: "A shoulder bag of waxed canvas. Room for the day's essentials and nothing to slow you down.",
 			Kind: KindEquipment, Slot: SlotBackpack, Tier: 1, Rarity: proto.RarityCommon,
 			Source: "start", Icon: "backpack",
 			Pros: []string{"Light: no effect on your pace or stamina"},
-			Cons: []string{"Eight slots", "Room for a single roll of film"},
+			Cons: []string{"A small 5×4 grid: bulky gear soon fills it", "Room for a single roll of film"},
 			Upgrades: []proto.UpgradeDef{
 				up("canvas_satchel_pocket", "Sewn-on Side Pocket",
-					"One more pocket, stitched on by Finn while you wait.", 50,
-					mods{"capacity": 1}),
+					"A row of pockets down one side, stitched on by Finn while you wait: the satchel grows to 6×4.", 50,
+					mods{"packW": 1}),
 				up("canvas_satchel_film", "Film Pouch",
 					"A light-tight pouch on the strap: four more frames per outing.", 60,
 					mods{"filmCap": 4}),
@@ -27,16 +29,16 @@ func backpackItems() []proto.ItemDef {
 			Desc: "A two-strap day pack with a proper lid. Room for gadgets, spare film and whatever you find on the way.",
 			Kind: KindEquipment, Slot: SlotBackpack, Tier: 2, Rarity: proto.RarityUncommon,
 			Price: 170, ReqRank: 2, Source: "shop", Icon: "backpack",
-			Mods: mods{"capacity": 4, "filmCap": 4, "stamina": -1},
-			Pros: []string{"Twelve slots", "Sixteen frames of film per outing"},
+			Mods: mods{"packW": 1, "packH": 1, "filmCap": 4, "stamina": -1},
+			Pros: []string{"A 6×5 grid: room for a spare lens and a gadget or two", "Sixteen frames of film per outing"},
 			Cons: []string{"The extra weight shortens your sprint"},
 			Upgrades: []proto.UpgradeDef{
 				up("explorer_pack_hipbelt", "Hip Belt",
 					"Puts the load on your hips. You get your wind back.", 80,
 					mods{"stamina": 1}),
 				atWorkshop(up("explorer_pack_dividers", "Gear Dividers",
-					"Fitted dividers cut at your workbench: two more slots from the same pack.", 110,
-					mods{"capacity": 2})),
+					"Fitted dividers cut at your workbench: another column of room from the same pack (7×5).", 110,
+					mods{"packW": 1})),
 			},
 		},
 		{
@@ -44,8 +46,8 @@ func backpackItems() []proto.ItemDef {
 			Desc: "A tall framed pack for days in the far country. It carries everything, and you carry it.",
 			Kind: KindEquipment, Slot: SlotBackpack, Tier: 3, Rarity: proto.RarityRare,
 			Price: 420, ReqRank: 3, Source: "shop", Icon: "backpack",
-			Mods: mods{"capacity": 8, "filmCap": 8, "moveSpeed": -0.06, "stamina": -2, "stealth": 0.05},
-			Pros: []string{"Sixteen slots", "Twenty frames of film per outing"},
+			Mods: mods{"packW": 2, "packH": 2, "filmCap": 8, "moveSpeed": -0.06, "stamina": -2, "stealth": 0.05},
+			Pros: []string{"A big 7×6 grid: carries a whole second kit", "Twenty frames of film per outing"},
 			Cons: []string{"Slows your walking pace", "Tiring: a much shorter sprint", "The frame creaks: birds notice you a little sooner"},
 			Upgrades: []proto.UpgradeDef{
 				atWorkshop(up("expedition_pack_frame", "Lightweight Frame",
@@ -58,13 +60,13 @@ func backpackItems() []proto.ItemDef {
 			Desc: "A field researcher's pack: labelled sleeves, a padded instrument bay, a film safe in the lid. Everything has a place, and you can find it without looking.",
 			Kind: KindEquipment, Slot: SlotBackpack, Tier: 4, Rarity: proto.RarityEpic,
 			Source: "loot", Icon: "backpack",
-			Mods: mods{"capacity": 7, "filmCap": 12, "camReady": -0.1, "stamina": -1},
-			Pros: []string{"Fifteen slots, perfectly organised", "A film safe: twenty-four frames per outing", "The camera comes to hand faster"},
+			Mods: mods{"packW": 3, "packH": 2, "filmCap": 12, "camReady": -0.1, "stamina": -1},
+			Pros: []string{"The biggest grid of all, 8×6", "Labelled sleeves: stacks hold half as much again", "A film safe: twenty-four frames per outing", "The camera comes to hand faster"},
 			Cons: []string{"Old leather and brass: the weight shortens your sprint"},
 			History: "Made to order for a coastal research station that closed when its funding did. Whoever packed up last left this behind, " +
 				"each sleeve still labelled in the same careful hand: RINGS · CALIPERS · SPARE REELS · TEA.",
-			Special: "Nearly an expedition pack's capacity without its drag on your pace, twice the film of any other pack, and an instrument " +
-				"bay that brings the camera up 0.1 s faster.",
+			Special: "More room than an expedition pack without its drag on your pace, sleeves that hold half as much again of every supply, " +
+				"food and ingredient, twice the film of any other pack, and an instrument bay that brings the camera up 0.1 s faster.",
 			Upgrades: []proto.UpgradeDef{
 				fromRank(3, atWorkshop(up("research_backpack_harness", "Re-stitched Harness",
 					"New webbing on the old harness spreads the load properly.", 200,
@@ -113,12 +115,12 @@ func navigationItems() []proto.ItemDef {
 		},
 		{
 			ID: "survey_kit", Name: "Surveyor's Kit",
-			Desc: "Prismatic compass, habitat survey sheets and an aneroid barometer in a fitted case. The country explains itself; the case takes its share of the pack.",
+			Desc: "Prismatic compass, habitat survey sheets and an aneroid barometer in a fitted case. The country explains itself; the case weighs on your shoulder.",
 			Kind: KindEquipment, Slot: SlotNavigation, Tier: 3, Rarity: proto.RarityRare,
 			Price: 390, ReqRank: 3, Source: "shop", Icon: "compass",
-			Mods: mods{"compass": 1, "mapDetail": 2, "trailSense": 14, "forecast": 3, "capacity": -1, "moveSense": -3},
+			Mods: mods{"compass": 1, "mapDetail": 2, "trailSense": 14, "forecast": 3, "stamina": -0.5, "moveSense": -3},
 			Pros: []string{"Map shows trails and habitats", "Compass reads in degrees", "Hidden places reveal from much farther off", "Three hours of weather warning"},
-			Cons: []string{"The fitted case takes up a pack slot", "Eyes on the instruments: you catch less movement around you"},
+			Cons: []string{"The fitted case is a weight on your shoulder: a shorter sprint", "Eyes on the instruments: you catch less movement around you"},
 			Upgrades: []proto.UpgradeDef{
 				atWorkshop(up("survey_kit_altimeter", "Calibrated Altimeter",
 					"Re-zero the barometer against your own cabin's height: a longer, surer forecast.", 160,

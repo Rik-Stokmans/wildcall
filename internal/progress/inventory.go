@@ -1,20 +1,27 @@
 package progress
 
 import (
+	"fmt"
 	"math"
 
+	"github.com/Rik-Stokmans/wildcall/internal/core"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
 )
 
-// Inventory model (contract §3.4):
-//   - Profile.Inventory is the backpack. Each entry is one slot; Stats.Capacity
-//     limits the number of entries. Supplies stack up to ItemDef.Stack per slot;
-//     everything else is one item per slot and one of each per player.
+// Inventory model (contract §3.4, grid inventory):
+//   - Profile.Inventory is the backpack: a grid of Stats.PackW x Stats.PackH cells
+//     (the worn backpack sets the size). Every stack lies at (X, Y), turned if R,
+//     and covers the item's footprint (ItemDef.W x H cells); stacks never overlap
+//     or leave the grid (grid.go has the placement rules).
+//   - Supplies, ingredients and food stack up to their stack limit per stack (a
+//     little more in the backpack with the Research Backpack); everything else is
+//     one item per stack and one of each per player.
 //   - Profile.Equipped holds worn equipment (slot → item id). Equipped items are
-//     NOT in the backpack and do not use capacity.
-//   - Profile.Storage is the cabin chest: unlimited, one entry per item id.
+//     NOT in any grid and take no room.
+//   - Profile.Storage is the cabin chest: a StorageW x StorageH grid.
 //
-// The invariant every function keeps: len(Inventory) <= Capacity.
+// The invariant every function keeps: both grids are valid (Grid.Valid). Every
+// refusal is a RuleError and changes nothing.
 
 // homeTrails are the home valley's hidden trails (contract §2.2). The Forgotten
 // Field Journal's sketch maps reveal them: AddItem appends them to Profile.Trails
@@ -50,12 +57,13 @@ func countItem(stacks []proto.ItemStack, id string) int {
 	return n
 }
 
+// removeAt removes element i, in place (the caller owns the slice).
 func removeAt(stacks []proto.ItemStack, i int) []proto.ItemStack {
 	return append(stacks[:i], stacks[i+1:]...)
 }
 
 // smallestStack is the index of the smallest stack of an item (-1 if none): taking
-// from it first frees slots soonest.
+// from it first frees cells soonest.
 func smallestStack(stacks []proto.ItemStack, id string) int {
 	best := -1
 	for i := range stacks {
@@ -66,54 +74,165 @@ func smallestStack(stacks []proto.ItemStack, id string) int {
 	return best
 }
 
-// packIn puts up to qty units into the backpack — topping up existing stacks, then
-// opening new slots while capacity allows — and returns how many did not fit.
-func packIn(p *proto.Profile, def *proto.ItemDef, qty, capacity int) (left int) {
-	size := stackSize(def)
-	if size > 1 {
-		for i := range p.Inventory {
-			if qty == 0 {
-				break
-			}
-			if st := &p.Inventory[i]; st.Item == def.ID && st.Qty < size {
-				n := min(qty, size-st.Qty)
-				st.Qty += n
-				qty -= n
-			}
-		}
-	}
-	for qty > 0 && len(p.Inventory) < capacity {
-		n := min(qty, size)
-		p.Inventory = append(p.Inventory, proto.ItemStack{Item: def.ID, Qty: n})
-		qty -= n
-	}
-	return qty
+// ---------------------------------------------------------------------------
+// The grids of a profile
+
+// packStackBonus is the organisation perk of a backpack: stacks in it hold this
+// fraction more (rounded up).
+var packStackBonus = map[string]float64{"research_backpack": 0.5}
+
+func packDims(s core.Stats) (w, h int) {
+	return max(1, roundInt(s.PackW)), max(1, roundInt(s.PackH))
 }
 
-// roomFor is how many units of an item the backpack can still take.
-func roomFor(p *proto.Profile, def *proto.ItemDef, capacity int) int {
-	size := stackSize(def)
-	room := max(0, capacity-len(p.Inventory)) * size
-	if size > 1 {
-		for i := range p.Inventory {
-			if p.Inventory[i].Item == def.ID {
-				room += max(0, size-p.Inventory[i].Qty)
-			}
-		}
-	}
-	return room
+// PackSize is the backpack grid, in cells.
+func PackSize(p *proto.Profile) (w, h int) { return packDims(p.Stats) }
+
+// StorageSize is the cabin storage grid, in cells: StorageW x StorageH, taller only
+// while something lies in overflow rows below (see StorageH).
+func StorageSize(p *proto.Profile) (w, h int) {
+	return StorageW, max(StorageH, Bottom(p.Storage))
 }
 
-func storeIn(p *proto.Profile, id string, qty int) {
+func packLimit(equip map[string]string) func(*proto.ItemDef) int {
+	bonus := packStackBonus[equip[SlotBackpack]]
+	return func(def *proto.ItemDef) int {
+		n := stackSize(def)
+		if n > 1 && bonus > 0 {
+			n += int(math.Ceil(float64(n) * bonus))
+		}
+		return n
+	}
+}
+
+// StackLimit is the most units of an item one stack may hold in a grid (where:
+// ToInventory or ToStorage), 0 for an unknown item.
+func StackLimit(p *proto.Profile, itemID, where string) int {
+	def := itemIndex[itemID]
+	if def == nil {
+		return 0
+	}
+	if where == ToInventory {
+		return packLimit(p.Equipped)(def)
+	}
+	return stackSize(def)
+}
+
+// PackGrid returns a Grid over a copy of the backpack.
+func PackGrid(p *proto.Profile) *Grid {
+	w, h := PackSize(p)
+	g := NewGrid(w, h, p.Inventory)
+	g.Limit = packLimit(p.Equipped)
+	return g
+}
+
+// StorageGrid returns a Grid over a copy of cabin storage.
+func StorageGrid(p *proto.Profile) *Grid {
+	w, h := StorageSize(p)
+	return NewGrid(w, h, p.Storage)
+}
+
+func gridOf(p *proto.Profile, where string) (*Grid, error) {
+	switch where {
+	case ToInventory:
+		return PackGrid(p), nil
+	case ToStorage:
+		return StorageGrid(p), nil
+	}
+	return nil, fail(ErrInvalid, "Items can be moved to your pack or to storage.")
+}
+
+func setGrid(p *proto.Profile, where string, g *Grid) {
+	if where == ToInventory {
+		p.Inventory = g.Stacks
+	} else {
+		p.Storage = g.Stacks
+	}
+}
+
+// storeForce puts qty units into cabin storage, merging and placing as usual, and —
+// only if the chest is truly full — in overflow rows below it, so nothing given to
+// the player is ever lost.
+func storeForce(p *proto.Profile, id string, qty int) {
 	if qty <= 0 {
 		return
 	}
-	if i := indexOfItem(p.Storage, id); i >= 0 {
-		p.Storage[i].Qty += qty
-		return
+	g := StorageGrid(p)
+	left := g.Add(id, qty)
+	lim := g.limitOf(id)
+	for left > 0 {
+		n := min(left, lim)
+		g.Stacks = append(g.Stacks, proto.ItemStack{Item: id, Qty: n, X: 0, Y: max(StorageH, Bottom(g.Stacks))})
+		left -= n
 	}
-	p.Storage = append(p.Storage, proto.ItemStack{Item: id, Qty: qty})
+	p.Storage = g.Stacks
 }
+
+// roomHint says what would make room in a grid for one more of an item: tidying,
+// or taking out one particular thing (the smallest that would do).
+func roomHint(g *Grid, def *proto.ItemDef) string {
+	t := g.clone()
+	if _, ok := layout(t.W, t.H, append(t.merged(), proto.ItemStack{Item: def.ID, Qty: 1}), false); ok {
+		return "Tidy your pack and it will fit."
+	}
+	best, bestArea := -1, 0
+	for i, st := range g.Stacks {
+		w, h := Footprint(st.Item, false)
+		if best >= 0 && w*h >= bestArea {
+			continue
+		}
+		c := g.clone()
+		c.Stacks = removeAt(c.Stacks, i)
+		if c.Room(def.ID, 1) == 0 {
+			if _, ok := layout(c.W, c.H, append(c.merged(), proto.ItemStack{Item: def.ID, Qty: 1}), false); !ok {
+				continue
+			}
+		}
+		best, bestArea = i, w*h
+	}
+	if best >= 0 {
+		return fmt.Sprintf("Taking out the %s would make room.", itemName(g.Stacks[best].Item))
+	}
+	return "Leave something behind to make room."
+}
+
+func packFull(g *Grid, def *proto.ItemDef) error {
+	return fail(ErrPackFull, "Your pack is full: no room for the %s. %s", def.Name, roomHint(g, def))
+}
+
+// fitPack lays a backpack out in a w x h grid together with extra stacks: the
+// current layout is kept when it still fits (the extras go at (px, py) if they can,
+// else wherever FindSpace finds room); otherwise everything is tidied into the new
+// size. ok is false if it cannot be done at all.
+func fitPack(stacks []proto.ItemStack, w, h int, limit func(*proto.ItemDef) int, extras []proto.ItemStack, px, py int) ([]proto.ItemStack, bool) {
+	g := &Grid{W: w, H: h, Stacks: append([]proto.ItemStack{}, stacks...), Limit: limit}
+	if g.Valid() {
+		ok := true
+		for _, e := range extras {
+			if !g.PlaceStack(e, px, py, false) && !g.PlaceStack(e, px, py, true) && !g.PlaceAnywhere(e) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return g.Stacks, true
+		}
+	}
+	all := &Grid{W: w, H: h, Stacks: append(append([]proto.ItemStack{}, stacks...), extras...), Limit: limit}
+	return layout(w, h, all.merged(), true)
+}
+
+// FreeSlots is how many cells of the backpack are empty.
+func FreeSlots(p *proto.Profile) int { return PackGrid(p).FreeCells() }
+
+// Capacity is the number of cells in the backpack grid (PackW x PackH).
+func Capacity(p *proto.Profile) int {
+	w, h := PackSize(p)
+	return w * h
+}
+
+// ---------------------------------------------------------------------------
+// Owning things
 
 func equippedSlot(p *proto.Profile, id string) string {
 	for _, slot := range slots {
@@ -150,9 +269,9 @@ func Carried(p *proto.Profile, itemID string) int { return countItem(p.Inventory
 func Stored(p *proto.Profile, itemID string) int { return countItem(p.Storage, itemID) }
 
 // AddItem gives the player qty units of an item (found, rewarded, handed over). It
-// goes into the backpack — supplies top up their stacks first — and whatever does
-// not fit is sent to cabin storage, so nothing found is ever lost; stored reports
-// how many units went there.
+// goes into the backpack — topping up stacks of the same item first, then new
+// stacks wherever they fit (Grid.Add) — and whatever does not fit is sent to cabin
+// storage, so nothing found is ever lost; stored reports how many units went there.
 //
 // Equipment, gadgets and keepsakes are one-of-a-kind: adding one the player already
 // owns returns ErrAlreadyOwned and changes nothing (ApplyReward turns such a
@@ -172,8 +291,10 @@ func AddItem(p *proto.Profile, itemID string, qty int) (stored int, err error) {
 		}
 		qty = 1
 	}
-	stored = packIn(p, def, qty, Capacity(p))
-	storeIn(p, itemID, stored)
+	g := PackGrid(p)
+	stored = g.Add(itemID, qty)
+	p.Inventory = g.Stacks
+	storeForce(p, itemID, stored)
 	if itemID == "forgotten_journal" {
 		for _, t := range homeTrails {
 			if !containsString(p.Trails, t) {
@@ -185,8 +306,37 @@ func AddItem(p *proto.Profile, itemID string, qty int) (stored int, err error) {
 	return stored, nil
 }
 
+// AddToPack puts up to qty units of an item into the backpack only (nothing goes to
+// storage): added is how many went in. If not even one fits it returns ErrPackFull,
+// saying what would make room, and changes nothing. One-of-a-kind items the player
+// already owns are refused as in AddItem.
+func AddToPack(p *proto.Profile, itemID string, qty int) (added int, err error) {
+	def := itemIndex[itemID]
+	if def == nil {
+		return 0, fail(ErrUnknown, "There is no such item.")
+	}
+	if qty <= 0 {
+		return 0, fail(ErrInvalid, "Nothing to add.")
+	}
+	if !stackable(def) {
+		if Owned(p, itemID) {
+			return 0, fail(ErrAlreadyOwned, "You already have the %s.", def.Name)
+		}
+		qty = 1
+	}
+	g := PackGrid(p)
+	left := g.Add(itemID, qty)
+	if left == qty {
+		return 0, packFull(PackGrid(p), def)
+	}
+	p.Inventory = g.Stacks
+	Recompute(p)
+	return qty - left, nil
+}
+
 // RemoveItem takes qty units of an item out of the backpack (smallest stacks
-// first). It fails, changing nothing, if the player carries fewer than that.
+// first; the other stacks stay where they lie). It fails, changing nothing, if the
+// player carries fewer than that.
 func RemoveItem(p *proto.Profile, itemID string, qty int) error {
 	def := itemIndex[itemID]
 	if def == nil {
@@ -204,27 +354,23 @@ func RemoveItem(p *proto.Profile, itemID string, qty int) error {
 }
 
 func takeFromPack(p *proto.Profile, id string, qty int) {
-	for qty > 0 {
-		i := smallestStack(p.Inventory, id)
-		if i < 0 {
-			return
-		}
-		n := min(qty, p.Inventory[i].Qty)
-		p.Inventory[i].Qty -= n
-		qty -= n
-		if p.Inventory[i].Qty <= 0 {
-			p.Inventory = removeAt(p.Inventory, i)
-		}
-	}
+	g := &Grid{Stacks: p.Inventory}
+	g.Remove(id, qty)
+	p.Inventory = g.Stacks
 }
 
+// ---------------------------------------------------------------------------
+// Equipment
+
 // Equip puts on a piece of equipment the player owns. It is taken from the
-// backpack, or — only if allowStorage is true, i.e. the player is at the cabin —
-// from cabin storage; the item previously in that slot takes its place there, so a
-// swap never needs a free slot. Equipping what is already worn is a no-op.
+// backpack (freeing its cells), or — only if allowStorage is true, i.e. the player
+// is at the cabin — from cabin storage; the item previously in that slot goes where
+// the new one came from (into its old cells when it fits there). Equipping what is
+// already worn is a no-op.
 //
-// It fails if the new outfit would leave the backpack over capacity (swapping to a
-// smaller pack, or to bulky gear that takes up pack slots, with a full bag).
+// A new backpack resizes the pack grid. The layout is kept if everything still
+// fits; otherwise the pack is tidied into the new size, and if even that cannot
+// hold it all the swap is refused (nothing is ever spilled).
 func Equip(p *proto.Profile, itemID string, allowStorage bool) error {
 	def := itemIndex[itemID]
 	if def == nil {
@@ -255,35 +401,41 @@ func Equip(p *proto.Profile, itemID string, allowStorage bool) error {
 		equip[k] = v
 	}
 	equip[def.Slot] = itemID
+	nw, nh := packDims(StatsFor(p, equip))
 
-	carried := len(p.Inventory)
-	if !fromStorage && prev == "" {
-		carried-- // the item leaves the pack and nothing comes back
+	pack := append([]proto.ItemStack{}, p.Inventory...)
+	store := append([]proto.ItemStack{}, p.Storage...)
+	px, py := -1, -1
+	if fromStorage {
+		store = removeAt(store, inStore)
+	} else {
+		px, py = pack[inPack].X, pack[inPack].Y
+		pack = removeAt(pack, inPack)
 	}
-	if capacity := roundInt(StatsFor(p, equip).Capacity); carried > capacity {
-		return fail(ErrPackFull, "With the %s you could carry %d things, and your pack holds %d. Lighten it first.",
-			def.Name, capacity, carried)
+	var extras []proto.ItemStack
+	if prev != "" && !fromStorage {
+		extras = append(extras, proto.ItemStack{Item: prev, Qty: 1})
 	}
-
-	switch {
-	case fromStorage:
-		p.Storage = removeAt(p.Storage, inStore)
-		if prev != "" {
-			storeIn(p, prev, 1)
+	newPack, ok := fitPack(pack, nw, nh, packLimit(equip), extras, px, py)
+	if !ok {
+		if def.Slot == SlotBackpack {
+			return fail(ErrPackFull, "Your things will not all fit in the %s (%d×%d). Move some to storage first.", def.Name, nw, nh)
 		}
-	case prev != "":
-		p.Inventory[inPack] = proto.ItemStack{Item: prev, Qty: 1}
-	default:
-		p.Inventory = removeAt(p.Inventory, inPack)
+		return fail(ErrPackFull, "There is no room in your pack for the %s you would take off.", itemName(prev))
+	}
+	p.Inventory = newPack
+	p.Storage = store
+	if fromStorage && prev != "" {
+		storeForce(p, prev, 1)
 	}
 	p.Equipped = equip
 	Recompute(p)
 	return nil
 }
 
-// Unequip takes off the item in a slot and puts it in the backpack. It fails if the
-// pack has no room for it — counting the room that is lost when the thing taken off
-// is the backpack itself.
+// Unequip takes off the item in a slot and puts it in the backpack, wherever it
+// fits. It fails if the pack has no room for it — counting the room lost when the
+// thing taken off is the backpack itself (the pack is tidied if that makes it fit).
 func Unequip(p *proto.Profile, slot string) error {
 	if !containsString(slots, slot) {
 		return fail(ErrUnknown, "There is no such equipment slot.")
@@ -298,20 +450,30 @@ func Unequip(p *proto.Profile, slot string) error {
 			equip[k] = v
 		}
 	}
-	if capacity := roundInt(StatsFor(p, equip).Capacity); len(p.Inventory)+1 > capacity {
-		return fail(ErrPackFull, "There is no room in your pack for the %s.", itemName(id))
+	nw, nh := packDims(StatsFor(p, equip))
+	newPack, ok := fitPack(p.Inventory, nw, nh, packLimit(equip), []proto.ItemStack{{Item: id, Qty: 1}}, -1, -1)
+	if !ok {
+		if slot == SlotBackpack {
+			return fail(ErrPackFull, "Without the %s your things and the %s itself would not fit in %d×%d. Move some to storage first.", itemName(id), itemName(id), nw, nh)
+		}
+		return fail(ErrPackFull, "There is no room in your pack for the %s. Make some room first.", itemName(id))
 	}
-	p.Inventory = append(p.Inventory, proto.ItemStack{Item: id, Qty: 1})
+	p.Inventory = newPack
 	p.Equipped = equip
 	Recompute(p)
 	return nil
 }
 
-// MoveItem moves an item between the backpack and cabin storage; to is ToStorage or
-// ToInventory. One call moves one slot's worth: a piece of gear, or one stack of a
-// supply (to storage: the smallest stack carried; to the backpack: up to a full
-// stack, as much as fits). Carried gadgets stop working once stored, and the stats
-// follow. Equipped items must be unequipped (or swapped with Equip) first.
+// ---------------------------------------------------------------------------
+// Moving between the pack and storage
+
+// MoveItem moves an item between the backpack and cabin storage, placing it
+// automatically; to is ToStorage or ToInventory. One call moves one stack: to
+// storage, the smallest stack carried (merged onto stored stacks first, then into
+// the first free spot); to the backpack, one stored stack, as much of it as fits.
+// Carried gadgets stop working once stored, and the stats follow. Equipped items
+// must be unequipped (or swapped with Equip) first. PlaceItem moves to a chosen
+// cell instead.
 //
 // Storage is only reachable at the cabin; that is the session's check, not this
 // function's.
@@ -329,27 +491,134 @@ func MoveItem(p *proto.Profile, itemID, to string) error {
 			}
 			return fail(ErrNotOwned, "You are not carrying the %s.", def.Name)
 		}
-		storeIn(p, itemID, p.Inventory[i].Qty)
-		p.Inventory = removeAt(p.Inventory, i)
+		sg := StorageGrid(p)
+		qty := p.Inventory[i].Qty
+		left := sg.Add(itemID, qty)
+		if left == qty {
+			return fail(ErrPackFull, "Your cabin storage is full: no room for the %s. Tidy it or take something out first.", def.Name)
+		}
+		p.Storage = sg.Stacks
+		inv := append([]proto.ItemStack{}, p.Inventory...)
+		inv[i].Qty = left
+		if left == 0 {
+			inv = removeAt(inv, i)
+		}
+		p.Inventory = inv
 	case ToInventory:
-		i := indexOfItem(p.Storage, itemID)
+		i := smallestStack(p.Storage, itemID)
 		if i < 0 {
 			return fail(ErrNotOwned, "There is no %s in your storage.", def.Name)
 		}
-		want := min(p.Storage[i].Qty, stackSize(def))
-		left := packIn(p, def, want, Capacity(p))
+		pg := PackGrid(p)
+		want := p.Storage[i].Qty
+		left := pg.Add(itemID, want)
 		if left == want {
-			return fail(ErrPackFull, "Your pack is full. Leave something behind to take the %s.", def.Name)
+			return packFull(PackGrid(p), def)
 		}
-		p.Storage[i].Qty -= want - left
-		if p.Storage[i].Qty <= 0 {
-			p.Storage = removeAt(p.Storage, i)
+		p.Inventory = pg.Stacks
+		store := append([]proto.ItemStack{}, p.Storage...)
+		store[i].Qty = left
+		if left == 0 {
+			store = removeAt(store, i)
 		}
+		p.Storage = store
 	default:
 		return fail(ErrInvalid, "Items can be moved to your pack or to storage.")
 	}
 	Recompute(p)
 	return nil
+}
+
+// PlaceItem moves a stack to a chosen cell of the backpack or storage grid, turning
+// or merging it (proto.PlaceItem; the rules are Place's). Storage is only reachable
+// at the cabin; that is the session's check.
+func PlaceItem(p *proto.Profile, m proto.PlaceItem) error {
+	from, err := gridOf(p, m.From)
+	if err != nil {
+		return err
+	}
+	to := from
+	if m.To != m.From {
+		if to, err = gridOf(p, m.To); err != nil {
+			return err
+		}
+	}
+	if err := Place(from, to, m.FX, m.FY, m.X, m.Y, m.R); err != nil {
+		return err
+	}
+	setGrid(p, m.From, from)
+	setGrid(p, m.To, to)
+	Recompute(p)
+	return nil
+}
+
+// TidyGrid re-packs the backpack or storage (where: ToInventory | ToStorage):
+// stacks merged, biggest things first, compact (Grid.Tidy).
+func TidyGrid(p *proto.Profile, where string) error {
+	g, err := gridOf(p, where)
+	if err != nil {
+		return err
+	}
+	if !g.Tidy() {
+		return fail(ErrInvalid, "That could not be packed any tighter.")
+	}
+	setGrid(p, where, g)
+	Recompute(p)
+	return nil
+}
+
+// RepairGrids makes both grids valid (save migration: stacks from before the grid
+// all lie at 0,0). An invalid backpack is tidied; whatever still does not fit goes
+// to cabin storage. Invalid storage, or storage holding stacks above the stack
+// limit (it used to be unlimited), is tidied too, overflowing into extra rows
+// rather than losing anything. It reports whether anything changed; Normalize
+// calls it.
+func RepairGrids(p *proto.Profile) bool {
+	changed := false
+	if pg := PackGrid(p); !pg.Valid() {
+		changed = true
+		if pg.Tidy() {
+			p.Inventory = pg.Stacks
+		} else {
+			fresh := &Grid{W: pg.W, H: pg.H, Limit: pg.Limit}
+			var spill []proto.ItemStack
+			for _, st := range pg.merged() {
+				if !fresh.PlaceAnywhere(st) {
+					spill = append(spill, st)
+				}
+			}
+			p.Inventory = fresh.Stacks
+			for _, st := range spill {
+				storeForce(p, st.Item, st.Qty)
+			}
+		}
+	}
+	sg := StorageGrid(p)
+	over := false
+	for _, st := range sg.Stacks {
+		if st.Qty > sg.limitOf(st.Item) {
+			over = true
+		}
+	}
+	if !sg.Valid() || over {
+		changed = true
+		if sg.Tidy() {
+			p.Storage = sg.Stacks
+		} else {
+			merged := sg.merged()
+			p.Storage = []proto.ItemStack{}
+			for _, st := range merged {
+				storeForce(p, st.Item, st.Qty)
+			}
+		}
+	}
+	if p.Inventory == nil {
+		p.Inventory = []proto.ItemStack{}
+	}
+	if p.Storage == nil {
+		p.Storage = []proto.ItemStack{}
+	}
+	return changed
 }
 
 // UseItem consumes one unit of a supply carried in the backpack and returns its
@@ -441,7 +710,8 @@ func UpgradePriceFor(p *proto.Profile, itemID, upgradeID string) int {
 // CanBuy reports why the player cannot buy an item from Finn right now, or nil.
 // Checked in this order: the item exists and is stocked; naturalist rank;
 // reputation with the outfitters (ItemDef.ReqRep); not already owned (gear is
-// one-of-a-kind); enough credits at the discounted price; room in the backpack.
+// one-of-a-kind); enough credits at the discounted price; room in the backpack
+// grid as it is packed now (the refusal says what would make room).
 // It changes nothing.
 func CanBuy(p *proto.Profile, itemID string) error {
 	def := itemIndex[itemID]
@@ -463,8 +733,8 @@ func CanBuy(p *proto.Profile, itemID string) error {
 	if price := discounted(p, def.Price); p.Credits < price {
 		return fail(ErrCredits, "The %s costs %d Field Credits (you have %d).", def.Name, price, p.Credits)
 	}
-	if roomFor(p, def, Capacity(p)) < 1 {
-		return fail(ErrPackFull, "Your pack is full. Make room before buying the %s.", def.Name)
+	if g := PackGrid(p); g.Room(itemID, 1) < 1 {
+		return packFull(g, def)
 	}
 	return nil
 }
@@ -477,7 +747,9 @@ func Buy(p *proto.Profile, itemID string) error {
 	}
 	def := itemIndex[itemID]
 	p.Credits -= discounted(p, def.Price)
-	packIn(p, def, 1, Capacity(p))
+	g := PackGrid(p)
+	g.Add(itemID, 1)
+	p.Inventory = g.Stacks
 	Recompute(p)
 	return nil
 }

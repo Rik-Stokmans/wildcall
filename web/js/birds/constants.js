@@ -77,8 +77,12 @@ export const INTERP_DELAY = 0.12;
 /** Full models within this distance; a speck beyond (with hysteresis). */
 export const LOD_NEAR = 120;
 export const LOD_HYST = 8;
-/** Spawn / despawn scale-fade durations (seconds). */
-export const FADE_IN = 0.3;
-export const FADE_OUT = 0.25;
+/**
+ * Spawn / despawn scale-fade durations (seconds). The engine only adds or removes birds
+ * far off (internal/eco nopop.go: beyond ~200 m, never within 150 m in view), so these
+ * soften a speck at the edge of the world; ~0.6 s reads as drifting out of sight.
+ */
+export const FADE_IN = 0.6;
+export const FADE_OUT = 0.6;
 /** Upper bound on simultaneously tracked birds (server sends birds within 260 m). */
 export const MAX_BIRDS = 1024;

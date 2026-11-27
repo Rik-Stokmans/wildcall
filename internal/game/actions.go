@@ -151,6 +151,44 @@ func (s *Session) msgMove(d []byte) {
 	s.changed()
 }
 
+// msgPlace moves a stack to a chosen cell of the backpack or storage grid (turned,
+// or merged onto a stack of the same item). Storage is only within reach at the
+// cabin, as for "move".
+func (s *Session) msgPlace(d []byte) {
+	var m proto.PlaceItem
+	if err := decode(d, &m); err != nil {
+		s.fail("That could not be read.")
+		return
+	}
+	if (m.From == progress.ToStorage || m.To == progress.ToStorage) && !s.nearCabin() {
+		s.fail("Your storage is at the cabin.")
+		return
+	}
+	if err := progress.PlaceItem(s.p, m); err != nil {
+		s.failErr(err)
+		return
+	}
+	s.changed()
+}
+
+// msgTidy re-packs the backpack or (at the cabin) storage neatly.
+func (s *Session) msgTidy(d []byte) {
+	var m proto.TidyMsg
+	if err := decode(d, &m); err != nil {
+		s.fail("That could not be read.")
+		return
+	}
+	if m.Where == progress.ToStorage && !s.nearCabin() {
+		s.fail("Your storage is at the cabin.")
+		return
+	}
+	if err := progress.TidyGrid(s.p, m.Where); err != nil {
+		s.failErr(err)
+		return
+	}
+	s.changed()
+}
+
 func (s *Session) msgUse(d []byte) {
 	var m proto.ItemAction
 	if err := decode(d, &m); err != nil {

@@ -11,11 +11,38 @@ import { clamp } from './rig.js';
 
 let material = null;
 
-/** The one material every bird shares (vertex colours, soft Lambert shading). */
+/** Strength of the sky-facing rim light on birds (set per frame by the birds module: day/night). */
+export const BIRD_RIM = { value: 0.55 };
+
+// A soft rim where the bird's upper edge faces the sky: the head, back and the top of
+// the wings catch the light and lift the silhouette off dark foliage (the eye finds
+// edges). Tinted by the sky light, so it is warm by day and a faint moonlit edge at night.
+const RIM_FRAGMENT = /* glsl */`
+{
+  vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+  float fres = 1.0 - saturate(dot(normal, normalize(vViewPosition)));
+  float skyward = saturate(dot(normal, upV) * 0.75 + 0.35);
+  float rim = pow(fres, 2.0) * skyward * uBirdRim;
+  vec3 rimCol = vec3(0.9, 0.86, 0.78);
+#if NUM_HEMI_LIGHTS > 0
+  rimCol = hemisphereLights[0].skyColor * 0.55 + rimCol * 0.45 * saturate(length(hemisphereLights[0].skyColor));
+#endif
+  outgoingLight += rimCol * rim * (0.4 + 0.6 * diffuseColor.rgb);
+}
+#include <opaque_fragment>
+`;
+
+/** The one material every bird shares (vertex colours, soft Lambert shading, sky rim). */
 export function birdMaterial() {
   if (!material) {
     material = new THREE.MeshLambertMaterial({ vertexColors: true });
     material.name = 'birds';
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uBirdRim = BIRD_RIM;
+      shader.fragmentShader = 'uniform float uBirdRim;\n' + shader.fragmentShader
+        .replace('#include <opaque_fragment>', RIM_FRAGMENT);
+    };
+    material.customProgramCacheKey = () => 'wc-bird-rim';
   }
   return material;
 }

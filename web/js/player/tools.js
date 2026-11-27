@@ -5,7 +5,7 @@
 import {
   clampZoom, wheelZoom, fovFor, sensitivityScale, raiseTime, swayAmplitude, swayOffset,
   shakeAmount, sharpness, stepFocus, blurPx, lowLightBrightness, focusState, stepRaise,
-  isRaised, burstInterval, blendFov, opticStats, breathFactor, zoomRange,
+  isRaised, burstInterval, blendFov, opticStats, breathFactor, zoomRange, proneRaiseTime,
 } from './optics.js';
 import {
   buildPhoto, outOfFilm, outOfFilmText, filmLeft, focusTarget, recorderHint, recResultText, TOOLS, FOCUS_FAR,
@@ -279,7 +279,7 @@ export function createTools(ctx, player) {
 
     // Raise / lower at the speed the equipment allows (weight, camReady).
     t.raiseAmt = isOptic
-      ? stepRaise(t.raiseAmt, playing && t.rmb, raiseTime(t.active, stats), dt)
+      ? stepRaise(t.raiseAmt, playing && t.rmb, proneRaiseTime(raiseTime(t.active, stats), !!player.api.prone), dt)
       : 0;
     const up = isOptic && t.raiseAmt > 0;
     if (t.lmb) t.lmbHeld += dt;
@@ -297,7 +297,7 @@ export function createTools(ctx, player) {
     let amp = 0;
     if (up) {
       amp = swayAmplitude(t.active, zoom, stats, {
-        crouching: player.api.crouching, sitting: player.api.sitting,
+        crouching: player.api.crouching, sitting: player.api.sitting, prone: !!player.api.prone,
         speed: player.api.speed, stillTime: player.api.stillTime,
       }) * t.raiseAmt;
       if (t.active === 'binoculars' && t.lmb) amp *= breathFactor(t.lmbHeld);

@@ -205,6 +205,7 @@ const (
 	EvFlush                      // a bird was scared off by the observer
 	EvMove                       // a bird made a conspicuous movement (take-off, landing, branch hop)
 	EvArrive                     // a notable bird entered the world (migrant / vagrant / rare visitor)
+	EvLand                       // a bird flushed by the observer (EvFlush) landed at its refuge
 )
 
 // EcoEvent is emitted by Ecosystem.Step.
@@ -213,10 +214,13 @@ type EcoEvent struct {
 	Bird    uint32
 	Species int     // Species.Index
 	Call    int     // index into Species.Calls (EvCall)
-	Repeats int     // phrase repeats in this bout (EvCall)
+	Repeats int     // phrase repeats in this bout (EvCall); flock mates flying with it (EvFlush)
 	Pos     Vec3    // where the bird is
-	Dur     float32 // total bout duration in seconds (EvCall)
+	Dur     float32 // total bout duration in seconds (EvCall); flight duration (EvFlush)
 	Seed    uint32  // per-event variation seed for the synth
+	// EvFlush / EvLand: the two ends of the escape flight - where it took off and the
+	// perch it is heading for (EvFlush) or has just landed on (EvLand).
+	From, To Vec3
 }
 
 // Nest stages.
@@ -349,6 +353,8 @@ type Stats struct {
 
 	// --- Pack, navigation, general
 	Capacity    float32 `json:"capacity"`    // [game] inventory slots (base 8)
+	PackW       float32 `json:"packW"`       // [game][client] backpack grid width in cells (base 5)
+	PackH       float32 `json:"packH"`       // [game][client] backpack grid height in cells (base 4)
 	Compass     float32 `json:"compass"`     // [client] 0 = 8-point strip, 1 = degrees, 2 = landmark bearings
 	MapDetail   float32 `json:"mapDetail"`   // [client] 0 = landmarks only, 1 = trails, 2 = habitats
 	LensInspect float32 `json:"lensInspect"` // [game] >=1: inspecting feathers & signs yields extra clues (Explorer's Lens)
@@ -366,6 +372,6 @@ func BaseStats() Stats {
 		CamZoom: 3, CamStability: 0.4, CamFocus: 1.0, CamQuality: 0.5, CamBurst: 1, CamNoise: 0.5, CamReady: 0.6, FilmCap: 12,
 		ObserveSpeed: 1, NakedEye: 1, MoveSense: 18, Settle: 1, TrackSigns: 6,
 		Stealth: 1, CrouchBonus: 0.75, MoveSpeed: 1, Stamina: 6, TrailSense: 12, Familiarity: 1,
-		Capacity: 8, XPMult: 1, CreditMult: 1,
+		Capacity: 8, PackW: 5, PackH: 4, XPMult: 1, CreditMult: 1,
 	}
 }

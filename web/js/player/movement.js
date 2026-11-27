@@ -5,6 +5,7 @@
 // Speeds are pinned by docs/contract.md §5.2 (ctx.player).
 
 export const SPEED = Object.freeze({
+  crawl: 0.7,                          // prone, on the elbows (stance.js CRAWL_SPEED)
   crouch: 1.2,
   walk: 2.4,
   run: 4.4,
@@ -14,6 +15,7 @@ export const SPEED = Object.freeze({
 export const EYE_HEIGHT = 1.65;        // core.EyeHeight
 export const CROUCH_EYE = 1.0;
 export const SIT_EYE = 0.85;
+export const PRONE_EYE_H = 0.35;       // lying flat (stance.js PRONE_EYE)
 export const MAX_WADE = 1.2;           // metres of water the player can wade through
 export const STEP_UP = 0.55;           // obstacles this high are stepped onto without a jump
 export const MAX_GRADE = 0.62;         // ~32°: steeper uphill ground cannot be walked up
@@ -48,14 +50,14 @@ export function runKeyUp(s) {
 /**
  * Advance the stamina state machine.
  * @param {object} s       sprint state (mutated)
- * @param {object} intent  {moving, runHeld, crouching, canSprint}
+ * @param {object} intent  {moving, runHeld, crouching, prone, canSprint}
  * @param {number} dt      seconds
  * @param {number} sprintSeconds stats.stamina (seconds of sprint from full)
- * @returns {'walk'|'run'|'sprint'|'crouch'} the gait the player wants this frame
+ * @returns {'walk'|'run'|'sprint'|'crouch'|'crawl'} the gait the player wants this frame
  */
 export function stepGait(s, intent, dt, sprintSeconds) {
   const cap = Math.max(1, sprintSeconds || 6);
-  const wantsSprint = intent.moving && intent.runHeld && s.armed && !intent.crouching && intent.canSprint !== false;
+  const wantsSprint = intent.moving && intent.runHeld && s.armed && !intent.crouching && !intent.prone && intent.canSprint !== false;
   // Exhaustion: once empty, sprinting is unavailable until stamina has recovered a
   // third (and the key must be double-tapped again) — no penalty, just a breather.
   if (s.exhausted && s.stamina >= 0.33) s.exhausted = false;
@@ -72,6 +74,7 @@ export function stepGait(s, intent, dt, sprintSeconds) {
       s.stamina = Math.min(1, s.stamina + dt * rate);
     }
   }
+  if (intent.prone) return 'crawl';
   if (intent.crouching) return 'crouch';
   if (s.sprinting) return 'sprint';
   if (intent.runHeld && intent.moving) return 'run';
@@ -125,11 +128,12 @@ export function approachVelocity(current, target, dt, accelerating) {
 }
 
 /**
- * Classify the pose move mode (proto.Pose.Move: still|crouch|walk|run|sprint) from the
- * actual horizontal speed and the gait.
+ * Classify the pose move mode (proto.Pose.Move: still|crouch|crawl|walk|run|sprint)
+ * from the actual horizontal speed and the gait.
  */
-export function moveMode(speed, gait, crouching, sitting) {
+export function moveMode(speed, gait, crouching, sitting, prone = false) {
   if (sitting || speed < STILL_SPEED) return 'still';
+  if (prone) return 'crawl';
   if (crouching) return 'crouch';
   // The gait (what the legs are doing) decides how disturbing the movement is, even
   // when terrain slows the actual pace: crashing through scrub at a sprint is loud.
@@ -139,7 +143,8 @@ export function moveMode(speed, gait, crouching, sitting) {
 }
 
 /** Eye height above the feet for the current posture. */
-export function eyeHeightFor(crouching, sitting) {
+export function eyeHeightFor(crouching, sitting, prone = false) {
+  if (prone) return PRONE_EYE_H;
   if (sitting) return SIT_EYE;
   if (crouching) return CROUCH_EYE;
   return EYE_HEIGHT;
@@ -152,7 +157,11 @@ export function eyeHeightFor(crouching, sitting) {
 export function bobParams(speed, crouching, raised) {
   if (speed < STILL_SPEED) return { amp: 0, freq: 0 };
   const amp = clamp(0.018 + speed * 0.0065, 0, 0.06) * (crouching ? 0.6 : 1) * (raised ? 0.25 : 1);
-  const freq = 1.1 + speed * 0.28; // full bob cycles per second; two footsteps per cycle
+  // Cadence follows distance covered, not time: each footfall covers a stride that
+  // lengthens with speed (about 1.2 m at a walk, 1.7 m at a run, 2.2 m at a sprint), so
+  // a stroll gives ~2 steps a second, a run ~2.6, a sprint ~2.9, and creeping along
+  // gives a step only now and then. Two footfalls per bob cycle.
+  const freq = speed / (2 * (0.55 + 0.26 * speed));
   return { amp, freq };
 }
 

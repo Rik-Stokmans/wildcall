@@ -18,6 +18,7 @@ import { createVoicePack, createNarratorVoice } from './pack.js';
 import { createCaption } from './caption.js';
 import { createController } from './controller.js';
 
+const SYSTEM_VOICE_FALLBACK = false;
 let controller = null;
 
 export default {
@@ -26,7 +27,9 @@ export default {
   init(ctx) {
     try {
       const win = typeof window !== 'undefined' ? window : globalThis;
-      const system = createSpeech(win);
+      // Recorded lines only. The system's speech synthesis is never used as a stand-in:
+      // a robotic voice reading the lines is worse than a silent caption.
+      const system = SYSTEM_VOICE_FALLBACK ? createSpeech(win) : null;
       const pack = createVoicePack({ baseUrl: 'voice/', getAudio: () => ctx.audio, win });
       const speech = createNarratorVoice(system, pack, {
         onSpeaking: (on) => ctx.audio?.voice?.setSpeaking?.(on),

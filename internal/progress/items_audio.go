@@ -30,9 +30,9 @@ func audioItems() []proto.ItemDef {
 			Desc: "A shotgun microphone on a pistol grip. Point it at a singer and the rest of the forest steps back.",
 			Kind: KindEquipment, Slot: SlotAudio, Tier: 2, Rarity: proto.RarityUncommon,
 			Price: 210, ReqRank: 2, Source: "shop", Icon: "microphone",
-			Mods: mods{"recRange": 20, "recFocus": 0.55, "noiseReduce": 0.12, "recQuality": 0.1, "capacity": -1},
+			Mods: mods{"recRange": 20, "recFocus": 0.55, "noiseReduce": 0.12, "recQuality": 0.1, "stamina": -0.5},
 			Pros: []string{"Clean recordings from nearly twice as far", "Rejects noise from the sides", "Better fidelity"},
-			Cons: []string{"Must be aimed: a call off to one side is lost", "The boom and cable take up a pack slot"},
+			Cons: []string{"Must be aimed: a call off to one side is lost", "The boom and cable are an awkward carry: a shorter sprint"},
 			Upgrades: []proto.UpgradeDef{
 				up("directional_microphone_blimp", "Wind Blimp",
 					"A zeppelin cover for breezy days on the ridge and the shore.", 110,
@@ -47,13 +47,13 @@ func audioItems() []proto.ItemDef {
 			Desc: "A clear dish half a metre across that gathers a distant voice to a point. Astonishing reach, if you can hold it on the bird — and carry it there.",
 			Kind: KindEquipment, Slot: SlotAudio, Tier: 3, Rarity: proto.RarityRare,
 			Price: 520, ReqRank: 4, Source: "shop", Icon: "microphone",
-			Mods: mods{"recRange": 60, "recFocus": 0.9, "recQuality": 0.2, "noiseReduce": 0.15, "capacity": -2, "moveSpeed": -0.05},
+			Mods: mods{"recRange": 60, "recFocus": 0.9, "recQuality": 0.2, "noiseReduce": 0.15, "stamina": -1, "moveSpeed": -0.05},
 			Pros: []string{"Records clearly from 85 m and beyond", "Isolates one singer from a whole chorus", "Rich, close-sounding takes"},
-			Cons: []string{"Pinpoint aim required", "The dish fills two pack slots", "Awkward to carry: it slows your walking"},
+			Cons: []string{"Pinpoint aim required", "The dish is a burden to carry: a shorter sprint", "Awkward to carry: it slows your walking"},
 			Upgrades: []proto.UpgradeDef{
 				fromRank(4, atWorkshop(up("parabolic_microphone_fold", "Folding Dish",
 					"Cut and hinge the dish into petals so it packs flat.", 230,
-					mods{"capacity": 1, "moveSpeed": 0.03}))),
+					mods{"stamina": 0.5, "moveSpeed": 0.03}))),
 			},
 		},
 		{

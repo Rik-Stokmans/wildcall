@@ -90,13 +90,20 @@ export function raiseTime(tool, stats) {
   return 0.2;
 }
 
+/** Raising an instrument while lying flat takes a touch longer (getting onto the elbows). */
+export const PRONE_RAISE_SLOW = 1.3;
+export function proneRaiseTime(seconds, prone) {
+  return prone ? seconds * PRONE_RAISE_SLOW : seconds;
+}
+
 /**
  * Posture factor on hand sway: crouching and sitting brace the arms; standing still
  * for a moment settles the breath (the "holding breath" steadying, earned by patience).
- * @param {object} p {crouching, sitting, speed, stillTime}
+ * Lying prone, resting on the elbows, is the steadiest of all.
+ * @param {object} p {crouching, sitting, prone, speed, stillTime}
  */
-export function postureFactor({ crouching = false, sitting = false, speed = 0, stillTime = 0 } = {}) {
-  let f = sitting ? 0.45 : crouching ? 0.62 : 1;
+export function postureFactor({ crouching = false, sitting = false, prone = false, speed = 0, stillTime = 0 } = {}) {
+  let f = prone ? 0.36 : sitting ? 0.45 : crouching ? 0.62 : 1;
   if (speed > 0.2) f *= 1 + Math.min(speed, 6.5) * 0.35;            // walking with optics up is wobbly
   else f *= 1 - 0.3 * clamp(stillTime / 2.5, 0, 1);                 // settle over ~2.5 s
   return f;

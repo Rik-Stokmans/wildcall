@@ -74,6 +74,8 @@ type Sim struct {
 	lureSeq uint32
 	dbgSeq  uint32
 
+	circuits []*circuit // circuit residents (resident.go); nil entries are free
+
 	// Clock state derived from the Env passed to Step.
 	started   bool
 	tick      uint32
@@ -95,7 +97,8 @@ type Sim struct {
 	lastScan core.Vec3
 	scanned  bool
 	oMove    float32 // movement factor on flush distance
-	oPosture float32 // crouch / sit bonus
+	oPosture float32 // crouch / sit / prone bonus
+	oAware   float32 // awareness band: fear builds inside oAware x flush distance
 	oDirX    float32 // unit horizontal velocity
 	oDirZ    float32
 	oMoving  bool
@@ -475,7 +478,13 @@ const (
 	moveRun    = 1.5
 	moveWalk   = 1.0
 	moveCrouch = 0.6
+	moveCrawl  = 0.4 // lying flat and crawling (Observer.Prone, Move "crawl")
 	moveStill  = 0.35
+	moveProne  = 0.25 // lying flat and still
+
+	// proneAware: a prone observer is a low, small shape: fear starts building 20 %
+	// closer than for an upright one (multiplies awareBand).
+	proneAware = 0.8
 
 	approachDirect     = 1.3
 	approachTangential = 0.8
@@ -485,11 +494,16 @@ const (
 // core.Observer.Move: when the client names its movement mode that is used as is (a
 // sprint slowed by rough ground is still a sprint); when it is empty or unknown the
 // mode is inferred from the speed sp.
-func moveFactor(move string, still, crouch bool, sp float32) float32 {
+func moveFactor(move string, still, crouch, prone bool, sp float32) float32 {
 	if still {
+		if prone {
+			return moveProne
+		}
 		return moveStill
 	}
 	switch move {
+	case "crawl":
+		return moveCrawl
 	case "crouch":
 		return moveCrouch
 	case "walk":
@@ -504,6 +518,8 @@ func moveFactor(move string, still, crouch bool, sp float32) float32 {
 		return moveSprint
 	case sp > 3.2:
 		return moveRun
+	case prone:
+		return moveCrawl
 	case crouch:
 		return moveCrouch
 	}
@@ -520,7 +536,7 @@ func observerStill(o core.Observer, sp float32) bool {
 	switch o.Move {
 	case "still":
 		return true
-	case "crouch", "walk", "run", "sprint":
+	case "crouch", "crawl", "walk", "run", "sprint":
 		return false
 	}
 	return sp < 0.35
@@ -550,11 +566,16 @@ func (s *Sim) setObserver(o core.Observer) {
 		sp = hs
 	}
 	still := observerStill(o, sp)
-	s.oMove = moveFactor(o.Move, still, o.Crouch, sp)
+	prone := o.Prone || o.Move == "crawl"
+	s.oMove = moveFactor(o.Move, still, o.Crouch, prone, sp)
 	crouch := o.Crouch || o.Move == "crouch"
 	s.oPosture = 1
-	if crouch || o.Sitting {
+	if crouch || o.Sitting || prone {
 		s.oPosture = s.obs.CrouchBonus
+	}
+	s.oAware = awareBand
+	if prone {
+		s.oAware = awareBand * proneAware
 	}
 	s.oMoving = !still
 	s.oDirX, s.oDirZ = 0, 0
@@ -562,9 +583,9 @@ func (s *Sim) setObserver(o core.Observer) {
 		s.oDirX, s.oDirZ = o.Vel.X/hl, o.Vel.Z/hl
 	}
 	// Calm: what lets birds get used to a person (sitting, standing quietly, creeping).
-	s.oCalm = still || (crouch && sp < 1.5)
-	stillBonus := 1 + min32(o.Still, 30)/6
-	if o.Sitting {
+	s.oCalm = still || ((crouch || prone) && sp < 1.5)
+	stillBonus := 1 + min32(o.Still, 20)/4 // standing still settles the birds within ~20 s
+	if o.Sitting || (prone && still) {     // lying still settles birds at least as well as sitting
 		stillBonus *= 1.5
 	}
 	s.oDecay = fearDecay * stillBonus * s.obs.Settle

@@ -58,21 +58,33 @@ test('purchaseCheck: buyable, rank, rep, credits, owned, capacity', () => {
   assert.equal(r.owned, true);
   assert.deepEqual(r.issues.map((i) => i.code), ['owned']);
 
+  // The grid room check needs the item defs: a 5x4 pack whose free cells hold no 2x2 spot.
   p = baseProfile();
-  p.inventory = Array.from({ length: 8 }, (_, i) => ({ item: 'x' + i, qty: 1 }));
-  r = L.purchaseCheck(items.explorer_binoculars, p, stats);
+  p.inventory = [{ item: 'tripod', qty: 1, x: 0, y: 0 }, { item: 'tripod2', qty: 1, x: 2, y: 0 }, { item: 'tripod3', qty: 1, x: 4, y: 0 }];
+  const grid = { ...items, explorer_binoculars: { ...items.explorer_binoculars, w: 2, h: 2 }, tripod: { id: 'tripod', w: 1, h: 4 }, tripod2: { id: 'tripod2', w: 1, h: 4 }, tripod3: { id: 'tripod3', w: 1, h: 4 } };
+  r = L.purchaseCheck(grid.explorer_binoculars, p, { ...stats, packW: 5, packH: 4 }, [], grid);
   assert.deepEqual(r.issues.map((i) => i.code), ['capacity']);
+  assert.equal(r.issues[0].text, L.NO_ROOM_TEXT);
+  assert.equal(r.noRoom, true);
+  assert.equal(r.tidyFits, true); // tidied, the three tripods stand side by side
+  // Without the defs the shop cannot tell and leaves it to the server.
+  assert.equal(L.purchaseCheck(items.explorer_binoculars, p, stats).canBuy, true);
 });
 
 test('supplies are never "owned" and stack into a full pack', () => {
-  const stats = { capacity: 2 };
+  const stats = { packW: 2, packH: 1 };
+  const grid = { ...items, x: { id: 'x', w: 1, h: 1 } };
   const p = baseProfile();
-  p.inventory = [{ item: 'film_roll', qty: 2 }, { item: 'x', qty: 1 }];
-  let r = L.purchaseCheck(items.film_roll, p, stats);
+  p.inventory = [{ item: 'film_roll', qty: 2, x: 0, y: 0 }, { item: 'x', qty: 1, x: 1, y: 0 }];
+  let r = L.purchaseCheck(items.film_roll, p, stats, [], grid);
   assert.equal(r.canBuy, true); // merges into the film stack (2 < 5)
   p.inventory[0].qty = 5;
-  r = L.purchaseCheck(items.film_roll, p, stats);
+  r = L.purchaseCheck(items.film_roll, p, stats, [], grid);
   assert.deepEqual(r.issues.map((i) => i.code), ['capacity']);
+  assert.equal(r.tidyFits, false);
+  // The Research Backpack's bigger stacks count in the pack.
+  p.equipped = { backpack: 'research_backpack' };
+  assert.equal(L.purchaseCheck(items.film_roll, p, stats, [], grid).canBuy, true);
 });
 
 test('unsold items cannot be bought', () => {
@@ -80,11 +92,13 @@ test('unsold items cannot be bought', () => {
   assert.deepEqual(r.issues.map((i) => i.code), ['unsold']);
 });
 
-test('capacityInfo counts stacks, ignores equipped, tolerates missing stats', () => {
+test('capacityInfo counts grid cells, ignores equipped, tolerates missing stats', () => {
   const p = baseProfile();
-  assert.deepEqual(L.capacityInfo(p, { capacity: 8 }), { used: 1, cap: 8, free: 7, full: false });
-  assert.equal(L.capacityInfo(p, {}).full, false);
-  assert.equal(L.capacityInfo({ inventory: null }, { capacity: 3 }).used, 0);
+  p.inventory = [{ item: 'film_roll', qty: 3, x: 0, y: 0 }, { item: 'explorer_binoculars', qty: 1, x: 1, y: 0 }];
+  const grid = { ...items, explorer_binoculars: { ...items.explorer_binoculars, w: 2, h: 2 } };
+  assert.deepEqual(L.capacityInfo(p, { packW: 5, packH: 4 }, grid), { used: 5, cap: 20, free: 15, full: false });
+  assert.equal(L.capacityInfo(p, {}, grid).cap, 20); // base 5 x 4
+  assert.equal(L.capacityInfo({ inventory: null }, { packW: 3, packH: 3 }).used, 0);
 });
 
 test('compareToEquipped: deltas against the equipped item including its upgrades', () => {
@@ -335,9 +349,13 @@ test('cabinUpgradeStatus', () => {
 
 test('moveCheck blocks a full backpack', () => {
   const p = baseProfile();
-  p.inventory = Array.from({ length: 3 }, (_, i) => ({ item: 'x' + i, qty: 1 }));
-  assert.equal(L.moveCheck({ id: 'k', stack: 0 }, 'inventory', p, { capacity: 3 }).ok, false);
-  assert.equal(L.moveCheck({ id: 'k', stack: 0 }, 'storage', p, { capacity: 3 }).ok, true);
+  p.inventory = Array.from({ length: 3 }, (_, i) => ({ item: 'x' + i, qty: 1, x: i, y: 0 }));
+  p.storage = [{ item: 'k', qty: 1, x: 0, y: 0 }];
+  const grid = { k: { id: 'k', name: 'Kettle', w: 1, h: 1 }, x0: { id: 'x0' }, x1: { id: 'x1' }, x2: { id: 'x2' } };
+  const r = L.moveCheck(grid.k, 'inventory', p, { packW: 3, packH: 1 }, grid);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /^Your pack is full: no room for the Kettle/);
+  assert.equal(L.moveCheck(grid.x0, 'storage', p, { packW: 3, packH: 1 }, grid).ok, true);
 });
 
 test('skyScene: day, night, weather', () => {

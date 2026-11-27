@@ -208,12 +208,14 @@ func TestDirectionErrorShrinksWithAccuracy(t *testing.T) {
 
 func TestStatGatedClueFields(t *testing.T) {
 	c, _ := newCtx()
-	b := birdAt(1, spRobin, north(20, 6), core.ActPerched, 0.7)
+	// Beyond nearHearR (40 m) a beginner gets no elevation and no perch layer; close
+	// up everyone does (TestCloseVoiceIsEasyToPlace).
+	b := birdAt(1, spRobin, north(60, 6), core.ActPerched, 0.7)
 	b.Flags = core.FlagRarePlumage
 
 	h := mustHear(t, c, b, standing())
 	cl := h.Clue
-	if cl.Pitch != "" || cl.Pattern != "" || cl.Habitat != "" || cl.Perch != "" || cl.Elevation != "" || cl.Unusual {
+	if cl.Pitch != "" || cl.Pattern != "" || cl.Habitat != "" || cl.Perch != "" || cl.Elevation != "" || cl.ElevSpread != 0 || cl.Unusual {
 		t.Errorf("beginner clue shows gated fields: %+v", cl)
 	}
 	if cl.DistMin == 0 && cl.DistMax == 0 {
@@ -236,11 +238,13 @@ func TestStatGatedClueFields(t *testing.T) {
 		t.Errorf("focus clue: %+v", fc)
 	}
 	// Habitat Reading rank 1: habitat without focus; the perch hint while focusing.
+	b.Pos = north(20, 6)
 	c.Stats.HabitatInfo = 1
-	if cl := mustHear(t, c, b, standing()).Clue; cl.Habitat != "Woodland canopy" || cl.Perch != "" {
+	// Unfocused it says only the coarse layer anyone hears; focused it adds the detail.
+	if cl := mustHear(t, c, b, standing()).Clue; cl.Habitat != "Woodland canopy" || cl.Perch != "high in the crown" {
 		t.Errorf("habitat reading 1, unfocused: %+v", cl)
 	}
-	if cl := mustHear(t, c, b, fp).Clue; cl.Perch == "" {
+	if cl := mustHear(t, c, b, fp).Clue; cl.Perch != "high in the canopy" {
 		t.Errorf("habitat reading 1, focused: no perch hint: %+v", cl)
 	}
 	c.Stats.HabitatInfo = 0
@@ -304,5 +308,103 @@ func TestMergeHeardPrecedence(t *testing.T) {
 	MergeHeard(ev, Heard{Evidence: map[string]string{"pitch": "medium"}, Primary: true})
 	if ev["pitch"] != "medium" {
 		t.Errorf("primary call should overwrite")
+	}
+}
+
+// TestCloseVoiceIsEasyToPlace pins the close-range hearing numbers for a beginner
+// (base stats, not focusing): spread, distance band, elevation and layer by range,
+// and their monotonicity.
+func TestCloseVoiceIsEasyToPlace(t *testing.T) {
+	c, _ := newCtx()
+	deg := func(r float32) float32 { return r * 180 / math.Pi }
+	// The skill's own spread (the pre-proximity formula) for a voice at strength s.
+	skillSpread := func(s float32) float32 {
+		return rad(lerp(sigmaVagueDeg, sigmaPreciseDeg, c.Stats.DirAccuracy)) * (faintErrBase - faintErrSlope*s) * spreadSigmas
+	}
+	type row struct {
+		d                      float32
+		maxSpreadDeg, maxBandW float32
+		elev                   bool
+	}
+	rows := []row{
+		{4, 6, 3, true}, {8, 6, 4, true}, {12, 6, 5, true}, {18, 9.5, 8, true},
+		{25, 12, 12, true}, {35, 25, 22, true}, {50, 0, 0, false}, {90, 0, 0, false},
+	}
+	var lastSpread, lastBand float32
+	for _, r := range rows {
+		b := birdAt(1, spWren, north(r.d, -core.EyeHeight+1.0), core.ActPerched, 0.2) // 1 m above the ground
+		h := mustHear(t, c, b, standing())
+		cl := h.Clue
+		sp := deg(cl.Spread)
+		t.Logf("%4.0f m: spread ±%.1f°  band %v-%v m  elevation %q %.1f°±%.1f°  layer %q", r.d, sp, cl.DistMin, cl.DistMax, cl.Elevation, deg(cl.Elev), deg(cl.ElevSpread), cl.Perch)
+		if r.maxSpreadDeg > 0 && sp > r.maxSpreadDeg {
+			t.Errorf("%.0f m: spread ±%.1f° > ±%.0f°", r.d, sp, r.maxSpreadDeg)
+		}
+		if r.d >= farBlendR && absf(cl.Spread-skillSpread(h.Loudness)) > 1e-4 {
+			t.Errorf("%.0f m: beyond %d m the spread must be the skill's own (%.1f° vs %.1f°)", r.d, farBlendR, sp, deg(skillSpread(h.Loudness)))
+		}
+		if sp < lastSpread-0.01 {
+			t.Errorf("%.0f m: spread shrank with distance (%.1f° < %.1f°)", r.d, sp, lastSpread)
+		}
+		lastSpread = sp
+		if !(cl.DistMin <= h.Dist && h.Dist <= cl.DistMax) {
+			t.Errorf("%.0f m: band %v-%v misses the truth", r.d, cl.DistMin, cl.DistMax)
+		}
+		bw := cl.DistMax - cl.DistMin
+		if r.maxBandW > 0 && bw > r.maxBandW {
+			t.Errorf("%.0f m: band %v-%v wider than %.0f m", r.d, cl.DistMin, cl.DistMax, r.maxBandW)
+		}
+		if bw < lastBand-0.01 {
+			t.Errorf("%.0f m: band narrowed with distance", r.d)
+		}
+		lastBand = bw
+		if got := cl.Elevation != "" && cl.ElevSpread > 0; got != r.elev {
+			t.Errorf("%.0f m: elevation given = %v, want %v", r.d, got, r.elev)
+		}
+		if r.elev {
+			if cl.Perch != "low, knee to head height" {
+				t.Errorf("%.0f m: layer %q", r.d, cl.Perch)
+			}
+			if truth := elevationOf(origin, b.Pos); absf(cl.Elev-truth) > cl.ElevSpread*1.4 {
+				t.Errorf("%.0f m: elevation %.1f° off the truth %.1f° by more than its spread", r.d, deg(cl.Elev), deg(truth))
+			}
+		} else if cl.Perch != "" {
+			t.Errorf("%.0f m: a beginner gets no layer beyond %d m: %q", r.d, nearHearR, cl.Perch)
+		}
+	}
+
+	// A close voice really is placed to a few degrees, draw after draw.
+	rng := seeded()
+	b := birdAt(2, spWren, north(10, -0.6), core.ActPerched, 0.2)
+	truth := core.HeadingTo(origin, b.Pos)
+	var worst float32
+	for i := 0; i < 300; i++ {
+		h, _ := Hear(c, callFrom(b, 3), b, standing(), rng)
+		worst = maxf(worst, absf(wrapPi(h.Clue.Bearing-truth)))
+		if h.Clue.DistMax-h.Clue.DistMin > 5 {
+			t.Fatalf("10 m: band %v-%v", h.Clue.DistMin, h.Clue.DistMax)
+		}
+	}
+	if deg(worst) > 7 {
+		t.Errorf("10 m: worst bearing error %.1f°", deg(worst))
+	}
+
+	// Focus sharpens a close voice further.
+	fp := standing()
+	fp.Focus = true
+	plain, foc := mustHear(t, c, b, standing()).Clue, mustHear(t, c, b, fp).Clue
+	if !(foc.Spread < plain.Spread && foc.ElevSpread < plain.ElevSpread) {
+		t.Errorf("focus should sharpen: spread %.3f vs %.3f, elevation %.3f vs %.3f", foc.Spread, plain.Spread, foc.ElevSpread, plain.ElevSpread)
+	}
+
+	// The coarse layer, by height above the ground.
+	for _, tc := range []struct {
+		above float32
+		want  string
+	}{{0.1, "low, on or near the ground"}, {1.2, "low, knee to head height"}, {4, "up in the branches"}, {9, "high in the crown"}} {
+		bb := birdAt(3, spWren, north(10, -core.EyeHeight+tc.above), core.ActPerched, 0.2)
+		if got := mustHear(t, c, bb, standing()).Clue.Perch; got != tc.want {
+			t.Errorf("%.1f m up: layer %q, want %q", tc.above, got, tc.want)
+		}
 	}
 }

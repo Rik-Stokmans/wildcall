@@ -1,8 +1,6 @@
 package eco
 
 import (
-	"math"
-
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 )
 
@@ -76,7 +74,12 @@ func (s *Sim) disturb(b *bird, p *profile, dt float32) {
 	d := sqrt32(d2)
 	fd := s.flushDist(b, p)
 
-	if pr := (awareBand*fd - d) / ((awareBand - 1) * fd); pr > 0 {
+	band := s.oAware // awareBand, shorter for a prone observer
+	if !(band > 1) {
+		band = awareBand
+	}
+	// The ramp keeps the upright slope, so a prone observer is simply noticed later.
+	if pr := (band*fd - d) / ((awareBand - 1) * fd); pr > 0 {
 		pr = min32(pr, 2.5)
 		b.fear += pr * pr * fearRise * dt
 		if s.oMoving && d < 0.5*fd && !b.airborne() {
@@ -84,7 +87,7 @@ func (s *Sim) disturb(b *bird, p *profile, dt float32) {
 		}
 	} else if b.fear > 0 {
 		decay := s.oDecay
-		if d > 1.5*awareBand*fd {
+		if d > 1.5*band*fd {
 			decay *= 2 // well out of the way
 		}
 		b.fear -= decay * dt
@@ -97,11 +100,11 @@ func (s *Sim) disturb(b *bird, p *profile, dt float32) {
 	// Habituation: time near a calm observer, without being frightened.
 	if s.oCalm && d2 < p.habitR2 && b.fear < fearAlert {
 		r := habitRate * p.habituate * s.obs.Familiarity
-		if s.obs.Sitting {
-			r *= 1.4
+		if s.obs.Sitting || (s.obs.Prone && !s.oMoving) {
+			r *= 1.4 // settled down: sitting, or lying still
 		}
 		b.habit = min32(1, b.habit+r*dt)
-	} else if s.oMove >= moveRun && d < awareBand*fd {
+	} else if s.oMove >= moveRun && d < band*fd {
 		b.habit = max32(0, b.habit-0.04*dt)
 	}
 	if b.habit >= habitOn {
@@ -186,10 +189,14 @@ func (s *Sim) calmCheck(b *bird, p *profile, dt float32) {
 		return
 	}
 	// An alert bird watching a quietly standing observer gives up after a while too.
-	if b.fear < fearWary || (b.mode == mAlert && b.fear < fearAlert && b.timer < -25) {
+	if b.fear < fearWary || (b.mode == mAlert && b.fear < fearAlert && b.timer < -12) {
 		b.flags &^= core.FlagHidden
 		b.quiet = max32(b.quiet, s.rnd(10, 25))
 		s.boutEnd(b, p)
+		return
+	}
+	if b.mode == mHide {
+		s.hidePeek(b, p, dt) // still uneasy: it shows itself on top of its cover (followflight.go)
 	}
 }
 
@@ -233,6 +240,7 @@ func (s *Sim) hide(b *bird, p *profile) bool {
 	b.singT = 0
 	b.quiet = max32(b.quiet, s.rnd(30, 60))
 	b.mode = mHide
+	b.ff.peek, b.ff.peeked = 0, false
 	s.fly(b, p, pc, dest, core.ActHiding, 1.2, thenHide)
 	return true
 }
@@ -248,24 +256,11 @@ func (s *Sim) flee(b *bird, p *profile) {
 	b.fear = max32(b.fear, fearFlee)
 	b.fled = s.obs.Present
 
-	dx, dz := b.pos.X-s.obs.Pos.X, b.pos.Z-s.obs.Pos.Z
-	if !s.obs.Present || dx*dx+dz*dz < 1e-4 {
-		a := s.rnd(0, 2*math.Pi)
-		dx, dz = sin32(a), -cos32(a)
-	}
-	a := heading(dx, dz) + s.rnd(-0.7, 0.7)
-	dist := p.fleeDist * s.rnd(0.8, 1.3)
-	tx, tz := b.pos.X+dist*sin32(a), b.pos.Z-dist*cos32(a)
-	refuge := s.refuge(p, tx, tz)
+	// Off to a refuge the observer can follow it to, with its flock, reporting the
+	// flush (followflight.go).
+	s.flushAway(b, p)
 
-	if !s.silent {
-		s.events = append(s.events, core.EcoEvent{Kind: core.EvFlush, Bird: b.id, Species: int(b.sp), Pos: b.pos})
-	}
-	b.mode = mAway
-	b.away = s.rnd(40, 110)
-	s.fly(b, p, refuge, noPerch, core.ActFleeing, 1.5, thenRefuge)
-
-	// The flock goes too.
+	// Flock mates that did not go with it (on a nest, say) are alarmed all the same.
 	if b.cell == nil || b.res < 0 {
 		return
 	}

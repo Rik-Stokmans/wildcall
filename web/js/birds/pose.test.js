@@ -216,3 +216,23 @@ test('stance keeps the feet on the contact point for any pitch and crouch', () =
   const a = stanceOffset(rig, P, pose);
   assert.ok(Math.abs(a.y - 0.1) < 1e-12 && a.z === 0, 'in flight the body is on the point');
 });
+
+test('perched idle life: wing shuffles, an occasional hop-turn on the perch; turning resets in flight', () => {
+  const { P } = setup();
+  const r = run(P, (i) => { i.act = ACT.PERCHED; }, 30);
+  assert.ok(r.hi.coverLiftL > 0.15 || r.hi.coverLiftR > 0.15, 'wing shuffle');
+  assert.ok(r.hi.turn - r.lo.turn > 0.5, 'turns on the perch');
+  assert.ok(r.hi.lift > 0, 'hops');
+  // Distance boost enlarges tail flicks.
+  const calm = run(P, (i) => { i.act = ACT.PERCHED; }, 8, 7);
+  const boosted = run(P, (i) => { i.act = ACT.PERCHED; i.boost = 1.6; }, 8, 7);
+  assert.ok(boosted.hi.tailPitch > calm.hi.tailPitch, 'boosted flick');
+  // Taking off: the perch turn goes back to the flight heading.
+  const st = createAnimState(), pose = createPose(), inp = createAnimInput();
+  resetAnimState(st, 3, pose);
+  inp.act = ACT.PERCHED;
+  for (let t = 0; t < 30; t += 1 / 60) updateAnim(st, P, inp, 1 / 60, pose);
+  inp.act = ACT.FLYING; inp.speed = 6; inp.vz = -6;
+  for (let t = 0; t < 1.5; t += 1 / 60) updateAnim(st, P, inp, 1 / 60, pose);
+  assert.ok(Math.abs(pose.turn) < 0.01);
+});

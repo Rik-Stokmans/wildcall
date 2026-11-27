@@ -25,6 +25,7 @@
 import { deriveRig, billDropAt, billWidthAt, BILL_PROFILES, tailLengthAt, wingOutline, WING_PROFILES, clamp } from './rig.js';
 import { preparePalette, paintAt } from './marks.js';
 import { parseHex, toLinear, leucistic, mix } from './color.js';
+import { plumageLift } from './visibility.js';
 
 export const BONES = Object.freeze([
   'body', 'neck', 'head', 'jaw', 'throat', 'tail',
@@ -61,10 +62,14 @@ class Builder {
     this._lin = [0, 0, 0];
     this._pale = [0, 0, 0];
     this._paleLin = [0, 0, 0];
+    this._lift = [0, 0, 0];
   }
 
   /** Colour a triangle from an sRGB triple; bare parts keep more colour when leucistic. */
   _pushColour(rgb, bare) {
+    // Plumage is lifted a touch so birds separate from dark foliage (visibility.js);
+    // bare parts (eye, bill, legs) keep their true colour.
+    if (!bare) rgb = plumageLift(rgb, this._lift);
     toLinear(rgb, this._lin);
     leucistic(rgb, bare, this._pale);
     const pl = toLinear(this._pale, this._paleLin);

@@ -38,6 +38,7 @@ func (s *Sim) rest(b *bird, p *profile, dur float32) {
 	b.act = s.restAct(b, p)
 	b.base = b.act
 	b.timer = dur
+	b.held = false
 	b.sub = s.rnd(3, 9)
 }
 
@@ -154,7 +155,7 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 	case cPreen:
 		if b.airborne() || b.destKind == core.PerchWater && !p.waterBird {
 			s.goPerch(b, p, thenPreen)
-		} else {
+		} else if !s.showOff(b, p, showOdds, thenPreen) {
 			s.rest(b, p, s.rnd(8, 22))
 			b.act = core.ActPreening
 		}
@@ -165,7 +166,7 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 	default:
 		if b.airborne() {
 			s.goPerch(b, p, thenPerch)
-		} else {
+		} else if !s.showOff(b, p, showOdds, thenPerch) {
 			s.rest(b, p, s.rnd(10, 40))
 		}
 	}
@@ -213,6 +214,13 @@ func (s *Sim) subStep(b *bird, p *profile) {
 		case s.chance(0.2):
 			b.act = core.ActFeeding
 			b.sub = s.rnd(1, 3)
+		case s.chance(gleanShow * p.bold):
+			// Out to the edge of the foliage for a moment: a short, visible hop.
+			if pc, ok := s.exposedNear(b, p, 6); ok {
+				s.fly(b, p, pc, noPerch, core.ActFlying, 1, thenGlean)
+				return
+			}
+			s.crownHop(b)
 		case s.chance(0.12):
 			if i := s.pickMem(b, memFeed, maxFeed, int(b.cur)); i >= 0 {
 				s.fly(b, p, b.mem[i], int8(i), core.ActFlying, 1, thenGlean)
@@ -626,6 +634,9 @@ func (s *Sim) idleFidget(b *bird, p *profile) {
 			return
 		}
 	}
+	if b.flags&core.FlagSinging != 0 || b.cur == memSong {
+		return // a singing bird holds its post
+	}
 	switch b.destKind {
 	case core.PerchCanopy, core.PerchBranch, core.PerchShrub, core.PerchReed:
 		if s.chance(0.3) {
@@ -900,6 +911,10 @@ func (s *Sim) spotNear(b *bird, p *profile, target core.Vec3, kind core.PerchKin
 // fast-forward). Where it is depends only on who it is and the quarter-hour, so
 // coming back to a place finds the bird in a place that makes sense for the hour.
 func (s *Sim) place(b *bird) {
+	if b.circ != 0 {
+		s.placeCircuit(b) // resident.go
+		return
+	}
 	p := &s.prof[b.sp]
 	s.releaseLure(b)
 	b.moving = false

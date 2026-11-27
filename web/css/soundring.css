@@ -1,0 +1,47 @@
+/* Sound ring (web/js/ui/soundring): a thin canvas ring around the centre of the view
+   showing where heard calls come from. Drawn on a canvas; this file only places it and
+   highlights the clue card of the voice the player is facing. */
+.sr-ring {
+  position: fixed;
+  pointer-events: none;
+  z-index: var(--z-hud);
+}
+
+/* The clue card whose arc the player is facing: a warm edge, nothing loud. */
+.hud-card.sr-facing {
+  box-shadow: 0 0 0 1.5px rgba(242, 235, 221, .75), 0 0 14px rgba(242, 235, 221, .28), var(--shadow-soft);
+}
+
+/* One clue card at a time (settings.clueCards = 'one', the default): the card of the
+   voice being followed. No pulsing: the left side stays still. */
+.hud-clues.one .hud-card.new { animation: hud-card-in .5s var(--ease) both; }
+.hud-card { transition: opacity .45s var(--ease), box-shadow .25s var(--ease), background-color .25s var(--ease); }
+
+/* The follow line at the foot of the card: "Q  Following · silent for 12 s". */
+.hud-card-follow {
+  display: flex; align-items: center; gap: 6px; margin-top: 5px; padding-top: 4px;
+  border-top: 1px dashed rgba(85, 69, 55, .25);
+  font-size: 9.5px; line-height: 1.2; letter-spacing: .03em; color: var(--ink-soft);
+}
+.hud-card-follow[hidden] { display: none; }
+.hud-card-follow kbd {
+  flex: none; min-width: 14px; padding: 1.5px 4px; border-radius: 4px; text-align: center;
+  font: 600 9px/1.1 var(--font-ui); color: var(--cream); background: var(--forest);
+}
+/* Pinned with Q: a little more solid, an amber edge; it stays while the voice is silent. */
+.hud-card.sr-pinned { background: rgba(242, 235, 221, .8); border-left-color: var(--amber); }
+.hud-card.sr-pinned .hud-card-follow { color: var(--amber-deep, #9a6a2a); }
+.hud-card.sr-pinned .hud-card-follow kbd { background: var(--amber-deep, #9a6a2a); }
+
+/* ---- quest search area on the compass strip (js/ui/hud/search-area.js) ---- */
+.hud-area-band { position: absolute; top: 0; height: 100%; width: 0; pointer-events: none; z-index: 0; }
+.hud-area-band i {
+  position: absolute; left: 0; bottom: 5px; height: 5px; border-radius: 3px;
+  background: linear-gradient(90deg, rgba(240, 195, 142, 0), rgba(240, 195, 142, .75) 25%, rgba(240, 195, 142, .75) 75%, rgba(240, 195, 142, 0));
+  box-shadow: 0 0 8px 1px rgba(240, 195, 142, .35);
+}
+.hud-area-band span {
+  position: absolute; left: 0; bottom: -11px; transform: translateX(-50%); white-space: nowrap;
+  font: 600 9.5px/1 var(--font-ui); letter-spacing: .04em; color: #F0C38E; text-shadow: 0 1px 2px rgba(30, 22, 14, .85);
+}
+.hud-quest-area { margin-top: 3px; font: italic 500 11.5px/1.3 var(--font-ui); color: #F0C38E; opacity: .92; }

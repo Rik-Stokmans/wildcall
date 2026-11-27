@@ -6,6 +6,14 @@
 // blend towards. If snapshots are late we extrapolate briefly along the last motion,
 // then hold. A bird missing from a snapshot has left: it starts fading out and is
 // reaped once the fade is done.
+//
+// Never a snap, never a slide through trees: a step between two samples that no bird
+// could fly (faster than JUMP_SPEED, or longer than TELEPORT_DIST) is a jump — the
+// bird is not dragged along the straight line but shrinks away where it was and grows
+// back where it now is (`out.fade`, a cross-fade over JUMP_FADE seconds either side of
+// the jump). Sampling also looks ahead: `out.nextAct` / `out.nextIn` tell the animator
+// a take-off or a landing is coming (the render runs ~120 ms behind the newest data),
+// so a bird can crouch before it springs and flare before it lands.
 
 import { SNAP, TICK_HZ, FADE_OUT } from './constants.js';
 
@@ -14,8 +22,14 @@ const TAU = Math.PI * 2;
 export const TRACK_LEN = 8;
 /** Longest we keep extrapolating past the newest sample (seconds). */
 export const MAX_EXTRAP = 0.25;
-/** A jump longer than this between consecutive samples is a teleport: snap, don't glide. */
+/** A jump longer than this between consecutive samples is always a jump (cross-faded, never glided). */
 export const TELEPORT_DIST = 60;
+/** Faster than any bird flies (m/s): a step implying more is a jump (a fast puffin is ~33 m/s). */
+export const JUMP_SPEED = 55;
+/** Steps shorter than this are never jumps (jitter, re-stamped packets). */
+export const JUMP_MIN = 6;
+/** Seconds a jump fades out before and fades in after the jump instant. */
+export const JUMP_FADE = 0.22;
 
 /** Wrap an angle to (-π, π]. */
 export function wrapAngle(a) {
@@ -64,7 +78,14 @@ export function createTrack() {
     x: new Float64Array(TRACK_LEN), y: new Float64Array(TRACK_LEN), z: new Float64Array(TRACK_LEN),
     yaw: new Float64Array(TRACK_LEN), speed: new Float64Array(TRACK_LEN),
     act: new Uint8Array(TRACK_LEN), flags: new Uint8Array(TRACK_LEN),
+    jump: new Uint8Array(TRACK_LEN), // 1 = this sample is not reachable by flight from the previous one
   };
+}
+
+/** Is a step of `dist` metres over `dt` seconds more than a bird could fly? */
+export function isJump(dist, dt) {
+  if (!(dist > JUMP_MIN)) return false;
+  return dist > TELEPORT_DIST || dist > JUMP_SPEED * Math.max(dt, 0.1);
 }
 
 export function clearTrack(tr) { tr.n = 0; tr.head = 0; }
@@ -80,22 +101,56 @@ export function pushSample(tr, t, x, y, z, yaw, speed, act, flags) {
     if (t < lt - 0.5) clearTrack(tr); // timeline restarted
     else if (t < lt - 1e-6) return; // stale packet: newer data already buffered
     else if (t <= lt + 1e-6) { tr.n--; tr.head = (tr.head - 1 + TRACK_LEN) % TRACK_LEN; } // same instant: replace
-    if (tr.n > 0) {
-      const p = idx(tr, tr.n - 1);
-      const dx = x - tr.x[p], dy = y - tr.y[p], dz = z - tr.z[p];
-      if (dx * dx + dy * dy + dz * dz > TELEPORT_DIST * TELEPORT_DIST) clearTrack(tr);
-    }
+  }
+  let jump = 0;
+  if (tr.n > 0) {
+    const p = idx(tr, tr.n - 1);
+    const dx = x - tr.x[p], dy = y - tr.y[p], dz = z - tr.z[p];
+    if (isJump(Math.sqrt(dx * dx + dy * dy + dz * dz), t - tr.t[p])) jump = 1;
   }
   const i = tr.head;
+  tr.jump[i] = jump;
   tr.t[i] = t; tr.x[i] = x; tr.y[i] = y; tr.z[i] = z;
   tr.yaw[i] = wrapAngle(yaw); tr.speed[i] = speed; tr.act[i] = act; tr.flags[i] = flags;
   tr.head = (tr.head + 1) % TRACK_LEN;
   if (tr.n < TRACK_LEN) tr.n++;
 }
 
-/** Reusable sample result. */
+/**
+ * Reusable sample result. Beyond the interpolated state: `fade` 0..1 (a jump's
+ * cross-fade; 1 normally), `nextAct` / `nextIn` (the next different act in the
+ * buffered future and the seconds until it; -1 / Infinity when none is known).
+ */
 export function createSample() {
-  return { x: 0, y: 0, z: 0, yaw: 0, speed: 0, act: 0, flags: 0, vx: 0, vy: 0, vz: 0, yawRate: 0, extrapolated: false, valid: false };
+  return {
+    x: 0, y: 0, z: 0, yaw: 0, speed: 0, act: 0, flags: 0, vx: 0, vy: 0, vz: 0, yawRate: 0,
+    extrapolated: false, valid: false, fade: 1, nextAct: -1, nextIn: Infinity,
+  };
+}
+
+const smooth01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+/** Cross-fade factor at render time rt from the jumps in the buffer (1 = none near). */
+function jumpFade(tr, rt) {
+  let f = 1;
+  for (let k = 1; k < tr.n; k++) {
+    const i = idx(tr, k);
+    if (!tr.jump[i]) continue;
+    // The bird vanishes over JUMP_FADE before the jump instant and grows back after it.
+    const g = smooth01(Math.abs(rt - tr.t[i]) / JUMP_FADE);
+    if (g < f) f = g;
+  }
+  return f;
+}
+
+/** Fill nextAct / nextIn: the first buffered sample after rt whose act differs from out.act. */
+function lookAhead(tr, rt, out) {
+  out.nextAct = -1; out.nextIn = Infinity;
+  for (let k = 0; k < tr.n; k++) {
+    const i = idx(tr, k);
+    if (tr.t[i] <= rt) continue;
+    if (tr.act[i] !== out.act) { out.nextAct = tr.act[i]; out.nextIn = tr.t[i] - rt; return; }
+  }
 }
 
 function setFrom(tr, i, out) {
@@ -108,6 +163,14 @@ function setFrom(tr, i, out) {
  * flags) come from the sample at or before rt so behaviour changes line up with motion.
  */
 export function sampleTrack(tr, rt, out) {
+  sampleRaw(tr, rt, out);
+  if (!out.valid) { out.fade = 1; out.nextAct = -1; out.nextIn = Infinity; return out; }
+  out.fade = tr.n > 1 ? jumpFade(tr, rt) : 1;
+  lookAhead(tr, rt, out);
+  return out;
+}
+
+function sampleRaw(tr, rt, out) {
   out.valid = tr.n > 0;
   out.extrapolated = false;
   out.vx = out.vy = out.vz = out.yawRate = 0;
@@ -122,7 +185,7 @@ export function sampleTrack(tr, rt, out) {
     const prev = idx(tr, tr.n - 2);
     const dt = tr.t[newest] - tr.t[prev];
     setFrom(tr, newest, out);
-    if (dt > 1e-4) {
+    if (dt > 1e-4 && !tr.jump[newest]) {
       const vx = (tr.x[newest] - tr.x[prev]) / dt;
       const vy = (tr.y[newest] - tr.y[prev]) / dt;
       const vz = (tr.z[newest] - tr.z[prev]) / dt;
@@ -140,6 +203,12 @@ export function sampleTrack(tr, rt, out) {
     const a = idx(tr, k);
     if (tr.t[a] <= rt) {
       const b = idx(tr, k + 1);
+      if (tr.jump[b]) {
+        // Not reachable by flight: hold where it was until the jump instant (where the
+        // cross-fade has shrunk it to nothing), then it is where it now is. Never slide.
+        setFrom(tr, a, out);
+        return out;
+      }
       const dt = tr.t[b] - tr.t[a];
       const u = dt > 1e-6 ? (rt - tr.t[a]) / dt : 1;
       out.x = tr.x[a] + (tr.x[b] - tr.x[a]) * u;

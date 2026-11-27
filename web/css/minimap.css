@@ -1,0 +1,161 @@
+/* minimap.css - owned by the minimap module (js/ui/minimap). Class prefix: mm-.
+   The minimap (top-left), the waypoint pins on the HUD compass strip and the waypoint
+   layer + panel on the big map. Builds only on the base.css tokens. */
+
+/* ---- the minimap ---------------------------------------------------------------- */
+.mm-root {
+  --mm-d: 160px;
+  --mm-m: 30px;
+  --mm-light: 1;
+  position: fixed; left: 20px; top: 16px; z-index: var(--z-hud);
+  width: var(--mm-d);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  font-family: var(--font-ui);
+  pointer-events: none;
+  opacity: .94;
+  transition: opacity .45s var(--ease), visibility 0s linear 0s;
+}
+.mm-root.mm-hidden { opacity: 0; visibility: hidden; transition: opacity .3s var(--ease), visibility 0s linear .3s; }
+.mm-root.mm-hidden .mm-disc { pointer-events: none; }
+.mm-root.mm-dim { opacity: .45; }
+
+.mm-disc {
+  position: relative; width: var(--mm-d); height: var(--mm-d); border-radius: 50%; overflow: hidden;
+  background: var(--paper);
+  box-shadow: 0 3px 14px rgba(30, 22, 14, .32), 0 0 0 1px rgba(58, 48, 39, .35);
+  pointer-events: auto; cursor: pointer;
+  filter: brightness(var(--mm-light));
+  transition: filter 1.5s linear;
+  /* keep the rounded clip crisp while the inner canvas turns */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  isolation: isolate;
+}
+.mm-base {
+  position: absolute; left: calc(-1 * var(--mm-m)); top: calc(-1 * var(--mm-m));
+  width: calc(var(--mm-d) + 2 * var(--mm-m)); height: calc(var(--mm-d) + 2 * var(--mm-m));
+  transform-origin: 50% 50%; will-change: transform;
+}
+.mm-over { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* a soft paper rim with a gentle inner vignette */
+.mm-rim {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: inset 0 0 0 3px rgba(242, 235, 221, .78), inset 0 0 0 4px rgba(85, 69, 55, .30), inset 0 0 18px 4px rgba(85, 69, 55, .30);
+}
+.mm-range {
+  margin-top: -2px; padding: 1px 8px; border-radius: 999px;
+  font: 600 10px/1.4 var(--font-ui); letter-spacing: .06em; color: var(--cream);
+  background: rgba(58, 48, 39, .42); opacity: 0;
+}
+.mm-range.show { animation: mm-flash 1.8s var(--ease) both; }
+@keyframes mm-flash { 0%, 70% { opacity: .95; } 100% { opacity: 0; } }
+
+/* "Reached Waypoint A": a quiet line under the minimap */
+.mm-reached {
+  display: flex; align-items: center; gap: 7px; max-width: 240px; white-space: nowrap;
+  padding: 3px 11px 3px 8px; border-radius: 999px;
+  background: rgba(58, 48, 39, .40); color: var(--cream);
+  font: italic 500 12.5px/1.3 var(--font-journal); letter-spacing: .02em;
+  text-shadow: 0 1px 2px rgba(30, 22, 14, .5);
+  opacity: 0; transform: translateY(-4px); transition: opacity .6s var(--ease), transform .6s var(--ease);
+  align-self: flex-start;
+}
+.mm-reached.show { opacity: 1; transform: none; }
+.mm-reached-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(242, 235, 221, .8); }
+.mm-root.mm-hidden .mm-reached.show { visibility: visible; opacity: 1; }
+
+/* Make room in the top-left: while the minimap is shown, the HUD's sound clue cards
+   (hud.css .hud-clues, top: 26vh) start below it and its range label. */
+body:has(.mm-root.mm-shown) #hud .hud-clues { top: max(26vh, 240px); }
+
+/* ---- waypoint pins on the HUD compass strip (hooked in from hud/index.js) ---------- */
+.mm-cpin {
+  position: absolute; top: 0; width: 0; height: 100%; pointer-events: none; z-index: 1;
+  transition: opacity .3s linear;
+}
+.mm-cpin i {
+  /* sits below the cardinal letters (top band) so N / NE stay readable */
+  position: absolute; left: -6px; top: 10px; width: 12px; height: 12px; display: grid; place-items: center; isolation: isolate;
+  font: 700 7.5px/1 var(--font-ui); font-style: normal; color: var(--cream);
+}
+/* the teardrop is a rotated square behind the letter, so the letter stays upright */
+.mm-cpin i::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: var(--c, var(--amber)); box-shadow: 0 0 0 1.2px rgba(242, 235, 221, .85), 0 1px 3px rgba(30, 22, 14, .5);
+}
+.mm-cpin span {
+  position: absolute; left: 0; top: 24px; transform: translateX(-50%); white-space: nowrap;
+  font: 600 8px/1 var(--font-ui); letter-spacing: .02em; color: rgba(242, 235, 221, .92);
+  text-shadow: 0 1px 2px rgba(30, 22, 14, .85);
+}
+.mm-cpin.strong i { transform: scale(1.15); }
+.mm-cpin.strong i::before { box-shadow: 0 0 0 1.5px var(--cream), 0 0 8px 1px rgba(242, 235, 221, .45); }
+.mm-cpin.strong span { font-size: 8.5px; color: var(--cream); }
+
+/* ---- waypoints on the big map (js/ui/minimap/map-waypoints.js) -------------------- */
+.mm-map-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; } /* under the player arrow (.jr-player z 4) */
+.mm-wp { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.mm-wp svg { position: absolute; left: -12px; top: -31px; overflow: visible; filter: drop-shadow(0 2px 2px rgba(30, 22, 14, .45)); transition: transform .15s var(--ease); transform-origin: 12px 31px; }
+.mm-wp b {
+  position: absolute; left: -12px; top: -27px; width: 24px; text-align: center;
+  font: 700 11px/1 var(--font-ui); color: var(--cream); pointer-events: none;
+}
+.mm-wp-label {
+  position: absolute; left: 14px; top: -27px; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+  font: 600 12px/1.25 var(--font-journal); color: var(--ink); background: rgba(242, 235, 221, .94);
+  box-shadow: 0 1px 3px rgba(40, 30, 20, .25); display: none;
+}
+.mm-wp.sel { z-index: 2; }
+.mm-wp.sel svg { transform: scale(1.22); }
+.mm-wp.sel b { top: -30px; }
+.mm-wp.sel .mm-wp-label { display: block; }
+.mm-wp.sel::after {
+  content: ''; position: absolute; left: -9px; top: -4px; width: 18px; height: 8px; border-radius: 50%;
+  border: 2px solid var(--c); opacity: .7; animation: mm-ring 1.8s ease-out infinite;
+}
+@keyframes mm-ring { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.8); opacity: 0; } }
+
+.mm-map-panel {
+  position: absolute; left: 14px; bottom: 44px; width: 280px; max-height: calc(100% - 330px); min-height: 0;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--r-md);
+  /* z 5: above the map pins (3) and player (4), but UNDER the off-screen "Home" arrow (6) and
+     the map's own legend / controls / seed (8), so a tall panel never hides those */
+  background: rgba(242, 235, 221, .93); box-shadow: var(--shadow-soft); z-index: 5; font-size: 13px; color: var(--ink);
+  user-select: none;
+}
+.mm-map-panel.mm-tall { max-height: calc(100% - 70px); }
+.mm-mp-head { display: flex; align-items: center; gap: 7px; font: 600 14px/1.2 var(--font-journal); color: var(--forest-deep); }
+.mm-mp-head small { margin-left: auto; font: 500 11px/1 var(--font-ui); color: var(--ink-soft); letter-spacing: .04em; }
+.mm-mp-empty { margin: 0; font: italic 12.5px/1.35 var(--font-journal); color: var(--ink-soft); }
+.mm-mp-note { margin: 0; font-size: 12px; color: var(--danger); }
+.mm-mp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.mm-mp-row {
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--r-sm); cursor: pointer;
+}
+.mm-mp-row:hover { background: rgba(85, 69, 55, .08); }
+.mm-mp-row.sel { background: rgba(124, 154, 112, .22); }
+.mm-mp-dot {
+  flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--c); color: var(--cream); font: 700 10px/1 var(--font-ui); box-shadow: 0 0 0 1.5px rgba(242, 235, 221, .9);
+}
+.mm-mp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-journal); }
+.mm-mp-dist { flex: none; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.mm-mp-go {
+  flex: none; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--forest); cursor: pointer; opacity: .7;
+}
+.mm-mp-go:hover { opacity: 1; background: rgba(53, 92, 67, .12); }
+.mm-mp-edit { display: flex; flex-direction: column; gap: 7px; padding: 8px; border-radius: var(--r-sm); background: rgba(255, 252, 244, .7); box-shadow: inset 0 0 0 1px rgba(85, 69, 55, .15); }
+.mm-mp-name-in {
+  width: 100%; padding: 5px 8px; border: 1px solid rgba(85, 69, 55, .3); border-radius: var(--r-sm);
+  background: #fffdf7; color: var(--ink); font: 600 13.5px/1.2 var(--font-journal); user-select: text;
+}
+.mm-mp-name-in:focus { outline: 2px solid var(--moss); outline-offset: 0; }
+.mm-mp-sw { display: flex; gap: 6px; }
+.mm-mp-sw button {
+  width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: var(--c); cursor: pointer;
+  box-shadow: 0 0 0 1.5px rgba(242, 235, 221, .9);
+}
+.mm-mp-sw button.on { box-shadow: 0 0 0 2px var(--cream), 0 0 0 3.5px var(--ink); }
+.mm-mp-meta { font-size: 11.5px; color: var(--ink-soft); }
+.mm-mp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.mm-lg-pin { display: block; width: 12px; height: 12px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--amber); box-shadow: 0 0 0 1.5px var(--cream); }

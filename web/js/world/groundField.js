@@ -447,23 +447,49 @@ const MOWN_KINDS = new Set(['cabin', 'ranger_station', 'watchtower', 'shop', 're
  * @param {Iterable<{kind:string, pos:{x:number, z:number}, radius?:number}>} pois
  */
 export function mowField(pois) {
-  const spots = [];
+  // state.pois keeps every POI ever streamed (the map shows them), so the spots are
+  // bucketed on a coarse grid: a sample only tests the buildings that can reach it,
+  // and the cost per sample stays flat however far the player has travelled.
+  const cells = new Map(); // cell key → flat [x, z, inner, …]
+  let n = 0;
   for (const p of pois || []) {
     if (!p || !MOWN_KINDS.has(p.kind) || !p.pos) continue;
     const inner = Math.max(14, Math.min(30, (p.radius || 0) * 1.5));
-    spots.push(p.pos.x, p.pos.z, inner);
+    const reach = inner + MOW_FADE;
+    const x0 = Math.floor((p.pos.x - reach) / MOW_CELL), x1 = Math.floor((p.pos.x + reach) / MOW_CELL);
+    const z0 = Math.floor((p.pos.z - reach) / MOW_CELL), z1 = Math.floor((p.pos.z + reach) / MOW_CELL);
+    for (let cz = z0; cz <= z1; cz++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const k = mowKey(cx, cz);
+        let list = cells.get(k);
+        if (!list) cells.set(k, (list = []));
+        list.push(p.pos.x, p.pos.z, inner);
+      }
+    }
+    n++;
   }
-  if (!spots.length) return null;
-  return (x, z) => {
+  if (!n) return null;
+  const field = (x, z) => {
+    const spots = cells.get(mowKey(Math.floor(x / MOW_CELL), Math.floor(z / MOW_CELL)));
+    if (!spots) return 0;
     let m = 0;
     for (let i = 0; i < spots.length; i += 3) {
       const d = Math.hypot(x - spots[i], z - spots[i + 1]);
-      const v = 1 - smooth(spots[i + 2], spots[i + 2] + 12, d);
+      const v = 1 - smooth(spots[i + 2], spots[i + 2] + MOW_FADE, d);
       if (v > m) m = v;
     }
     return m;
   };
+  field.spots = n;
+  field.cells = cells.size;
+  return field;
 }
+
+/** Metres over which mown ground fades back to full cover. */
+const MOW_FADE = 12;
+/** Bucket size of mowField's spatial index (m). */
+const MOW_CELL = 64;
+const mowKey = (cx, cz) => cx * 65536 + cz;
 
 /** Most gaps the ground-cover shaders take (uniform array size). */
 export const MAX_GAPS = 12;
@@ -491,12 +517,14 @@ export const NO_SIGHT = -1e4;
  * @param {{x:number, y:number, z:number}|null} [feet]
  * @param {Float32Array} [outY]  MAX_GAPS sight heights
  */
-export function collectGaps(out, cam, birds, airborne, heightAt, nests, feet, outY = Y_SCRATCH) {
+export function collectGaps(out, cam, birds, airborne, heightAt, nests, feet, outY = Y_SCRATCH, lane = null) {
   let n = 0;
   const scratch = SCRATCH;
   const r2 = GAP_RANGE * GAP_RANGE;
-  // Keep the nearest candidates (one slot stays for the feet).
-  const cap = MAX_GAPS - (feet ? 1 : 0);
+  // Keep the nearest candidates (one slot stays for the feet, PRONE_LANE.length more
+  // for a prone player's sight lane).
+  const useLane = !!(feet && lane && Number.isFinite(lane.dx) && Number.isFinite(lane.dz));
+  const cap = MAX_GAPS - (feet ? 1 : 0) - (useLane ? PRONE_LANE.length : 0);
   const consider = (x, y, z, scale, keep) => {
     const dx = x - cam.x, dz = z - cam.z, d2 = dx * dx + dz * dz;
     if (!(d2 <= r2)) return;
@@ -519,9 +547,23 @@ export function collectGaps(out, cam, birds, airborne, heightAt, nests, feet, ou
     out[n * 4] = feet.x; out[n * 4 + 1] = feet.z; out[n * 4 + 2] = 0.9; out[n * 4 + 3] = 0.55;
     outY[n] = NO_SIGHT;
     n++;
+    // Prone sight lane (player module, the prone stance): lying flat with the eye at
+    // ~0.35 m, meadow grass would fill the whole view. A short chain of wider, lower
+    // gaps ahead along the view heading opens a low sight line through it; the grass
+    // either side (and beyond ~4 m) still frames the view.
+    if (useLane) {
+      for (const [ahead, scale, keep] of PRONE_LANE) {
+        out[n * 4] = feet.x + lane.dx * ahead; out[n * 4 + 1] = feet.z + lane.dz * ahead;
+        out[n * 4 + 2] = scale; out[n * 4 + 3] = keep;
+        outY[n] = NO_SIGHT;
+        n++;
+      }
+    }
   }
   return n;
 }
+/** Prone sight lane: [metres ahead of the feet, radius scale, height kept]. */
+export const PRONE_LANE = Object.freeze([[0.45, 1.2, 0.22], [1.7, 1.4, 0.34], [3.1, 1.6, 0.5]]);
 const Y_SCRATCH = new Float32Array(MAX_GAPS);
 const SCRATCH = new Float32Array(MAX_GAPS);
 

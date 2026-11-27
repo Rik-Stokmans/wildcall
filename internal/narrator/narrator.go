@@ -63,6 +63,9 @@ const (
 	Flushed Kind = "flush"
 	// Settled: a wary or flushed bird settled or returned because the player waited.
 	Settled Kind = "settle"
+	// FlushWatched: the player flushed a bird but followed it with their eyes all the
+	// way to where it landed (instead of Flushed). Known only if identified.
+	FlushWatched Kind = "flushland"
 	// Identified: an identify result. Outcome = certain|probable|wrong|insufficient.
 	// Known = the identified species for certain/probable (ignored otherwise).
 	// Mismatch = an evidence key that did not fit (wrong), if the session has one.
@@ -134,7 +137,7 @@ const (
 // aboutBird reports whether the event concerns one particular bird.
 func (k Kind) aboutBird() bool {
 	switch k {
-	case CallHeard, Watching, NewEvidence, Behaviour, Flushed, Settled, Identified, Photographed, Recorded, RareFind:
+	case CallHeard, Watching, NewEvidence, Behaviour, Flushed, FlushWatched, Settled, Identified, Photographed, Recorded, RareFind:
 		return true
 	}
 	return false
@@ -663,6 +666,10 @@ func (n *Narrator) planEvent(ev Event) (plan, bool) {
 	case Flushed:
 		return plan{prio: 1, kind: "advice", chance: 0.7, slots: sl,
 			groups: [][]string{{"flush"}}, topics: []topic{{"k:flush", 150}}}, true
+
+	case FlushWatched:
+		return plan{prio: 2, kind: "sighting", chance: 0.85, slots: sl,
+			groups: [][]string{{"flush.landed"}}, topics: []topic{{"k:flushland", 120}, {"k:flush", 60}}}, true
 
 	case Settled:
 		return plan{prio: 1, kind: "sighting", chance: 0.7, slots: sl,

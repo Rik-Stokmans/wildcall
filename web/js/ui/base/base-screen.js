@@ -8,6 +8,7 @@ import { creditsChip } from './views.js';
 import { renderResearch, researchCounts } from './station-research.js';
 import { renderEquipment } from './station-equipment.js';
 import { renderJournal, renderPhotos, renderStorage, renderUpgrades, renderRest, pinnedPhotos } from './station-misc.js';
+import { closeStorage } from './station-storage.js';
 
 const RENDERERS = {
   research: renderResearch, equipment: renderEquipment, journal: renderJournal,
@@ -212,7 +213,7 @@ export function createBaseScreen(ctx) {
       drawScene(true);
       render();
     },
-    close() { isOpen = false; },
+    close() { isOpen = false; closeStorage(view); },
     overlay: false,
     closable: true,
   });

@@ -14,6 +14,7 @@ import { CallManager } from './calls.js';
 import { SampleBank } from './samples.js';
 import { Ambience } from './ambience.js';
 import { Sfx } from './sfx.js';
+import { WingSounds } from './wings.js'; // [flight hook] take-off / landing wing sounds at the bird
 import { Wildlife } from './wildlife.js';
 import { NarratorBus } from './narratorbus.js';
 import { Music } from './music.js';
@@ -35,6 +36,7 @@ let bank = null;
 let ambience = null;
 let wildlife = null;
 let sfx = null;
+let wings = null; // [flight hook]
 let music = null;
 let readyEmitted = false;
 let unavailable = false;
@@ -84,6 +86,7 @@ function start() {
     calls = new CallManager(eng, ctx, bank);
     ambience = new Ambience(eng, ((ctx.state?.welcome?.seed ?? 1) >>> 0) || 1);
     sfx = new Sfx(eng);
+    wings = new WingSounds(eng, sfx); // [flight hook]
     wildlife = new Wildlife(eng, ((ctx.state?.welcome?.seed ?? 1) >>> 0) || 1);
     narBus.attach(eng);
     music = new Music(eng);
@@ -346,6 +349,15 @@ const api = {
   get voices() { return calls ? calls.activeCount : 0; },
   /** The AudioContext, or null before the first gesture. */
   get context() { return eng ? eng.ac : null; },
+  /**
+   * [flight hook] A bird's wings at a take-off or landing, heard where it is (wings.js):
+   * kind 'flutter' | 'whirr' | 'clatter' | 'duck' | 'big' (wingmodel.js wingKind),
+   * opts {flush, landing, water, size (body length m), gain}. Returns true if played.
+   */
+  wings(kind, x, y, z, opts) {
+    if (!wings || !canPlay() || eng.ac.state !== 'running') return false;
+    return wings.play(kind, x, y, z, opts || {});
+  },
 };
 
 export default {
@@ -363,7 +375,12 @@ export default {
 
     const live = () => !!eng && eng.ac.state === 'running';
     bus.on('net:call', (m) => { if (live()) calls.onCall(m); });
-    bus.on('net:cue', (cue) => { if (live() && cue) sfx.flutter(cue, listener); });
+    // [flight hook] The cue's flutter waits a moment and stands down when the bird's own
+    // wings were just heard where it is (ctx.audio.wings), so one take-off is one sound.
+    bus.on('net:cue', (cue) => {
+      if (!live() || !cue) return;
+      setTimeout(() => { if (live() && !(wings && eng.ac.currentTime - wings.lastAt < 0.6)) sfx.flutter(cue, listener); }, 220);
+    });
     bus.on('footstep', (f) => {
       footstepEvents++;
       if (live() && f) sfx.footstep(f.surface, f.move);

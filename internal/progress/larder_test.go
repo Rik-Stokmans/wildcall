@@ -3,6 +3,7 @@ package progress
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Rik-Stokmans/wildcall/internal/core"
@@ -150,7 +151,7 @@ func TestBuffsReplaceWithinSlotAndStackAcrossSlots(t *testing.T) {
 	if len(p.Buffs) != 3 {
 		t.Fatalf("slots should stack: %+v", p.Buffs)
 	}
-	b := core.BaseStats()
+	b := BaseStats()
 	if p.Stats.HearRange <= b.HearRange || p.Stats.MoveSpeed <= b.MoveSpeed || p.Stats.RainProof <= b.RainProof {
 		t.Errorf("stacked stats: %+v", p.Stats)
 	}
@@ -209,13 +210,13 @@ func TestEatRules(t *testing.T) {
 func TestBuffedStatsStayClamped(t *testing.T) {
 	p := NewProfile("t")
 	p.Buffs = []proto.Buff{
-		{Item: "x", Slot: SlotDrink, Until: 99, Mods: map[string]float32{"stamina": 500, "capacity": -50}},
+		{Item: "x", Slot: SlotDrink, Until: 99, Mods: map[string]float32{"stamina": 500, "packH": -50, "capacity": 70}},
 	}
 	Recompute(p)
 	_, hi, _ := StatLimits("stamina")
-	lo, _, _ := StatLimits("capacity")
-	if p.Stats.Stamina != hi || p.Stats.Capacity != lo {
-		t.Errorf("stamina %v capacity %v", p.Stats.Stamina, p.Stats.Capacity)
+	lo, _, _ := StatLimits("packH")
+	if p.Stats.Stamina != hi || p.Stats.PackH != lo || p.Stats.Capacity != 5*lo {
+		t.Errorf("stamina %v packH %v capacity %v", p.Stats.Stamina, p.Stats.PackH, p.Stats.Capacity)
 	}
 }
 
@@ -279,46 +280,45 @@ func TestCookRefusals(t *testing.T) {
 func TestCookRespectsCapacity(t *testing.T) {
 	p := NewProfile("t")
 	AddItem(p, "pine_tips", 2)
-	// Fill every other slot with distinct gear and supplies.
 	for _, id := range []string{"headphones", "pocket_guide", "pocket_barometer", "field_stool", "film_roll", "seed_mix"} {
 		if _, err := AddItem(p, id, 1); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(p.Inventory) != 7 {
-		t.Fatalf("setup: %d slots", len(p.Inventory))
+	fillPack(p, "nettle", 20)
+	if FreeSlots(p) != 0 {
+		t.Fatalf("setup: %d free", FreeSlots(p))
 	}
-	// One slot free, and the inputs free up one more: 4 teas fit in a stack of 8.
+	// The pack is full, but the inputs free a cell: the teas take it.
 	if _, err := Cook(p, testRecipe("pine_tip_tea"), 1); err != nil {
 		t.Fatal(err)
 	}
-	// A truly full pack: eight distinct slots, one of them a big stack of tips.
-	gear := []string{"headphones", "pocket_guide", "pocket_barometer", "field_stool", "film_roll", "seed_mix", "nettle"}
+	if !PackGrid(p).Valid() || Carried(p, "pine_tip_tea") == 0 {
+		t.Fatalf("after cooking: %+v", p.Inventory)
+	}
+	// A truly full pack, one cell of it a big stack of tips.
 	q := NewProfile("t")
 	AddItem(q, "pine_tips", 20)
-	for _, id := range gear {
+	for _, id := range []string{"headphones", "pocket_guide", "pocket_barometer", "field_stool", "film_roll", "seed_mix"} {
 		AddItem(q, id, 1)
 	}
-	if len(q.Inventory) != 8 {
-		t.Fatalf("setup: %d slots", len(q.Inventory))
-	}
+	fillPack(q, "nettle", 20)
 	r := testRecipe("pine_tip_tea")
 	r.Inputs = []proto.ItemStack{{Item: "pine_tips", Qty: 1}}
 	snap := snapshot(t, q)
-	// One tip out of twenty frees no slot, and the tea has nowhere to go.
+	// One tip out of twenty frees no cell, and the tea has nowhere to go.
 	_, err := Cook(q, r, 1)
 	wantErr(t, err, ErrPackFull)
 	if snapshot(t, q) != snap {
 		t.Error("a pack-full cook changed the profile")
 	}
-	// Using up the whole stack frees its slot for the tea.
+	// Using up the whole stack frees its cell for the tea.
 	r.Inputs = []proto.ItemStack{{Item: "pine_tips", Qty: 20}}
 	if _, err := Cook(q, r, 1); err != nil {
 		t.Errorf("using up the stack should leave room: %v", err)
 	}
-	// Tea tops up an existing stack even with no free slot.
-	if _, err := Cook(q, testRecipe("pine_tip_tea"), 1); err == nil {
-		t.Error("no tips left: should fail on ingredients")
+	if !PackGrid(q).Valid() {
+		t.Errorf("pack %+v", q.Inventory)
 	}
 }
 
@@ -343,13 +343,11 @@ func TestAddForageStacksAndRespectsCapacity(t *testing.T) {
 	if n, _ := AddForage(p, "blackberry", 2); n != 2 || len(p.Inventory) != 1 || p.Inventory[0].Qty != 5 {
 		t.Errorf("stacking: %+v", p.Inventory)
 	}
-	// Fill to the brim: seven other slots, then a nearly full stack.
-	for _, id := range []string{"headphones", "pocket_guide", "pocket_barometer", "field_stool", "film_roll", "seed_mix", "nettle"} {
+	// Fill to the brim around the nearly full stack.
+	for _, id := range []string{"headphones", "pocket_guide", "pocket_barometer", "field_stool", "film_roll", "seed_mix"} {
 		AddItem(p, id, 1)
 	}
-	if len(p.Inventory) != 8 {
-		t.Fatalf("setup %d", len(p.Inventory))
-	}
+	fillPack(p, "nettle", 20)
 	if room := ForageRoom(p, "blackberry"); room != 15 {
 		t.Errorf("room %d", room)
 	}
@@ -361,6 +359,9 @@ func TestAddForageStacksAndRespectsCapacity(t *testing.T) {
 	wantErr(t, err, ErrPackFull)
 	_, err = AddForage(p, "hazelnut", 1)
 	wantErr(t, err, ErrPackFull)
+	if !strings.Contains(err.Error(), "Taking out the ") {
+		t.Errorf("a full pack should say what would make room: %q", err)
+	}
 	_, err = AddForage(p, "film_roll", 1)
 	wantErr(t, err, ErrInvalid)
 	_, err = AddForage(p, "nope", 1)

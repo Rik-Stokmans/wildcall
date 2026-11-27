@@ -22,8 +22,9 @@ export const KEYMAP = {
   KeyX: 'sit',                              // toggle: settle down and wait
   KeyZ: 'prone',                            // toggle: lie down flat; move to crawl
   // field actions
-  KeyE: 'interact',
+  KeyE: 'interact',                         // also opens the inventory when there is nothing to interact with
   KeyF: 'focus',                            // hold: focused listening
+  KeyQ: 'follow',                           // follow one voice: the sound you are facing (again to let go)
   KeyT: 'identify',                         // open identification for the bird under observation
   KeyG: 'seed',                             // scatter seed mix (supply)
   KeyN: 'note',                             // jot a field note
@@ -68,6 +69,9 @@ export function createInput(bus, state, canvas) {
     if (state.mode === 'play' || (isScreen && (state.mode === 'ui' || state.mode === 'mainmenu'))) {
       if (state.mode === 'play') held.add(action);
       bus.emit('action:' + action, { code: e.code });
+    } else if (state.mode === 'ui' && action === 'interact') {
+      // E also closes the inventory it opened (see core/ui.js); gameplay never sees this.
+      bus.emit('ui:key', { action, code: e.code });
     }
   });
   window.addEventListener('keyup', (e) => {

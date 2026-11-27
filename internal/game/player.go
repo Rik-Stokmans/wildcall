@@ -51,12 +51,18 @@ func (s *Session) msgPose(d []byte) {
 	s.applyPose(p)
 }
 
+// proneEye is the eye height above the feet while lying flat (client: PRONE_EYE in
+// web/js/player/movement.js).
+const proneEye = 0.35
+
 // applyPose moves the player: totals, observer velocity, fog of war, region
 // gating and cabin arrival. (Discovery of places runs at 2 Hz from Tick.)
 func (s *Session) applyPose(p proto.Pose) {
 	// Eye heights match the client controller (web/js/player/movement.js).
 	eyeH := float32(core.EyeHeight)
 	switch {
+	case p.Prone:
+		eyeH = proneEye
 	case p.Sit:
 		eyeH = 0.85
 	case p.Crouch:

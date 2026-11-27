@@ -337,7 +337,9 @@ vShape = vec3(0.0);
       if (gRand(h) < 0.2) sp = floor(gRand(h) * 3.999);
       vec3 petal = pow(PETALS[row * 4 + int(sp)], vec3(2.2));
       float grow = smoothstep(0.0, 1.0, fade);
-      float widen = max(1.0, d * 0.07);
+      // Sized for how far they look (as the grass): through optics the heads must not
+      // stay widened for naked-eye distance, or they bury a ground bird the size of a head.
+      float widen = max(1.0, d / uZoom * 0.07);
       float ph = gRand(h) * 6.2831853;
       float tallBase = (0.18 + 0.42 * cov.g) * (0.75 + 0.5 * gRand(h));
 
@@ -346,11 +348,13 @@ vShape = vec3(0.0);
       float fr = fract(sin((f + 1.0) * 12.9898 + ph) * 43758.5453);
       vec2 base = p + (f > 0.5 ? vec2(cos(ph + f * 2.3), sin(ph + f * 2.3)) * (0.1 + 0.08 * fr) : vec2(0.0));
       float Hs = tallBase * (0.8 + 0.4 * fr) * grow;
-      if (d < ${GAP_RANGE_GLSL} && uGapN > 0) { Hs *= gapShrink(base); Hs = min(Hs, sightCap(base, gy - 0.05)); }
+      float R = (0.04 + 0.025 * fr) * widen * grow;
+      // The head sits on the stalk and tilts towards the camera: keep its top (not just
+      // the stalk) under a ground bird's sight line.
+      if (d < ${GAP_RANGE_GLSL} && uGapN > 0) { Hs *= gapShrink(base); Hs = min(Hs, max(0.0, sightCap(base, gy - 0.05) - R * 1.2)); }
       float gust = windGust(base);
       vec2 lean = uWindDir * (uWind * (0.15 + 0.6 * gust) + 0.05 * sin(uTime * 2.1 + ph + f)) + vec2(cos(ph * 3.0 + f), sin(ph * 3.0 + f)) * 0.12;
       vec2 top = base + lean * Hs;
-      float R = (0.04 + 0.025 * fr) * widen * grow;
       float by = gHeight(base) - 0.05;
       if (part < 0.5) {
         // Stalk: a thin quad from the ground to the head.
@@ -646,6 +650,11 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     const p = cfg.n / cfg.g;
     layer.rings.forEach((r, k) => {
       r.geometry.setAttribute('aCell', layer.attrs[ci]);
+      // three.js caches the largest drawable instance count on the geometry the first
+      // time it binds an instanced attribute and never recomputes it. Without clearing it,
+      // switching to the larger zoomed layout drew only the first rows of every patch:
+      // stripes of grass with bare ground between them.
+      delete r.geometry._maxInstanceCount;
       r.geometry.instanceCount = p * p;
       const size = p * cfg.base * (1 << k);
       r.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(size / 2, 0, size / 2), size * 0.95 + 3);

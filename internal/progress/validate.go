@@ -93,6 +93,10 @@ func Validate() []error {
 			bad("stats: %q has no clamp range", name)
 			continue
 		}
+		if name == "capacity" {
+			// Derived (packW x packH); core's base value is from the slot era.
+			base = float64(BaseStats().Capacity)
+		}
 		if lim[0] >= lim[1] || base < lim[0] || base > lim[1] {
 			bad("stats: base value %g of %q is outside its clamp range %v", base, name, lim)
 		}
@@ -107,8 +111,8 @@ func Validate() []error {
 			bad("stats: lowerIsBetter lists unknown stat %q", name)
 		}
 	}
-	if !reflect.DeepEqual(ComputeStats(&proto.Profile{Rank: 1}), core.BaseStats()) {
-		bad("stats: a bare profile does not compute to core.BaseStats()")
+	if !reflect.DeepEqual(ComputeStats(&proto.Profile{Rank: 1}), BaseStats()) {
+		bad("stats: a bare profile does not compute to BaseStats()")
 	}
 
 	checkMods := func(owner string, m map[string]float32, required bool) {
@@ -121,6 +125,18 @@ func Validate() []error {
 			}
 			if v == 0 || math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
 				bad("%s: modifier %q has a useless value %v", owner, k, v)
+			}
+			if k == "capacity" {
+				bad("%s: capacity is derived from packW x packH and cannot be modified", owner)
+			}
+		}
+	}
+	// Only backpacks (and their upgrades) size the pack grid: Equip and Unequip
+	// re-fit the pack when they change it, nothing else does.
+	checkPackMods := func(owner string, it *proto.ItemDef, m map[string]float32) {
+		if _, w := m["packW"]; w || m["packH"] != 0 {
+			if it.Kind != KindEquipment || it.Slot != SlotBackpack {
+				bad("%s: only a backpack may change the pack grid size", owner)
 			}
 		}
 	}
@@ -237,7 +253,7 @@ func Validate() []error {
 		modSigs[sig] = s.ID
 		// A skill must do something measurable at every rank, starting from a bare
 		// profile (i.e. its first rank is not swallowed by a clamp).
-		prev := core.BaseStats()
+		prev := BaseStats()
 		for rank := 1; rank <= s.MaxRank; rank++ {
 			now := ComputeStats(&proto.Profile{Rank: 1, Skills: map[string]int{s.ID: rank}})
 			if reflect.DeepEqual(now, prev) {
@@ -309,6 +325,16 @@ func Validate() []error {
 		checkText(owner, it.Name, it.Desc)
 		checkIcon(owner, it.Icon)
 		checkMods(owner, it.Mods, false)
+		checkPackMods(owner, it, it.Mods)
+		if it.W < 1 || it.H < 1 || it.W > MaxItemSide || it.H > MaxItemSide {
+			bad("%s: footprint %dx%d, want 1..%d cells a side", owner, it.W, it.H, MaxItemSide)
+		}
+		if stackable(it) && (it.W != 1 || it.H != 1) {
+			bad("%s: stackable things are 1x1 (footprint %dx%d)", owner, it.W, it.H)
+		}
+		if min(it.W, it.H) > 3 {
+			bad("%s: footprint %dx%d does not fit the smallest pack", owner, it.W, it.H)
+		}
 		if it.Mods == nil || it.Pros == nil || it.Cons == nil || it.Upgrades == nil {
 			bad("%s: Mods, Pros, Cons and Upgrades must not be nil", owner)
 		}
@@ -377,10 +403,12 @@ func Validate() []error {
 			if len(it.Mods) == 0 {
 				bad("%s: a %s must do something while carried", owner, it.Kind)
 			}
-			if _, ok := it.Mods["capacity"]; ok {
-				// Carrying it would change how much can be carried: the pack-room
-				// checks assume this never happens.
-				bad("%s: a carried item may not modify capacity", owner)
+			for _, k := range []string{"capacity", "packW", "packH"} {
+				if _, ok := it.Mods[k]; ok {
+					// Carrying it would change how much can be carried: the
+					// pack-room checks assume this never happens.
+					bad("%s: a carried item may not modify %s", owner, k)
+				}
 			}
 		case KindSupply, KindIngredient, KindFood:
 			if it.Slot != "" || len(it.Mods) != 0 || len(it.Upgrades) != 0 {
@@ -443,6 +471,7 @@ func Validate() []error {
 			}
 			checkText(uo, u.Name, u.Desc)
 			checkMods(uo, u.Mods, true)
+			checkPackMods(uo, it, u.Mods)
 			if u.Price <= 0 || u.Price > maxPrice {
 				bad("%s: price %d", uo, u.Price)
 			}
@@ -532,7 +561,7 @@ func modSignature(m map[string]float32) string {
 
 // forbiddenBuffStats are never touched by food: the pack size the pack-room checks
 // rely on, and the economy (spec §22: no credits or XP for eating).
-var forbiddenBuffStats = toSet([]string{"capacity", "xpMult", "creditMult", "discount", "filmCap"})
+var forbiddenBuffStats = toSet([]string{"capacity", "packW", "packH", "xpMult", "creditMult", "discount", "filmCap"})
 
 // validateBuff checks one item's BuffDef: a real slot with a fitting duration, a few
 // modest, wholly beneficial modifiers on real stats, and the player-facing text.

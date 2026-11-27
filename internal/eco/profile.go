@@ -49,6 +49,9 @@ type profile struct {
 	sp *core.Species
 
 	perchPref [core.PerchKindCount]float32 // 0 = never chosen as a general perch; 1 = favourite
+	showPref  [core.PerchKindCount]float32 // perchPref for song posts and resting in view (exposure.go)
+	bold      float32                      // 1 − 0.9·Skulking: how readily it shows itself (exposure.go)
+	expoTab   [3][expoSteps + 1]float32    // exposure weight by cover for the three uses (exposure.go)
 	feedSpot  [core.PerchKindCount]bool    // perch kinds this species forages at
 	// Height habit: perches up to hiMax metres above the ground suit the species
 	// fully; above it they suit it less and less (hiFall metres per step of the
@@ -354,6 +357,8 @@ func buildProfile(sp *core.Species) profile {
 	p.density = max32(b.Density, 0)
 	p.length = clamp(sp.Look.Length, 0.07, 1.6)
 	p.small = sp.Look.Length < smallBird && !p.raptor
+
+	p.buildShowPref()
 
 	// Big wings ride higher thermals; small hoverers work close to the ground.
 	p.soarAlt = 22 + 45*clamp(sp.Look.Wingspan/1.4, 0.2, 1.3)
