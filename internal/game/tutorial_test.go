@@ -382,6 +382,12 @@ func TestTutorialUnseenSinger(t *testing.T) {
 	if s.p.SkillPoints <= sp0 {
 		t.Fatalf("no skill point from the tutorial (%d -> %d)", sp0, s.p.SkillPoints)
 	}
+	// Pacing (QA play-through): after the tutorial the player is level 3 with 3
+	// skill points and 320 credits. Nothing added since may inflate that.
+	t.Logf("after the tutorial: level %d, %d skill points, %d credits, rep %v", s.p.Level, s.p.SkillPoints, s.p.Credits, s.p.Rep)
+	if s.p.Level > 3 || s.p.Credits > 320 {
+		t.Fatalf("tutorial pacing inflated: level %d, %d credits", s.p.Level, s.p.Credits)
+	}
 
 	// Spend a skill point.
 	h.take()

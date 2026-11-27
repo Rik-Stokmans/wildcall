@@ -32,6 +32,9 @@ func juneSpeaker() *speaker {
 			{id: "j_care", title: "How should I behave around the birds?", lines: juneCare},
 			{id: "j_map", title: "How do I find my way?", lines: juneMap},
 			{id: "j_forage", title: "Is it all right to pick plants in the park?", lines: juneForage, follow: offerIfAvailable("a_fair_share", "Is there something I can do about it?")},
+			// Stories the rangers' standing unlocks (spec §16.2).
+			{id: "j_signs", title: "How do you find the places nobody goes?", lines: juneSigns, minRep: 40},
+			{id: "j_nests", title: "What should I do if I find a nest?", lines: juneNests, minRep: 100},
 		},
 		taken: map[string][]string{
 			"old_watchtower": {
@@ -142,5 +145,28 @@ func juneForage(*dctx) []string {
 	return []string{
 		"A little, for yourself, from things that are common, yes. Berries, nuts, leaves, a few mushrooms. Never roots, never a whole plant, and never from anything rare. A few of the things that grow here are protected, and the herbarium in your journal will tell you which are fair game.",
 		"The fair share rule is simple: the birds were here first. Leave at least two of every three berries, and the high ones for the thrushes. Pick for one meal, not a stockpile. Then everyone eats again next year.",
+	}
+}
+
+// juneSigns is June's reading of the land for hidden places (40 rangers reputation):
+// the kinds of sign, never a location.
+func juneSigns(c *dctx) []string {
+	l := []string{
+		"Since you have earned it: the land tells you. Reeds where there is no stream means water nobody has mapped. A place on a slope where the trees stop means a view. A straight line in a wood is somebody's roof, because nothing that grows stays straight for long. And soft ground under pines with nothing growing on it is where people used to pitch camp.",
+		"The paths to them are faint, and the map only draws one once you have walked it yourself. Look for a gap in the bracken that is a little too regular.",
+		"Every place you find goes into the rangers' register, and so does every nest you report, and the rangers remember who found them. That is most of how you earned this conversation.",
+	}
+	if c.turnedIn("harrows_places") {
+		l = append(l, "You have found all four of Harrow's. There are more like them out past the valley, and nobody has written those down at all.")
+	}
+	return l
+}
+
+// juneNests is June on nests and conservation (100 rangers reputation).
+func juneNests(*dctx) []string {
+	return []string{
+		"Look, note it, and leave. A nest is logged the moment you have seen it properly; you do not need to stand over it. Five minutes beside a nest is five minutes the parents are not feeding.",
+		"Most of the valley nests in spring, and some go on into summer. Outside those months what you find is old, and you leave it alone anyway, because some birds come back to the same one year after year. Some nest on bare ground, which is why I ask everyone to keep to the paths in spring.",
+		"When I started, one of the marsh birds had all but gone from this part of the country. Nobody saw it, and hardly anyone heard it. Then the reedbeds were left alone for twenty years, and now on a still spring evening in the marsh you can hear it again. That is the whole of this job: leave a place alone long enough and it comes back.",
 	}
 }

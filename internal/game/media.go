@@ -118,7 +118,12 @@ func (s *Session) msgPhoto(d []byte) {
 		s.toast("xp", "Photograph", starsText(meta.Stars), res.XP, "camera")
 	}
 	s.send(proto.SPhoto, res)
-	s.narrate(narrator.Event{Kind: narrator.Photographed, Stars: meta.Stars, Tags: meta.Tags, Known: known})
+	if meta.Stars > 0 && !s.p.Flags["narr:first_stars"] {
+		s.p.Flags["narr:first_stars"] = true
+		s.narrate(narrator.Event{Kind: narrator.TutorialBeat, Item: "first_stars"})
+	} else {
+		s.narrate(narrator.Event{Kind: narrator.Photographed, Stars: meta.Stars, Tags: meta.Tags, Known: known})
+	}
 	if progress.FilmLeft(s.p) == 0 {
 		s.narrate(narrator.Event{Kind: narrator.OutOfFilm})
 	}
@@ -231,7 +236,13 @@ func (s *Session) stopRecording() {
 	s.p.Journal.Recordings = append(s.p.Journal.Recordings, &r)
 	s.p.Totals.Recordings++
 	res.Rec = &r
-	res.XP = s.award(progress.SrcRecording, sp.ID, progress.RecordingXP(meta.Stars))
+	if progress.Awarded(s.p, progress.SrcRecording, sp.ID) == 0 && !firstRecordingCounts(meta, s.p.Stats) {
+		// Kept, but too faint to be the species' first recording: no XP yet.
+		res.Notes = append(res.Notes, "Saved to your journal. It is a little too faint to count as a first recording of this voice yet: get within about "+
+			itoa(int(firstRecReach*s.p.Stats.RecRange+0.5))+" m, or wait for a quieter moment, and the next take will count.")
+	} else {
+		res.XP = s.award(progress.SrcRecording, sp.ID, progress.RecordingXP(meta.Stars))
+	}
 	var known *core.Species
 	if e := s.entry(sp.ID); e != nil {
 		known = sp

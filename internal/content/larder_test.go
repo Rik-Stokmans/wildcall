@@ -116,7 +116,7 @@ func TestPlantPlacementMatchesTheWorldBrief(t *testing.T) {
 		"cloudberry":     {core.RegionFrostveil},
 		"wild_thyme":     {core.RegionWindpeak},
 		"sea_buckthorn":  {core.RegionWhisperingCoast},
-		"samphire":       {core.RegionWhisperingCoast},
+		"samphire":       {core.RegionWhisperingCoast, core.RegionMurmurMarsh}, // salt marsh too, as the world places it
 	}
 	for id, regions := range where {
 		p, ok := Plant(id)

@@ -29,6 +29,9 @@ func finnSpeaker() *speaker {
 			{id: "f_credits", title: "How do I earn Field Credits?", lines: finnCredits},
 			{id: "f_pantry", title: "Do you sell anything to cook with?", lines: finnPantry},
 			{id: "f_flatbread", title: "Do you know a good trail bread?", lines: finnFlatbread, acts: teachRecipe("wild_garlic_flatbread")},
+			// Stories the outfitters' standing unlocks (spec §16.2).
+			{id: "f_trade", title: "Do regulars get a better price?", lines: finnTrade, minRep: 40},
+			{id: "f_heirlooms", title: "What about the old kit people left behind?", lines: finnHeirlooms, minRep: 100},
 		},
 		taken: map[string][]string{
 			"perfect_moment": {
@@ -116,5 +119,42 @@ func finnFlatbread(*dctx) []string {
 	return []string{
 		"Wild garlic flatbread. Flour, a few crushed ramsons leaves, water, a hot dry pan. Nothing to it. I put one in my pocket every spring when the woods smell like a kitchen and I swear I walk further on it.",
 		"I have written it down for you. You will need the stove at the cabin: a camp fire is not flat enough, and I speak from experience.",
+	}
+}
+
+// finnDiscounts mirrors progress.RepDiscount (internal/progress/stats.go): the shop
+// discount by outfitters reputation, highest threshold first.
+var finnDiscounts = []struct{ rep, pct int }{{120, 15}, {60, 10}, {25, 5}}
+
+// finnTrade explains the goodwill discount (40 outfitters reputation).
+func finnTrade(c *dctx) []string {
+	rep := c.rep()
+	now, next := 0, 0
+	for _, d := range finnDiscounts {
+		if rep >= d.rep {
+			now = d.pct
+			break
+		}
+		next = d.rep
+	}
+	l := []string{
+		"They do, and you are one. It goes by how well I know you, which is to say your standing with the outfitters: five off every hundred once you are past twenty-five, ten at sixty, fifteen at a hundred and twenty. It comes off the tag before you pay. No haggling, which is lucky, because I am terrible at it.",
+	}
+	switch {
+	case next == 0:
+		l = append(l, fmt.Sprintf("You are on the top rate already, %d off every hundred. Do not tell the others.", now))
+	default:
+		l = append(l, fmt.Sprintf("At the moment you get %d off every hundred, and it goes up when you reach %d.", now, next))
+	}
+	l = append(l, "How you get there: buy your kit here, and run the odd errand for me when I ask. A good deal of the better stock waits under the counter until I know who I am dealing with, whatever card you carry, and the more I know you the more of it comes out.")
+	return l
+}
+
+// finnHeirlooms is Finn on the old gear found in caches (100 outfitters reputation).
+func finnHeirlooms(*dctx) []string {
+	return []string{
+		"Ah. Now you are asking the right question of the wrong man. There is kit in this valley I have never sold and never will: brass glasses with the leather worn to the shape of one pair of hands, an old reel recorder wrapped in oilcloth. People left it in places off the trail and never came back for it.",
+		"My dad kept this stall before me, and he used to say the best glass in Greenhollow was never sold over a counter. It was handed down, or left somewhere dry. If you find a piece, it is yours. Nobody can buy it from me, and I would not buy it from you.",
+		"Bring it by anyway. I like to look. And I will tell you what it is bad at, same as everything else.",
 	}
 }

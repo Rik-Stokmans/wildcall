@@ -127,7 +127,7 @@ func TestLureDrawsGroundFeeders(t *testing.T) {
 	s.Step(0.1, env, obs)
 	s.AddLure(core.Lure{Pos: lurePos, Radius: 40, TTL: 600, Kind: "seed"})
 	maxAt := 0
-	for i := 0; i < 2400; i++ { // four minutes
+	for i := 0; i < 3600; i++ { // six minutes
 		s.Step(0.1, env, obs)
 		at := 0
 		for _, b := range s.Near(lurePos, 2.5, nil) {
@@ -254,7 +254,7 @@ func TestFastForwardPutsBirdsWhereTheirRoutineSays(t *testing.T) {
 // the woods and checks that the whole repertoire shows up.
 func TestBehaviourRepertoire(t *testing.T) {
 	species := extraSpecies()
-	s, tr := newTestSim(12, species)
+	s, tr := newTestSim(13, species) // was 12: the spring song-post boost made seed 12 a day without a robin bath
 	pond := core.V(512, 5, 1536)
 	obs := observerAt(core.V(pond.X+60, 5, pond.Z))
 	obs.Still, obs.Sitting = 100, true

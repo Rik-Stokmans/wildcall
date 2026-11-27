@@ -112,6 +112,9 @@ func TestHomeValley(t *testing.T) {
 				if p.Pos.Y < 0.8 || gh < 0.8 {
 					t.Errorf("seed %d: %s at y %.2f (ground %.2f), want dry land", seed, p.ID, p.Pos.Y, gh)
 				}
+				if p.ID == "page_0" {
+					gh += oldTowerPlatform // up on the Old Watchtower's platform
+				}
 				if math.Abs(float64(p.Pos.Y-gh)) > 0.35 {
 					t.Errorf("seed %d: %s y %.2f but ground %.2f", seed, p.ID, p.Pos.Y, gh)
 				}

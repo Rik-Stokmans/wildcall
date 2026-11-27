@@ -72,7 +72,23 @@ type topic struct {
 	lines     func(c *dctx) []string             // what the NPC says
 	follow    func(c *dctx) []proto.DialogChoice // extra choices ahead of the usual way out (a lesson that continues)
 	acts      func(c *dctx) []Action             // fired on arrival (tutorial flags, one-off gifts)
+	// Gates (spec §16.2: reputation unlocks stories). A gated topic is listed in the
+	// hub, and answers when chosen, only once the player meets every gate; until then
+	// its id falls back to the hub like any unknown id. Zero means no gate.
+	minRep  int // reputation with this NPC's own faction (NPCDef.Faction) of at least this
+	minRank int // naturalist rank (1..5) of at least this
 }
+
+// unlocked reports whether the player meets the topic's reputation and rank gates.
+func (c *dctx) unlocked(tp *topic) bool {
+	if tp.minRep > 0 && c.rep() < tp.minRep {
+		return false
+	}
+	return tp.minRank <= 0 || c.rank() >= tp.minRank
+}
+
+// rep is the player's reputation with the NPC's own faction.
+func (c *dctx) rep() int { return c.p.Rep[c.npc.Faction] }
 
 // voice holds the lines every NPC says in their own words for the generic parts of a
 // conversation.
@@ -294,8 +310,9 @@ func (c *dctx) node(id string) (nodeDef, []Action) {
 	case strings.HasPrefix(id, pfxTurnIn):
 		return c.turnInNode(strings.TrimPrefix(id, pfxTurnIn))
 	}
-	for _, tp := range sp.topics {
-		if tp.id == id {
+	for i := range sp.topics {
+		tp := &sp.topics[i]
+		if tp.id == id && c.unlocked(tp) {
 			var ch []proto.DialogChoice
 			if tp.follow != nil {
 				ch = tp.follow(c)
@@ -349,8 +366,8 @@ func (c *dctx) hubNode(lead []string) nodeDef {
 	if c.sp.shop {
 		ch = append(ch, proto.DialogChoice{ID: nodeShop, Text: "Let me see what you have.", Kind: choiceShop})
 	}
-	for _, tp := range c.sp.topics {
-		if !tp.hidden {
+	for i := range c.sp.topics {
+		if tp := &c.sp.topics[i]; !tp.hidden && c.unlocked(tp) {
 			ch = append(ch, ask(tp.id, tp.title))
 		}
 	}

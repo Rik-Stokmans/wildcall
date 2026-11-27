@@ -6,13 +6,29 @@ import "github.com/Rik-Stokmans/wildcall/internal/core"
 // per Step (Sim.rate); voiceFactor scales it by what the bird is doing right now.
 // Disturbed birds (fear, the quiet timer) do not call at all.
 
+// singerBoost: a territory holder in the breeding season (bird.singer) sings this
+// much more readily wherever it is - foraging in the thicket, hopping about, on the
+// way to its nest - except on its song post, where it is at its peak anyway.
+const singerBoost = 1.6
+
 // voiceFactor is how likely a bird is to start a bout now relative to its species'
 // base rate: highest on its song post, lower while busy, zero when asleep, hiding,
 // alarmed or fleeing.
 func (s *Sim) voiceFactor(b *bird, p *profile) float32 {
+	f := s.activityVoice(b, p)
+	if b.singer && b.cur != memSong {
+		f *= singerBoost
+	}
+	return f
+}
+
+// activityVoice is voiceFactor before the territorial boost.
+func (s *Sim) activityVoice(b *bird, p *profile) float32 {
 	switch b.mode {
 	case mRoost, mAlert, mHide, mAway, mLeave:
 		return 0
+	case mPass:
+		return 0.4 // a buzzard mews as it sweeps over
 	}
 	if p.asleep[s.birdPhase(b)] {
 		return 0 // its night (or an owl's day): on its way to roost, not singing
@@ -37,7 +53,14 @@ func (s *Sim) voiceFactor(b *bird, p *profile) float32 {
 		return 0.5
 	case core.ActBathing:
 		return 0.1
-	case core.ActNesting, core.ActPreening:
+	case core.ActNesting:
+		// The bird on the eggs keeps quiet; its mate (the territorial male that
+		// carries material or drops by) sings as freely as ever.
+		if !b.singer {
+			return 0.35
+		}
+		return 1
+	case core.ActPreening:
 		return 0.35
 	case core.ActSocial:
 		return 1.5
@@ -63,7 +86,7 @@ func (s *Sim) sing(b *bird, p *profile) {
 		ci = p.callDrum
 	case p.callContact >= 0 && b.moving:
 		ci = p.callContact
-	case p.callContact >= 0 && b.cur != memSong && u < 0.4:
+	case p.callContact >= 0 && b.cur != memSong && (u < 0.15 || !b.singer && u < 0.4):
 		ci = p.callContact
 	}
 	c := calls[ci]
@@ -77,6 +100,13 @@ func (s *Sim) sing(b *bird, p *profile) {
 	s.voice(b, p, ci, lo+s.rng.IntN(hi-lo+1))
 }
 
+// The pause after a bout before the next may start (halved in the dawn chorus).
+const (
+	pauseMin  = 2
+	pauseMax  = 7
+	pauseMean = (pauseMin + pauseMax) / 2.0
+)
+
 // voice emits one bout of call ci with the given phrase repeats.
 func (s *Sim) voice(b *bird, p *profile, ci, repeats int) {
 	if s.silent {
@@ -89,7 +119,7 @@ func (s *Sim) voice(b *bird, p *profile, ci, repeats int) {
 	}
 	b.singT = dur
 	b.flags |= core.FlagSinging
-	pause := s.rnd(2, 7)
+	pause := s.rnd(pauseMin, pauseMax)
 	if s.phase == core.PhaseDawn {
 		pause *= 0.5 // the dawn chorus: bout after bout
 	}

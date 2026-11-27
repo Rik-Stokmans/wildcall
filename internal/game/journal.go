@@ -195,6 +195,7 @@ func (s *Session) raiseDocumented(e *proto.SpeciesEntry) {
 	if e.Level < proto.LevelDocumented && s.documented(e.ID, "") {
 		e.Level = proto.LevelDocumented
 		s.changed()
+		s.deedRep(content.FactionNaturalists, "document", e.ID, repDocument, "a species documented")
 	}
 }
 
@@ -237,6 +238,14 @@ func (s *Session) identify(mysteryID, guess string) (proto.IdentifyResult, error
 		s.narrate(narrator.Event{Kind: narrator.Identified, Outcome: res.Outcome, Subject: m.ID})
 		return res, nil
 	}
+	if !s.newEvidenceSinceGuess(m) {
+		// Design rule 1: after a wrong guess, the next one needs something new to go
+		// on, so guesses cannot simply be cycled to the answer. No other penalty.
+		res.Outcome = "insufficient"
+		res.Feedback = "Nothing new has turned up since your last guess. " + evidenceHint(m.Evidence)
+		s.narrate(narrator.Event{Kind: narrator.Identified, Outcome: res.Outcome, Subject: m.ID})
+		return res, nil
+	}
 	conf := field.ConfidenceFor(guess, m.Evidence, m.Wrong, ic, s.p.Stats, s.species)
 	res.Confidence = conf
 	if guess != m.Species {
@@ -251,6 +260,7 @@ func (s *Session) identify(mysteryID, guess string) (proto.IdentifyResult, error
 		if added {
 			s.changed()
 		}
+		s.markGuess(m)
 		s.narrate(narrator.Event{Kind: narrator.Identified, Outcome: res.Outcome, Mismatch: key, Subject: m.ID})
 		return res, nil
 	}
@@ -264,6 +274,7 @@ func (s *Session) identify(mysteryID, guess string) (proto.IdentifyResult, error
 	res.Species = sp.ID
 	res.First = true
 	res.XP = s.award(progress.SrcIdentify, sp.ID, progress.IdentifyXP(sp.FirstIDXP(), probable))
+	s.deedRep(content.FactionResearch, "identify", sp.ID, repIdentify, "a new species on the record")
 	if probable {
 		res.Notes = append(res.Notes, "Logged as a probable identification. It will be confirmed once the evidence is stronger or you have a good photo or recording.")
 	}
@@ -344,6 +355,7 @@ func (s *Session) promote(m *proto.Mystery, sp *core.Species, conf int, probable
 			}
 		}
 	}
+	s.clearGuess(m.ID)
 	// Remove the mystery.
 	out := s.p.Journal.Mysteries[:0]
 	for _, x := range s.p.Journal.Mysteries {
@@ -479,10 +491,13 @@ func (s *Session) afterChange() {
 		progress.Recompute(s.p)
 		s.changed()
 	}
+	s.storyItems()
 	if added := s.tracker.Sync(s.p); len(added) > 0 {
 		s.changed()
 	}
+	s.reportProgress(s.tracker.Reconcile(s.p))
 	s.syncLoreRecipes()
+	s.settleLedger()
 }
 
 // giveItems adds items to the player (backpack, overflowing into storage), equips

@@ -96,6 +96,15 @@ func (n *Narrator) planActivity(ev Event, sl slots) (plan, bool) {
 		return plan{prio: 1, kind: "activity", chance: 0.8, slots: sl,
 			groups: [][]string{{"climb." + item}, {"climb.any"}}, topics: []topic{{"k:climb", 300}}}, true
 
+	case TutorialBeat:
+		switch item {
+		case "singer_heard", "singer_raised", "first_stars":
+		default:
+			return plan{}, false
+		}
+		return plan{prio: 2, kind: "quest", chance: 1, ttl: 12, slots: sl,
+			groups: [][]string{{"tutorial." + item}}, topics: []topic{{"tutorial:" + item, 86400}}}, true
+
 	case Waded:
 		return plan{prio: 0, kind: "activity", chance: 0.5, slots: sl,
 			groups: [][]string{{"wade"}}, topics: []topic{{"k:wade", 900}}}, true

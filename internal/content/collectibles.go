@@ -150,6 +150,12 @@ var questBadges = []struct{ id, name, desc string }{
 	{"badge_golden_flute", "The Golden Flute", "You heard what Harrow heard in the crown."},
 	{"badge_voice_of_the_reeds", "Voice of the Reeds", "You recorded the boom across the marsh."},
 	{"badge_white_on_white", "White on White", "You wrote the first page about Frostveil in forty years."},
+	{"badge_her_glass", "Through Her Glass", "You saw again what Edith Harrow saw through Survey No. 1."},
+	{"badge_long_watch", "The Long Watch", "You watched long enough to see what birds really do."},
+	{"badge_nest_warden", "Nest Warden", "You found and recorded nests without disturbing them."},
+	{"badge_field_tested", "Field Tested", "Finn's kit, proven in the field."},
+	{"badge_six_countries", "Six Countries", "A bird named in every kind of country there is."},
+	{"badge_far_north", "The Far North", "You led the expedition to the white country's edge."},
 }
 
 // RegionBadgeID is the badge awarded for first entering a region type (the Region

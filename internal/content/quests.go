@@ -51,6 +51,7 @@ func Quests() []proto.QuestDef {
 	q = append(q, regionQuests()...)
 	q = append(q, larderQuests()...)
 	q = append(q, boardContracts()...)
+	q = append(q, standingQuests()...)
 	return q
 }
 
@@ -116,8 +117,11 @@ func valleyQuests() []proto.QuestDef {
 				XP: 150, Credits: 90,
 				Rep:   map[string]int{FactionOutfitters: 20},
 				Items: []string{itemFilm},
-				Lore:  []string{"sit_and_wait"},
-				Badge: "badge_perfect_moment",
+				// Spec §15.2: a camera upgrade. Finn fits the sharper kit lens to the
+				// starter camera (paid out as its price if already fitted).
+				Unlock: []string{upgradeUnlock("starter_camera", "starter_camera_lens")},
+				Lore:   []string{"sit_and_wait"},
+				Badge:  "badge_perfect_moment",
 			},
 		},
 		{
@@ -128,15 +132,18 @@ func valleyQuests() []proto.QuestDef {
 				o("tower", KindDiscover, "old_watchtower", 1, "Find the Old Watchtower",
 					"It stands on a wooded rise away from the main trail. From open ground, look for a roofline above the trees."),
 				o("page", KindCollect, "page_0", 1, "Recover the torn journal page",
-					"Search the tower from its foot to its platform. Paper lasts longest out of the rain."),
+					"Climb the tower: the stair runs up the back to the platform. Paper lasts longest out of the rain, and up there it has been tucked under the roof."),
 				o("satchel", KindCollect, "cache_watchtower", 1, "Search the weathered satchel",
 					"Somebody left a satchel at the tower. Press E to open it."),
 			},
 			Rewards: proto.Reward{
 				XP: 200, Credits: 100,
-				Rep:    map[string]int{FactionRangers: 25},
-				Lore:   []string{"fire_watch"},
-				Unlock: []string{"quest:harrows_survey", trailFeature + "secret_lookout"},
+				Rep:  map[string]int{FactionRangers: 25},
+				Lore: []string{"fire_watch"},
+				// Spec §15.2: map expansion (the secret lookout trail), equipment (June
+				// pencils the rangers' notes on old paths onto your trail map) and the
+				// hidden research quest.
+				Unlock: []string{"quest:harrows_survey", trailFeature + "secret_lookout", upgradeUnlock("trail_map", "trail_map_notes")},
 			},
 		},
 		{
@@ -153,6 +160,9 @@ func valleyQuests() []proto.QuestDef {
 				XP: 200, Credits: 120,
 				Rep:  map[string]int{FactionNaturalists: 20, FactionResearch: 10},
 				Lore: []string{"birding_by_ear"},
+				// Spec §15.2: a binocular upgrade - Mara has Finn clean and recoat the
+				// old glass of the starter binoculars.
+				Unlock: []string{upgradeUnlock("basic_binoculars", "basic_binoculars_recoat")},
 			},
 		},
 		{
@@ -437,8 +447,8 @@ func boardContracts() []proto.QuestDef {
 			Story:    "Posted by the Creekside Field Lab: \"Wanted: confirmed identifications from any habitat. Five species. Probable records accepted and will be reviewed.\"",
 			Requires: []string{TutorialQuest},
 			Objectives: []proto.ObjectiveDef{
-				o("species", KindIdentify, TargetAny, 5, "Identify five species you have not named before",
-					"Try a habitat you have been walking past: the meadow, the creek, the pines, the deep shade."),
+				o("species", KindIdentify, TargetAny, 5, "Have five species identified in your journal",
+					"Identifications you have already made count. Try a habitat you have been walking past: the meadow, the creek, the pines, the deep shade."),
 			},
 			Rewards: proto.Reward{XP: 200, Credits: 140, Rep: map[string]int{FactionResearch: 20}},
 		},

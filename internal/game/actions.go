@@ -67,12 +67,17 @@ func (s *Session) msgBuy(d []byte) {
 		s.fail("Finn's stall is at the Woodland Entrance.")
 		return
 	}
+	s.settleLedger()
 	if err := progress.Buy(s.p, m.Item); err != nil {
 		s.failErr(err)
 		return
 	}
 	if def, ok := progress.Item(m.Item); ok {
+		s.ledger(s.p.Credits-s.ledgerCredits, "Bought "+def.Name)
 		s.toast("item", "Bought", def.Name, 0, def.Icon)
+		if def.Kind == progress.KindEquipment || def.Kind == progress.KindGadget {
+			s.deedRep(content.FactionOutfitters, "gear", m.Item, repBuyGear, "Finn remembers a good customer")
+		}
 	}
 	s.changed()
 }
@@ -87,12 +92,15 @@ func (s *Session) msgUpgrade(d []byte) {
 		s.fail("Upgrades are fitted at Finn's stall or at your cabin.")
 		return
 	}
+	s.settleLedger()
 	if err := progress.BuyUpgrade(s.p, m.Item, m.Upgrade); err != nil {
 		s.failErr(err)
 		return
 	}
 	if up, ok := progress.Upgrade(m.Item, m.Upgrade); ok {
+		s.ledger(s.p.Credits-s.ledgerCredits, "Upgrade: "+up.Name)
 		s.toast("item", "Upgrade fitted", up.Name, 0, "upgrade")
+		s.deedRep(content.FactionOutfitters, "upgrade", m.Item+"/"+m.Upgrade, repBuyUpgrade, "Finn likes to see kit looked after")
 	}
 	s.changed()
 }
@@ -237,10 +245,12 @@ func (s *Session) msgCabin(d []byte) {
 }
 
 func (s *Session) cabinUpgrade(id string) error {
+	s.settleLedger()
 	if err := progress.BuyCabinUpgrade(s.p, id); err != nil {
 		return err
 	}
 	if def, ok := progress.CabinUpgrade(id); ok {
+		s.ledger(s.p.Credits-s.ledgerCredits, "Cabin: "+def.Name)
 		s.toast("item", "Cabin upgraded", def.Name, 0, def.Icon)
 	}
 	if id == progress.CabinGarden {
@@ -351,6 +361,7 @@ func (s *Session) study(spID string) error {
 		e.Study = 100
 		e.Level = proto.LevelStudied
 		s.toast("journal", "Studied", sp.Name+" is fully studied.", 0, "knowledge")
+		s.deedRep(content.FactionResearch, "studied", sp.ID, repStudied, "a species fully studied")
 	}
 	xp := s.award("study", spID+"@"+itoa(day), 20)
 	s.toast("journal", "Desk research", sp.Name+": "+itoa(e.Study)+"%", xp, "knowledge")
@@ -404,7 +415,11 @@ func (s *Session) submit(id string) error {
 		ph.Submitted = true
 		stars, what, src = ph.Stars, "photo", progress.SrcSubmitPhoto
 		if len(ph.Subjects) > 0 {
-			spID, key = ph.Subjects[0].Species, ph.Subjects[0].Mystery
+			spID = ph.Subjects[0].Species
+			key = s.trueSpecies(ph.Subjects[0].Species, ph.Subjects[0].Mystery)
+		} else if e := s.nestEntry(nest); e != nil && e.Species != "" {
+			// Nest photographs pay once per nest species, not once per nest.
+			key = "nest:" + e.Species
 		} else {
 			key = "nest:" + nest
 		}
@@ -414,19 +429,28 @@ func (s *Session) submit(id string) error {
 		}
 		r.Submitted = true
 		stars, what, src = r.Stars, "recording", progress.SrcSubmitRecording
-		spID, key = r.Species, r.Mystery
+		spID = r.Species
+		if sp := s.spAt(r.SpIndex); sp != nil {
+			key = sp.ID
+		} else {
+			key = s.trueSpecies(r.Species, r.Mystery)
+		}
 	} else {
 		return gentleErr("There is nothing with that id to submit.")
 	}
-	if spID != "" && s.identified(spID) {
-		key = spID
-	} else {
+	// The board pays per species (improvable by a better rating), keyed by the TRUE
+	// species whether or not the player has named it yet, so a piece submitted as a
+	// mystery is not paid again under the species id after identification. (The
+	// client view strips log keys that name unidentified species.)
+	if spID == "" || !s.identified(spID) {
 		spID = ""
 	}
 	if key == "" {
 		key = id
 	}
+	s.settleLedger()
 	got := progress.AwardCredits(s.p, src, key, progress.SubmissionCredits(stars))
+	s.ledger(got, "Research board: "+what)
 	text := "Submitted to the research board."
 	if got > 0 {
 		text += " +" + itoa(got) + " credits"

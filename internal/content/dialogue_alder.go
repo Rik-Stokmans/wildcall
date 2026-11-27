@@ -25,6 +25,9 @@ func alderSpeaker() *speaker {
 			{id: "a_desk", title: "What do I do at the Research Desk?", lines: alderDesk},
 			{id: "a_rare", title: "What counts as a rare discovery?", lines: alderRare},
 			{id: "a_similar", title: "Some birds look alike. Any advice?", lines: alderSimilar},
+			// Lessons the research standing unlocks (spec §16.2).
+			{id: "a_difficult", title: "Which identifications are the hardest?", lines: alderDifficult, minRep: 40},
+			{id: "a_scarce", title: "How does one find the truly rare birds?", lines: alderScarce, minRep: 100},
 		},
 		done: map[string][]string{
 			"visitor_from_afar": {"A bird in the wrong country. Do you know how long I have waited for someone to bring me one of those in a hand I do not have to decipher? Thank you. It goes in the record at once."},
@@ -99,5 +102,27 @@ func alderSimilar(*dctx) []string {
 	return []string{
 		"Every journal page has a \"compare similar\" view for exactly that reason. Do not rely on colour alone, which changes with the light. Size relative to a bird you know, the shape of the bill, the way the tail is held and how it moves are better evidence, and they are the ones a good look gives you first.",
 		"Habitat helps, and so does season. A wrong guess costs nothing, so make one and let the evidence correct you.",
+	}
+}
+
+// alderDifficult is the lesson on hard identifications (40 research reputation).
+func alderDifficult(*dctx) []string {
+	return []string{
+		"The hard ones fall into three drawers. Birds that look alike and sound different: there the recorder is better evidence than the binoculars, so get the voice. Birds that sound alike and look different: the reverse. And birds that will not show themselves at all, because they live in thick cover or come out only at the edges of the day.",
+		"For those, sit. A bird that has decided you are furniture will step out eventually, so wait where it must cross open ground: the edge of the water, a gap in the cover. And in poor light a recording does what your eyes cannot.",
+		"The third trap is the young and the females. Half the marks in any guide belong to the adult male in spring. When the colours mislead you, trust the size, the shape, the bill and what the bird is doing. And do not be ashamed of \"probable\". I keep a drawer of my own and visit it like old friends.",
+		"Every species you name for the first time goes into my records, and the research people notice whose name is on it. That is how you came to be standing here asking me this.",
+	}
+}
+
+// alderScarce is the lesson on scarce species and vagrants (100 research reputation).
+// It describes the conditions of the rarest birds as Harrow's diary does, and names
+// none of them.
+func alderScarce(*dctx) []string {
+	return []string{
+		"Scarce birds are not hiding from you in particular. They keep strict appointments: a season, an hour, a kind of weather, sometimes all three. Your journal records when and where you met everything; put the hours side by side and the rare ones show their pattern.",
+		"From the records, and from Harrow's papers: one sings only in late spring, only in the first hours after sunrise, only in the crowns of the tallest trees. One booms from deep reeds at dusk in spring. And something pale hunts the far north, but only in the depths of winter. I will not name them. You would never forgive me.",
+		"Vagrants are another matter: they are lost, not scarce. They come after strong wind and rain, most of all in autumn, and turn up where they have no business. Identify one and it is logged as a rare discovery.",
+		"The first identification of a scarce bird is worth more experience than a common one: half as much again for an uncommon bird, two and a half times for a rare one, four times for the rarest of all. Spend the first minute looking, though, not reaching for the camera. I want the notes, but I want you to have seen it first.",
 	}
 }

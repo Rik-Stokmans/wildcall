@@ -128,7 +128,7 @@ func buildSkills() []proto.SkillDef {
 			mods:   mods{"settle": 0.35}},
 		{id: "habitat_reading", name: "Habitat Reading", icon: "tree",
 			desc:   "Predict where birds may hide",
-			effect: "Rank 1: sound clues name the habitat the call comes from. Rank 2: they also suggest where the bird is sitting — high in the canopy, low in the shrubs, down in the reeds.",
+			effect: "Focused listening already tells you the habitat a call comes from. Rank 1: clues name the habitat without focusing, and while you focus they suggest where the bird is sitting — high in the canopy, low in the shrubs, down in the reeds. Rank 2: that perch hint comes without focusing too.",
 			mods:   mods{"habitatInfo": 1, "perchHint": 0.5}},
 		{id: "peripheral_awareness", name: "Peripheral Awareness", icon: "search",
 			desc:   "Detect nearby movement",
@@ -178,7 +178,7 @@ func buildSkills() []proto.SkillDef {
 	all = append(all, discipline(DiscKnowledge, [7]skillSpec{
 		{id: "field_experience", name: "Field Experience", icon: "journal",
 			desc:   "Unlock additional journal information",
-			effect: "Each rank unlocks a deeper layer of detail in the journal entries of species you have identified.",
+			effect: "Each rank unlocks a deeper layer of detail in the journal entries of species you have identified. Journal detail 3 (rank 3, or rank 2 with the Forgotten Field Journal) adds each species' discovery difficulty and a description of its nest.",
 			mods:   mods{"journalInfo": 1}},
 		{id: "species_recognition", name: "Species Recognition", icon: "bird",
 			desc:   "Improve visual identification",

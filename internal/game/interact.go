@@ -30,7 +30,7 @@ func (s *Session) msgInteract(d []byte) {
 		s.fail("There is nothing there to use.")
 		return
 	}
-	if !s.havePose || poi.Pos.DistXZ(s.feet) > poi.Radius+interactSlack {
+	if !s.havePose || !s.inReach(poi, poi.Radius+interactSlack) {
 		s.fail("That is too far away.")
 		return
 	}
@@ -61,6 +61,23 @@ func (s *Session) msgInteract(d []byte) {
 	default:
 		s.toast("location", poi.Name, "", 0, "map")
 	}
+}
+
+// elevatedPOI is how far above the ground under it a POI must sit to count as up
+// on a structure (the torn page on the Old Watchtower's platform).
+const elevatedPOI = 2
+
+// inReach reports whether the player can reach a POI: within r metres across the
+// ground, and for a POI raised on a platform within r metres in 3D as well, so it
+// can only be picked up by climbing to it (not from the ground beneath).
+func (s *Session) inReach(poi core.POI, r float32) bool {
+	if poi.Pos.DistXZ(s.feet) > r {
+		return false
+	}
+	if poi.Pos.Y-s.world.HeightAt(poi.Pos.X, poi.Pos.Z) > elevatedPOI {
+		return poi.Pos.Dist(s.feet) <= r
+	}
+	return true
 }
 
 // talk opens a conversation.
@@ -177,7 +194,9 @@ func (s *Session) turnIn(id string) (proto.RewardsMsg, error) {
 	if err != nil {
 		return proto.RewardsMsg{}, err
 	}
+	s.settleLedger()
 	_, items := progress.ApplyReward(s.p, reward)
+	s.ledger(s.p.Credits-s.ledgerCredits, "Quest: "+q.Name)
 	for _, it := range items {
 		if def, ok := progress.Item(it); ok {
 			if def.Kind == progress.KindEquipment && s.p.Equipped[def.Slot] == "" {
@@ -205,6 +224,7 @@ func (s *Session) turnIn(id string) (proto.RewardsMsg, error) {
 	if reward.Badge != "" {
 		r.Journal = append(r.Journal, "Badge earned")
 	}
+	r.Journal = append(r.Journal, rewardUpgradeLines(reward)...)
 	if s.p.Level > lvl0 {
 		r.LevelUp = s.p.Level
 		s.lastLevel = s.p.Level // the Rewards screen announces it
@@ -241,8 +261,9 @@ func (s *Session) openCache(poi core.POI) {
 	s.p.Flags[takenFlag(poi.ID)] = true
 	s.giveItems(items, true)
 	if credits > 0 {
-		got := progress.GrantCredits(s.p, credits)
-		s.toast("credits", "Field Credits", "+"+itoa(got), 0, "credits")
+		if got := s.payModestFind(credits, "Found in "+poi.Name); got > 0 {
+			s.toast("credits", "Field Credits", "+"+itoa(got), 0, "credits")
+		}
 	}
 	if s.addLore(lore) {
 		if def, ok := content.LoreByID(lore); ok {
@@ -280,8 +301,11 @@ func (s *Session) pickUp(poi core.POI) {
 	s.p.Flags[takenFlag(poi.ID)] = true
 	s.changed()
 	if id == "" {
-		got := progress.GrantCredits(s.p, 15)
-		s.toast("credits", poi.Name, "Nothing new, but a few coins: +"+itoa(got), 0, "credits")
+		if got := s.payModestFind(15, "Found at "+poi.Name); got > 0 {
+			s.toast("credits", poi.Name, "Nothing new, but a few coins: +"+itoa(got), 0, "credits")
+		} else {
+			s.toast("info", poi.Name, "Nothing new here.", 0, poi.Kind)
+		}
 		return
 	}
 	s.p.Journal.Collectibles[id] = s.clock.Env().Day
@@ -296,6 +320,9 @@ func (s *Session) pickUp(poi core.POI) {
 			text = "A feather of " + withArticleLower(sp.Name) + "."
 		} else {
 			text = "A feather. Whose? You will know once you have identified its owner."
+		}
+		if l := s.lensFeather(sp, poi); l != "" {
+			text += " " + l
 		}
 	} else {
 		for _, c := range content.Collectibles(nil) {

@@ -163,3 +163,7 @@ func oneOf(v string, set ...string) bool {
 	}
 	return false
 }
+
+// TutorialSpecies is the tutorial's unknown singer (contract §3.5). The session uses
+// it only for narrator pacing; it is never sent to the client.
+const TutorialSpecies = tutorialSpecies

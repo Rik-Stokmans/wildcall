@@ -52,6 +52,7 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 	s.releaseLure(b)
 	b.flags &^= core.FlagHidden
 	b.n, b.sub = 0, 0
+	b.singer = s.territorial(b, p)
 	ph := s.birdPhase(b)
 
 	if p.asleep[ph] {
@@ -65,6 +66,10 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 	}
 	// Nest duty comes before everything else the day offers.
 	if s.nestBout(b, p) {
+		return
+	}
+	if b.mixed != 0 {
+		s.mixedForage(b, p) // on with the mixed flock
 		return
 	}
 	if p.lureEater && b.lureCD <= 0 && s.tryLure(b, p) {
@@ -102,6 +107,9 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 		w[cSong] = 0.6 * a
 		if dawn {
 			w[cSong] *= 2.5
+		}
+		if b.singer {
+			w[cSong] *= breedSong
 		}
 	}
 	w[cRest] = 0.5 + 0.6*(1-a)
@@ -161,6 +169,21 @@ func (s *Sim) boutEnd(b *bird, p *profile) {
 			s.rest(b, p, s.rnd(10, 40))
 		}
 	}
+}
+
+// breedSong: in the breeding season a territory holder that is not sitting on eggs
+// goes to its song post this many times as often.
+const breedSong = 2
+
+// territorial reports whether the bird is holding a breeding territory right now:
+// its species is in its nesting season, it lives alone or in a pair (not in a
+// flock), and it is not the one incubating.
+func (s *Sim) territorial(b *bird, p *profile) bool {
+	np := &p.nest
+	if !np.ok || p.flock || int8(s.season) < np.first || int8(s.season) > np.last {
+		return false
+	}
+	return !s.nestSitter(b)
 }
 
 // subStep is the next small step within the current bout.
@@ -298,7 +321,7 @@ func (s *Sim) feedSpot(b *bird, p *profile) (core.Perch, int, then, bool) {
 		r := s.rnd(0, min32(p.terr, 25))
 		var ok bool
 		pc, ok = s.groundAt(p, b.home.X+r*sin32(a), b.home.Z-r*cos32(a), p.waterBird)
-		if !ok {
+		if !ok || !s.groundFeeder(p, pc.Kind) {
 			return core.Perch{}, -1, thenPerch, false
 		}
 		i = noPerch
@@ -317,6 +340,13 @@ func (s *Sim) feedSpot(b *bird, p *profile) (core.Perch, int, then, bool) {
 		th = thenGlean
 	}
 	return pc, i, th, true
+}
+
+// groundFeeder: whether a species may forage on a standing place of this kind
+// (ground, shore, water) when it has no feeding spot of its own: a cormorant does
+// not peck about on dry land.
+func (s *Sim) groundFeeder(p *profile, k core.PerchKind) bool {
+	return p.feedSpot[k] || p.perchPref[k] > 0 || k == core.PerchGround && (p.feed == feedHunt || p.feed == feedGround)
 }
 
 func (s *Sim) beginGround(b *bird, p *profile) {
@@ -369,8 +399,10 @@ func (s *Sim) beginGlean(b *bird) {
 	b.sub = s.rnd(0.5, 1.5)
 }
 
-// crownHop moves a gleaning bird a little within the crown or bush it is in.
+// crownHop moves a gleaning bird a little within the crown or bush it is in. A
+// low-living bird does not climb out of its height band.
 func (s *Sim) crownHop(b *bird) {
+	p := &s.prof[b.sp]
 	r := float32(1.6)
 	if b.destKind == core.PerchShrub || b.destKind == core.PerchReed {
 		r = 0.8
@@ -384,6 +416,11 @@ func (s *Sim) crownHop(b *bird) {
 	}
 	if y < b.anchor.Y-1.2 {
 		y = b.anchor.Y - 1.2
+	}
+	if p.lowLiving {
+		if top := max32(b.anchor.Y, b.gy+p.hiMax); y > top {
+			y = top
+		}
 	}
 	to := core.Perch{Pos: core.V(x, max32(y, 0), z), Kind: b.destKind, Cover: b.destCover}
 	big := distXZ2(b.pos, to.Pos) > 1
@@ -487,7 +524,7 @@ func (s *Sim) hoverAt(b *bird, p *profile, centre core.Vec3, r float32, water bo
 		d := s.rnd(0, r)
 		x, z := centre.X+d*sin32(a), centre.Z-d*cos32(a)
 		g := s.t.HeightAt(x, z)
-		if water != (g < -0.1) {
+		if water != (g < -0.1) || s.tooClose(b, x, z) {
 			continue
 		}
 		b.mode = mHover
@@ -582,7 +619,7 @@ func (s *Sim) idleFidget(b *bird, p *profile) {
 		// A perch-hunter has spotted something: it drops onto it.
 		a := s.rnd(0, 2*math.Pi)
 		d := s.rnd(8, 25)
-		if pc, ok := s.groundAt(p, b.pos.X+d*sin32(a), b.pos.Z-d*cos32(a), false); ok {
+		if pc, ok := s.groundAt(p, b.pos.X+d*sin32(a), b.pos.Z-d*cos32(a), false); ok && !s.tooClose(b, pc.Pos.X, pc.Pos.Z) {
 			b.n = 0
 			s.dive(b, p, pc, thenEat)
 			s.cue(b)
@@ -665,6 +702,22 @@ func (s *Sim) goPerch(b *bird, p *profile, th then) {
 	s.fly(b, p, b.mem[i], int8(i), core.ActFlying, 1, th)
 }
 
+// comfort2 is the squared distance from the observer inside which the bird does not
+// choose to land (0 with nobody about).
+func (s *Sim) comfort2(b *bird) float32 {
+	if !s.obs.Present {
+		return 0
+	}
+	c := s.prof[b.sp].shy * 0.8 * (1 - habitCut*b.habit)
+	return c * c
+}
+
+// tooClose: (x, z) is inside the bird's comfort distance from the observer.
+func (s *Sim) tooClose(b *bird, x, z float32) bool {
+	c2 := s.comfort2(b)
+	return c2 > 0 && distXZ2(core.V(x, 0, z), s.obs.Pos) < c2
+}
+
 // pickMem picks one of the remembered perches in [lo, lo+n) at random, avoiding
 // skip if there is any other choice. It returns -1 if there are none.
 func (s *Sim) pickMem(b *bird, lo, n, skip int) int {
@@ -672,11 +725,7 @@ func (s *Sim) pickMem(b *bird, lo, n, skip int) int {
 	k := 0
 	// Birds do not choose to land right next to a person: perches inside their
 	// comfort distance are passed over while there is any other choice.
-	var comfort2 float32
-	if s.obs.Present {
-		c := s.prof[b.sp].shy * 0.8 * (1 - habitCut*b.habit)
-		comfort2 = c * c
-	}
+	comfort2 := s.comfort2(b)
 	for pass := 0; pass < 2 && k == 0; pass++ {
 		for i := lo; i < lo+n && i < maxMem; i++ {
 			if b.has(i) && i != skip && (pass == 1 || comfort2 == 0 || distXZ2(b.mem[i].Pos, s.obs.Pos) > comfort2) {
@@ -697,11 +746,18 @@ func (s *Sim) pickMem(b *bird, lo, n, skip int) int {
 // ---------------------------------------------------------------------------
 // Flocks and pairs
 
-// followable: a leader that is calmly going about its day.
+// followable: a leader that is calmly going about its day somewhere a follower can
+// sit too (not hovering over prey, hawking insects or stooping).
 func followable(l *bird) bool {
 	switch l.mode {
-	case mAway, mLeave, mHide, mAlert, mNest, mBathe:
+	case mAway, mLeave, mHide, mAlert, mNest, mBathe, mPass, mHover, mHawk:
 		return false
+	}
+	if l.moving {
+		switch l.then {
+		case thenHover, thenHawk, thenEat:
+			return false
+		}
 	}
 	return !(l.moving && l.act == core.ActFleeing)
 }
@@ -803,17 +859,26 @@ func (s *Sim) spotNear(b *bird, p *profile, target core.Vec3, kind core.PerchKin
 	default:
 		// Another perch of the same kind close by, if the cell knows one.
 		if b.cell != nil {
+			// At about the leader's height: a flock moves through one layer of the
+			// wood. Another kind it likes will do if the leader's is not one of them.
+			liked := p.perchPref[kind] > 0
+			c := b.cell
 			best, bestD := -1, float32(12*12)
-			for i, pc := range b.cell.perches {
-				if pc.Kind != kind {
+			for i, pc := range c.perches {
+				if pc.Kind != kind && (liked || p.perchFit(pc.Kind, c.perchH[i]) < suitFit) {
 					continue
 				}
-				if d := distXZ2(pc.Pos, core.V(x, 0, z)); d < bestD {
+				d := distXZ2(pc.Pos, core.V(x, 0, z))
+				if d >= bestD {
+					continue
+				}
+				dy := pc.Pos.Y - target.Y
+				if d += dy * dy; d < bestD {
 					best, bestD = i, d
 				}
 			}
 			if best >= 0 {
-				return b.cell.perches[best]
+				return c.perches[best]
 			}
 		}
 	}
@@ -838,11 +903,13 @@ func (s *Sim) place(b *bird) {
 	p := &s.prof[b.sp]
 	s.releaseLure(b)
 	b.moving = false
-	b.fear, b.singT, b.quiet, b.away = 0, 0, 0, 0
+	b.fear, b.singT, b.quiet, b.away, b.dive = 0, 0, 0, 0, 0
+	b.fled = false
 	b.flags &^= core.FlagSinging | core.FlagWary | core.FlagHidden
 	b.n, b.timer, b.sub = 0, 0, 0
 	b.callCD = s.rnd(0, 20)
 
+	b.singer = s.territorial(b, p)
 	h := hash2(b.seed, uint64(int64(s.abs*4)))
 	if s.placeAtNest(b, p, h) {
 		return

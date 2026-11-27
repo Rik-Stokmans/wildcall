@@ -124,6 +124,11 @@ const (
 	// Stage = old|building|eggs|chicks (optional); Subject = the nest id (cooldown);
 	// Known = the owner species ONLY if the player has identified it.
 	NestFound Kind = "nest"
+	// TutorialBeat: a beat of the first quest. Item = singer_heard (the tutorial's
+	// unknown singer heard for the first time) | singer_raised (binoculars first
+	// raised on that singer) | first_stars (the first star-rated photograph ever).
+	// The lines never name the bird.
+	TutorialBeat Kind = "tutorial"
 )
 
 // aboutBird reports whether the event concerns one particular bird.

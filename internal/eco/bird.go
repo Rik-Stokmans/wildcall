@@ -25,6 +25,7 @@ const (
 	mHide               // tucked into cover until the danger has passed
 	mAway               // flushed: flying to, or waiting at, a refuge before returning
 	mLeave              // flying out of the world (migration, a rare bird withdrawing)
+	mPass               // a raptor sweeping low past the observer (predator.go)
 	modeCount
 )
 
@@ -102,12 +103,15 @@ type bird struct {
 	dest   int8  // remembered perch the current move ends on, or noPerch
 	n      int8  // steps left in the current bout (trips, hover stations, flight legs)
 	stage  uint8 // nest bouts: what the trips are for (nsGather / nsFood / nsSit / nsVisit)
+	singer bool  // holding a breeding territory (refreshed at every bout end): sings more
 
 	destKind core.PerchKind
 	sp       int16
 	res      int16 // index into cell.roster
 	memOK    uint16
 	lure     uint32 // id of the lure it is visiting (0 = none)
+	mixed    uint32 // id of the mixed feeding flock it travels with (0 = none)
+	passSeq  uint32 // the last predator pass it reacted to
 	id       uint32
 
 	pos   core.Vec3
@@ -129,6 +133,8 @@ type bird struct {
 	lureCD float32
 	habit  float32 // 0..1 habituation to the observer
 	jitter float32 // personal offset (hours) on when it wakes and roosts
+	dive   float32 // seconds until it dives for cover from a passing raptor (0 = not pending)
+	fled   bool    // flushed by the observer and not yet back home (Settled)
 	gy     float32 // ground height under the bout's anchor
 
 	// The move in progress: from -> to along an arc, with a per-style wobble.
@@ -207,6 +213,20 @@ func (s *Sim) stepBird(b *bird, idx int32, dt float32) {
 	if b.lureCD > 0 {
 		b.lureCD -= dt
 	}
+	if b.mode == mPass {
+		// The pass itself is flown by predTick; the raptor may call as it goes.
+		s.voiceTick(b, p, dt)
+		s.gridUpdate(b, idx)
+		return
+	}
+	if b.dive > 0 {
+		if b.dive -= dt; b.dive <= 0 {
+			b.dive = 0
+			if b.mode == mAlert || b.moving && b.mv == mvFly && b.mode != mAway && b.mode != mLeave {
+				s.predHide(b, p)
+			}
+		}
+	}
 
 	if b.mode != mLeave {
 		s.disturb(b, p, dt)
@@ -246,11 +266,21 @@ func (s *Sim) stepBird(b *bird, idx int32, dt float32) {
 		if !b.moving && timed[b.mode] && b.timer <= 0 {
 			s.boutEnd(b, p)
 		}
-		if !b.moving && p.flock {
-			s.keepUp(b, p, dt)
+		if !b.moving {
+			if b.mixed != 0 {
+				s.mixedKeepUp(b, p, dt)
+			} else if p.flock {
+				s.keepUp(b, p, dt)
+			}
 		}
 	}
 
+	s.voiceTick(b, p, dt)
+	s.gridUpdate(b, idx)
+}
+
+// voiceTick may start a vocal bout.
+func (s *Sim) voiceTick(b *bird, p *profile, dt float32) {
 	if b.callCD > 0 {
 		b.callCD -= dt
 	} else if b.quiet <= 0 && b.fear < fearWary {
@@ -258,6 +288,4 @@ func (s *Sim) stepBird(b *bird, idx int32, dt float32) {
 			s.sing(b, p)
 		}
 	}
-
-	s.gridUpdate(b, idx)
 }

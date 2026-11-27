@@ -125,7 +125,7 @@ func randomEvent(r *rand.Rand, cat []core.Species) Event {
 	kinds := []Kind{CallHeard, FocusBegin, Watching, NewEvidence, Behaviour, Flushed, Settled, Identified,
 		Photographed, Recorded, PlaceFound, RegionEntered, RegionLocked, CabinReturn, Rested, RareFind,
 		RankReached, NewAdventure, Resumed, Foraged, Cooked, Ate, PackFull, Collected, Climbed, Waded,
-		Sheltered, SatDown, EmptyView, OutOfFilm, NestFound, Kind("bogus")}
+		Sheltered, SatDown, EmptyView, OutOfFilm, NestFound, TutorialBeat, Kind("bogus")}
 	junk := []string{"", "Something odd", "the Robin's perch", "12 metres", "Wren", "🙂"}
 	or := func(vals []string) string {
 		if r.IntN(4) == 0 {

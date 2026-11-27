@@ -36,6 +36,7 @@ const (
 	nestCalmRatio    = 1.3  // the alarm ends once the observer is this many alarm radii away
 	nestScoldRate    = 0.12 // alarm calls per second from an adult kept off its nest
 	nestTripTimer    = 600  // seconds: a bout of trips ends when its trips are done, not on a timer
+	loneMaleShare    = 0.7  // share of birds nesting alone that are the (non-incubating) male: the one that shows
 )
 
 // Trip kinds of a nest bout (bird.stage).
@@ -153,12 +154,19 @@ type nestRec struct {
 	yaw   float32
 	off   float32 // this nest's offset in the season's schedule
 	alarm bool    // the observer is too close: the adults keep away
+	// male: a bird nesting alone (its mate is not simulated) is the male of the pair.
+	// He does not incubate - his unseen mate does - and keeps singing on territory.
+	male bool
 }
 
-// sitter is the roster index of the adult that incubates.
+// sitter is the roster index of the adult that incubates, or -1 if that is the
+// unsimulated mate of a lone male.
 func (n *nestRec) sitter() int16 {
 	if n.mates[1] >= 0 {
 		return n.mates[1]
+	}
+	if n.male {
+		return -1
 	}
 	return n.mates[0]
 }
@@ -255,6 +263,7 @@ func (s *Sim) buildNests(c *cell, year int32) {
 			size:  np.size,
 			yaw:   unit(hash2(h, 0x594157)) * 2 * math.Pi,
 			off:   (unit(hash2(h, 0x4F4646)) - 0.5) * stageJitter,
+			male:  mate < 0 && unit(hash2(h, 0x4D414C45)) < loneMaleShare,
 		}
 		n.pos = pc.Pos
 		g := max32(s.t.HeightAt(pc.Pos.X, pc.Pos.Z), 0)
@@ -387,6 +396,17 @@ func (s *Sim) nestBlocked(b *bird) bool {
 	}
 	n := s.nestOf(b)
 	return n != nil && n.alarm
+}
+
+// nestSitter reports whether the bird is the incubating one of its pair (the
+// female): it is sitting on the eggs or chicks right now, or it is the pair's
+// designated sitter. The male - the mate of a sitter, or a lone male - is not.
+func (s *Sim) nestSitter(b *bird) bool {
+	if b.mode == mNest && b.stage == nsSit {
+		return true
+	}
+	n := s.nestOf(b)
+	return n != nil && n.sitter() == b.res
 }
 
 // onNest reports whether the bird is sitting on its nest right now.
@@ -677,6 +697,7 @@ func (s *Sim) nestFlee(b *bird, p *profile, n *nestRec) {
 	b.mode = mAway
 	b.away = s.rnd(20, 45)
 	b.stage = 0
+	b.fled = s.obs.Present
 	s.fly(b, p, refuge, noPerch, core.ActFlying, 1.2, thenRefuge)
 }
 

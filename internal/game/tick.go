@@ -49,6 +49,7 @@ func (s *Session) Tick(dt float32) {
 	for i := range s.evBuf {
 		s.onEvent(ctx, s.evBuf[i], eye)
 	}
+	s.onSettled(eye)
 	s.board.Advance(dt)
 	s.calls.Advance(dt)
 
@@ -142,10 +143,25 @@ func (s *Session) observer() core.Observer {
 		noise = s.pose.Noise
 	}
 	return core.Observer{
-		Present: true, Pos: s.eye(), Vel: s.vel, Speed: s.pose.Speed,
+		Present: true, Pos: s.eye(), Vel: s.vel, Speed: s.pose.Speed, Move: moveMode(s.pose),
 		Crouch: s.pose.Crouch, Sitting: s.pose.Sit, Still: s.still, Noise: noise,
 		Stealth: st.Stealth, CrouchBonus: st.CrouchBonus, Settle: settle, Familiarity: fam,
 	}
+}
+
+// moveMode is the player's own movement mode for the ecosystem's disturbance model
+// (core.Observer.Move): the client's declared mode, so a sprint slowed by rough
+// ground is still a sprint. Sitting is still; unknown values fall back to "" (the
+// ecosystem then infers the mode from the speed).
+func moveMode(p proto.Pose) string {
+	if p.Sit {
+		return "still"
+	}
+	switch p.Move {
+	case "still", "crouch", "walk", "run", "sprint":
+		return p.Move
+	}
+	return ""
 }
 
 // onEvent turns one ecosystem event into perception and messages.
@@ -171,6 +187,10 @@ func (s *Session) onEvent(ctx *field.Context, ev core.EcoEvent, eye core.Vec3) {
 		// but nobody is listening yet: no mysteries, clues or quest progress.
 		if ok && s.havePose {
 			s.onHeard(ctx, h, bird)
+		}
+	case core.EvArrive:
+		if s.havePose {
+			s.onArrival(ev, eye)
 		}
 	case core.EvMove, core.EvFlush:
 		if !s.havePose {
@@ -209,6 +229,9 @@ func (s *Session) onHeard(ctx *field.Context, h field.Heard, bird core.BirdState
 		s.minor = true
 		h.Clue.Mystery = m.ID
 		s.mysteryBird[m.ID] = birdRef{id: bird.ID, flags: bird.Flags}
+	}
+	if !known && sp.ID == content.TutorialSpecies {
+		s.tutorialBeat("singer_heard")
 	}
 	s.heardBirds[h.Bird] = true
 	for _, c := range s.board.Offer(h, s.p.Stats.ClueSlots) {
@@ -255,6 +278,10 @@ func (s *Session) observe(ctx *field.Context, dt float32, birds []core.BirdState
 	}
 	b := res.Bird
 	known := s.identified(sp.ID)
+	s.noteMixedFlock(b, sp)
+	if !known && sp.ID == content.TutorialSpecies && s.pose.Tool == "binoculars" && s.pose.Raised {
+		s.tutorialBeat("singer_raised")
+	}
 	if res.Encounter {
 		if known {
 			s.noteEncounter(s.entry(sp.ID), b.Pos, true)

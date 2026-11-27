@@ -208,6 +208,11 @@ func Validate(speciesIDs, itemIDs, poiIDs, skillIDs []string) []error {
 				bad("%s: requires itself", w)
 			}
 		}
+		for f, n := range q.ReqRep {
+			if !oneOf(f, factions...) || n <= 0 || n > 400 {
+				bad("%s: ReqRep %s=%d", w, f, n)
+			}
+		}
 		if q.ReqRank < 0 || q.ReqRank > 5 {
 			bad("%s: ReqRank %d out of range", w, q.ReqRank)
 		}
@@ -423,6 +428,11 @@ func validateReward(w string, r proto.Reward, items, lore, quests, badges, skill
 				bad("unlock %q: unknown skill", u)
 			}
 		case strings.HasPrefix(u, "feature:"):
+		case strings.HasPrefix(u, "upgrade:"):
+			parts := strings.Split(strings.TrimPrefix(u, "upgrade:"), ":")
+			if len(parts) != 2 || parts[1] == "" || !items[parts[0]] {
+				bad("unlock %q: want upgrade:<known item>:<upgrade id>", u)
+			}
 		default:
 			bad("unlock %q has no known prefix", u)
 		}

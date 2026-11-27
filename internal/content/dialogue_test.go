@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
+	"github.com/Rik-Stokmans/wildcall/internal/species"
 )
 
 var npcIDs = []string{NPCMara, NPCFinn, NPCAlder, NPCJune}
@@ -449,6 +450,164 @@ func TestQuestOffersDoNotPutNarrationInTheGiversMouth(t *testing.T) {
 					for _, q := range Quests() {
 						if (q.Story != "" && l == q.Story) || (q.Summary != "" && l == q.Summary) {
 							t.Errorf("%s / %s: %s speaks the narration of %q: %q", name, npc, npc, q.ID, l)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// hubHas reports whether the NPC's main menu lists a choice id.
+func hubHas(npc, id string, p *proto.Profile) bool {
+	hub, _ := Choose(npc, nodeHub, p)
+	for _, c := range hub.Choices {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func withRep(p *proto.Profile, faction string, n int) *proto.Profile {
+	p.Rep = map[string]int{FactionNaturalists: 0, FactionOutfitters: 0, FactionResearch: 0, FactionRangers: 0}
+	p.Rep[faction] = n
+	return p
+}
+
+func TestReputationGatedTopicsOpenAtTheirThreshold(t *testing.T) {
+	for _, npc := range npcIDs {
+		def, _ := NPC(npc)
+		gated, at40 := 0, false
+		for _, tp := range speakers[npc].topics {
+			if tp.minRep == 0 {
+				continue
+			}
+			gated++
+			at40 = at40 || tp.minRep == 40
+			if tp.hidden || tp.title == "" {
+				t.Errorf("%s/%s: a gated topic must be listed when open", npc, tp.id)
+			}
+			// Below the threshold, even with every other faction maxed out.
+			below := withRep(afterTutorial(), def.Faction, tp.minRep-1)
+			for _, f := range factions {
+				if f != def.Faction {
+					below.Rep[f] = 999
+				}
+			}
+			below.Rank = 5
+			if hubHas(npc, tp.id, below) {
+				t.Errorf("%s/%s listed at %d %s reputation (needs %d)", npc, tp.id, tp.minRep-1, def.Faction, tp.minRep)
+			}
+			hub, _ := Choose(npc, nodeHub, below)
+			if n, _ := Choose(npc, tp.id, below); fmt.Sprint(n.Lines) != fmt.Sprint(hub.Lines) {
+				t.Errorf("%s/%s: a locked topic answered by id: %v", npc, tp.id, n.Lines)
+			}
+			// At and above it.
+			for _, rep := range []int{tp.minRep, tp.minRep + 200} {
+				at := withRep(afterTutorial(), def.Faction, rep)
+				if !hubHas(npc, tp.id, at) {
+					t.Errorf("%s/%s missing at %d %s reputation", npc, tp.id, rep, def.Faction)
+				}
+				n, _ := Choose(npc, tp.id, at)
+				if len(n.Lines) == 0 || fmt.Sprint(n.Lines) == fmt.Sprint(hub.Lines) {
+					t.Errorf("%s/%s at %d: %v", npc, tp.id, rep, n.Lines)
+				}
+			}
+		}
+		if gated < 1 || gated > 2 || !at40 {
+			t.Errorf("%s has %d reputation-gated topics (want 1-2, one at 40)", npc, gated)
+		}
+	}
+}
+
+func TestTopicRankGate(t *testing.T) {
+	c, _ := newCtx(NPCAlder, withRep(afterTutorial(), FactionResearch, 50))
+	c.p.Rank = 2
+	for _, tc := range []struct {
+		tp   topic
+		want bool
+	}{
+		{topic{}, true},
+		{topic{minRank: 2}, true},
+		{topic{minRank: 3}, false},
+		{topic{minRep: 50, minRank: 2}, true},
+		{topic{minRep: 51, minRank: 2}, false},
+		{topic{minRep: 50, minRank: 3}, false},
+	} {
+		if got := c.unlocked(&tc.tp); got != tc.want {
+			t.Errorf("unlocked(minRep %d, minRank %d) = %v", tc.tp.minRep, tc.tp.minRank, got)
+		}
+	}
+}
+
+func TestFinnQuotesTheDiscountHeGives(t *testing.T) {
+	for rep, want := range map[int]string{40: "5 off every hundred, and it goes up when you reach 60", 60: "10 off every hundred, and it goes up when you reach 120", 130: "top rate already, 15"} {
+		n, _ := Choose(NPCFinn, "f_trade", withRep(afterTutorial(), FactionOutfitters, rep))
+		if !strings.Contains(strings.Join(n.Lines, " "), want) {
+			t.Errorf("Finn at %d outfitters reputation: %v", rep, n.Lines)
+		}
+	}
+}
+
+func TestMarasGreetingFollowsRankAndStanding(t *testing.T) {
+	greet := func(rank, rep int) string {
+		p := withRep(afterTutorial(), FactionNaturalists, rep)
+		p.Rank = rank
+		n, _ := Choose(NPCMara, nodeHub, p)
+		return strings.Join(n.Lines, " ")
+	}
+	bands := []int{0, 19, 20, 59, 60, 149, 150, 400}
+	seen := map[string]string{}
+	for rank := 1; rank <= 5; rank++ {
+		for i := 0; i < len(bands); i += 2 {
+			lo, hi := greet(rank, bands[i]), greet(rank, bands[i+1])
+			if lo != hi {
+				t.Errorf("rank %d: reputation %d and %d are one band but greet differently", rank, bands[i], bands[i+1])
+			}
+			key := fmt.Sprintf("rank %d rep %d", rank, bands[i])
+			if prev, dup := seen[lo]; dup {
+				t.Errorf("%s greets exactly like %s: %q", key, prev, lo)
+			}
+			seen[lo] = key
+		}
+	}
+}
+
+// Discovery must be earned: outside a quest's own card, nothing an NPC says names a
+// species the player has not identified, by name or by id.
+func TestDialogueNeverNamesUnidentifiedSpecies(t *testing.T) {
+	cat := species.All()
+	profiles := profileVariants()
+	for i, half := range []int{0, len(cat) / 2} {
+		p := afterTutorial()
+		p.Rank = 3 + i
+		p.Rep = map[string]int{FactionNaturalists: 400, FactionOutfitters: 400, FactionResearch: 400, FactionRangers: 400}
+		p.Inventory = []proto.ItemStack{{Item: "forgotten_journal", Qty: 1}}
+		setStatus(p, StatusTurnedIn, "old_watchtower", "harrows_places")
+		for _, sp := range cat[:half] {
+			speciesEntry(p, sp.ID, proto.LevelIdentified, "sight")
+		}
+		profiles[fmt.Sprintf("high standing, %d identified", half)] = p
+	}
+	for name, p := range profiles {
+		known := func(id string) bool {
+			e := p.Journal.Species[id]
+			return e != nil && e.Level >= proto.LevelIdentified
+		}
+		for _, npc := range npcIDs {
+			for _, n := range allNodes(t, npc, p) {
+				if n.Quest != "" {
+					continue // a quest's offer and hand-in speak of that quest's own bird
+				}
+				for _, l := range n.Lines {
+					low := strings.ToLower(l)
+					for _, sp := range cat {
+						if known(sp.ID) {
+							continue
+						}
+						if strings.Contains(low, strings.ToLower(sp.Name)) || strings.Contains(low, sp.ID) || strings.Contains(low, strings.ReplaceAll(sp.ID, "_", " ")) {
+							t.Errorf("%s / %s names %s: %q", name, npc, sp.Name, l)
 						}
 					}
 				}

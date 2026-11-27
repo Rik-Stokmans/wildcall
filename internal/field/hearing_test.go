@@ -228,13 +228,22 @@ func TestStatGatedClueFields(t *testing.T) {
 		t.Errorf("DistAcc <= 0.1 must not give a band: %v-%v", cl.DistMin, cl.DistMax)
 	}
 
-	// Focus temporarily grants pitch and pattern, nothing else.
+	// Focus temporarily grants pitch, pattern and habitat, but no perch hint.
 	fp := standing()
 	fp.Focus = true
 	fc := mustHear(t, c, b, fp).Clue
-	if fc.Pitch != "High" || fc.Pattern != "Melodic" || fc.Habitat != "" || fc.Perch != "" {
+	if fc.Pitch != "High" || fc.Pattern != "Melodic" || fc.Habitat != "Woodland canopy" || fc.Perch != "" {
 		t.Errorf("focus clue: %+v", fc)
 	}
+	// Habitat Reading rank 1: habitat without focus; the perch hint while focusing.
+	c.Stats.HabitatInfo = 1
+	if cl := mustHear(t, c, b, standing()).Clue; cl.Habitat != "Woodland canopy" || cl.Perch != "" {
+		t.Errorf("habitat reading 1, unfocused: %+v", cl)
+	}
+	if cl := mustHear(t, c, b, fp).Clue; cl.Perch == "" {
+		t.Errorf("habitat reading 1, focused: no perch hint: %+v", cl)
+	}
+	c.Stats.HabitatInfo = 0
 
 	c.Stats.PitchInfo, c.Stats.PatternInfo, c.Stats.HabitatInfo, c.Stats.PerchHint, c.Stats.Instinct = 1, 1, 1, 1, 1
 	c.Stats.DirAccuracy, c.Stats.DistAcc = 0.7, 0.9

@@ -248,3 +248,39 @@ func SubmissionCredits(stars int) int {
 func AwardCredits(p *proto.Profile, source, key string, amount int) int {
 	return GrantCredits(p, logIncrement(p, source, key, amount))
 }
+
+// ---------------------------------------------------------------------------
+// Credit ledger (spec screen 13)
+
+// LedgerCap is how many entries Profile.Ledger keeps (newest last).
+const LedgerCap = 40
+
+// AddLedger appends one Field Credit movement to the profile's ledger: amount is
+// positive for credits earned and negative for credits spent, reason is
+// player-facing ("Quest: The Unseen Singer", "Bought Explorer Binoculars"). A zero
+// amount is ignored. The oldest entries fall off beyond LedgerCap.
+func AddLedger(p *proto.Profile, day, amount int, reason string) {
+	if p == nil || amount == 0 {
+		return
+	}
+	if reason == "" {
+		reason = "Field Credits"
+	}
+	p.Ledger = append(p.Ledger, proto.LedgerEntry{Day: max(day, 1), Amount: amount, Reason: reason})
+	if n := len(p.Ledger); n > LedgerCap {
+		p.Ledger = append([]proto.LedgerEntry(nil), p.Ledger[n-LedgerCap:]...)
+	}
+}
+
+// MigrateLedger gives a profile saved before the ledger existed an opening entry:
+// its balance, brought forward on the given day. Profiles that already have a
+// ledger (or no credits) are left alone.
+func MigrateLedger(p *proto.Profile, day int) {
+	if p == nil || len(p.Ledger) > 0 || p.Credits == 0 {
+		if p != nil && p.Ledger == nil {
+			p.Ledger = []proto.LedgerEntry{}
+		}
+		return
+	}
+	AddLedger(p, day, p.Credits, "Balance brought forward")
+}

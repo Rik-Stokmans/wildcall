@@ -116,11 +116,14 @@ func (s *Sim) disturb(b *bird, p *profile, dt float32) {
 func (s *Sim) react(b *bird, p *profile, d, fd float32) {
 	if b.fear >= fearWary {
 		b.flags |= core.FlagWary
-	} else if b.fear < fearWary*0.7 {
+	} else if b.fear < fearWary*0.7 && b.flags&core.FlagWary != 0 {
 		b.flags &^= core.FlagWary
+		if s.obs.Present && !s.oMoving && b.mode != mAway {
+			s.noteSettled(b) // calm again while the observer kept still
+		}
 	}
 	switch b.mode {
-	case mLeave:
+	case mLeave, mPass:
 		return
 	case mAway:
 		// Already flushed. Only a renewed close approach to its refuge moves it on.
@@ -190,22 +193,34 @@ func (s *Sim) calmCheck(b *bird, p *profile, dt float32) {
 	}
 }
 
-// hide ducks into the nearest deep cover. It returns false if there is none close.
+// hide ducks into the nearest deep cover the species uses: one of its remembered
+// perches, or failing that a covered perch of a kind (and height) it likes. It
+// returns false if there is none close.
 func (s *Sim) hide(b *bird, p *profile) bool {
 	found, dest, bestD := false, int8(noPerch), float32(9*9)
 	var pc core.Perch
 	for i := 0; i < maxMem; i++ {
-		if b.has(i) && b.mem[i].Cover >= 0.5 {
+		if b.has(i) && b.mem[i].Cover >= 0.5 && p.perchPref[b.mem[i].Kind] > 0 {
 			if d := distXZ2(b.mem[i].Pos, b.pos); d < bestD {
 				found, dest, bestD, pc = true, int8(i), d, b.mem[i]
 			}
 		}
 	}
 	if !found && b.cell != nil {
-		for _, c := range b.cell.perches {
-			if c.Cover >= 0.5 && p.perchPref[c.Kind] > 0 {
-				if d := distXZ2(c.Pos, b.pos); d < bestD {
-					found, dest, bestD, pc = true, noPerch, d, c
+		c := b.cell
+		bestC := float32(9 * 9)
+		for i, cp := range c.perches {
+			if cp.Cover < 0.5 {
+				continue
+			}
+			fit := p.perchFit(cp.Kind, c.perchH[i])
+			if fit < suitFit*0.5 {
+				continue
+			}
+			// Nearest wins, but a perch that suits it better may be a little further.
+			if d := distXZ2(cp.Pos, b.pos); d < bestD {
+				if cost := d / fit; cost < bestC {
+					found, dest, bestC, pc = true, noPerch, cost, cp
 				}
 			}
 		}
@@ -231,6 +246,7 @@ func (s *Sim) flee(b *bird, p *profile) {
 	b.quiet = max32(b.quiet, s.rnd(40, 90))
 	b.habit *= 0.6
 	b.fear = max32(b.fear, fearFlee)
+	b.fled = s.obs.Present
 
 	dx, dz := b.pos.X-s.obs.Pos.X, b.pos.Z-s.obs.Pos.Z
 	if !s.obs.Present || dx*dx+dz*dz < 1e-4 {
@@ -270,21 +286,31 @@ func (s *Sim) flee(b *bird, p *profile) {
 }
 
 // refuge finds somewhere to sit out a disturbance near (x, z): a perch the species
-// likes, preferably in cover, or failing that open ground.
+// likes, at a height that suits it, preferably in cover, or failing that open ground.
 func (s *Sim) refuge(p *profile, x, z float32) core.Perch {
 	s.scratch = s.t.PerchesNear(x, z, 20, s.scratch[:0])
 	best, bestW := -1, float32(0)
+	limited := p.hiMax < noHeightLimit
 	for i, c := range s.scratch {
 		w := p.perchPref[c.Kind] * (0.5 + c.Cover)
-		if w > bestW {
+		if w <= bestW {
+			continue
+		}
+		if limited {
+			w *= p.heightFit(c.Pos.Y - max32(s.t.HeightAt(c.Pos.X, c.Pos.Z), 0))
+		}
+		if w > bestW && s.perchValid(c) {
 			best, bestW = i, w
 		}
 	}
-	if best >= 0 && s.perchValid(s.scratch[best]) {
+	if best >= 0 && (!p.lowLiving || bestW >= 0.5*suitFit) {
 		return s.scratch[best]
 	}
 	if pc, ok := s.groundAt(p, x, z, true); ok {
 		return pc
+	}
+	if best >= 0 {
+		return s.scratch[best]
 	}
 	// Over deep water with nowhere to land: circle back over land at a safe height.
 	return core.Perch{Pos: core.V(x, max32(s.t.HeightAt(x, z), 0)+20, z)}
@@ -315,3 +341,26 @@ func (s *Sim) comeHome(b *bird, p *profile) {
 }
 
 func sq(v float32) float32 { return v * v }
+
+// settleR: Settled reports birds this close to the observer.
+const settleR = 60
+
+// noteSettled records that the bird has visibly settled this Step (Settled).
+func (s *Sim) noteSettled(b *bird) {
+	if s.silent || !s.obs.Present || distXZ2(b.pos, s.obs.Pos) > settleR*settleR {
+		return
+	}
+	for _, id := range s.settled {
+		if id == b.id {
+			return
+		}
+	}
+	s.settled = append(s.settled, b.id)
+}
+
+// Settled returns the ids of the birds within about 60 m of the observer that,
+// during the last Step, visibly settled thanks to the player's patience: a bird that
+// had fled from the observer landed back in its territory, or a wary or alert bird
+// calmed down while the observer stood still or sat. It is empty most steps. The
+// slice is reused (and overwritten) by the next Step: copy what you keep.
+func (s *Sim) Settled() []uint32 { return s.settled }

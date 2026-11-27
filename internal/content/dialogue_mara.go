@@ -38,6 +38,9 @@ func maraSpeaker() *speaker {
 			{id: "t_forage", title: "Is it all right to eat what grows out here?", lines: maraForage, follow: maraForageFollow},
 			{id: "t_kettle", title: "What do I do with the kettle?", lines: maraKettle},
 			{id: "t_elder", title: "What do I do with elderberries?", lines: maraElder, acts: teachRecipe("elderberry_syrup")},
+			// Stories the naturalists' standing unlocks (spec §16.2).
+			{id: "m_edith", title: "Tell me about Edith Harrow.", lines: maraEdith, minRep: 40},
+			{id: "m_margins", title: "What did Edith write in her margins?", lines: maraMargins, minRep: 100},
 			// The rest of the tutorial chain: reachable only through t_move.
 			{id: "t_welcome", hidden: true, lines: tutWelcome, follow: tutFollow("t_move", "Go on, then.")},
 			{id: "t_listen", hidden: true, lines: tutListen, follow: tutFollow("t_bino", "And the binoculars?"), acts: setFlags("tutorial:listen")},
@@ -134,6 +137,7 @@ func maraHub(c *dctx) []string {
 	default:
 		l = append(l, fmt.Sprintf("%s. I stopped counting at thirty, because it began to feel like boasting.", capitalFirst(speciesWord(f.species))))
 	}
+	l = append(l, maraStanding(c.rep()))
 	if f.rare != nil {
 		l = append(l, fmt.Sprintf("And word reaches even me: \"%s\". I would have given a week's tea to have seen that.", f.rare.Title))
 	}
@@ -302,4 +306,50 @@ func maraElder(*dctx) []string {
 		"Elder. The flowers in spring and the berries in autumn. Flowers go into a cordial, which is easy. The berries, now: never raw. Raw elderberries will give you a very bad afternoon. Cooked slowly with honey, they make the best syrup there is, and I will show you how.",
 		"Simmer them gently until they burst, strain through a cloth, and add honey. I have written it into your recipes. Take the stalks off first, and leave a fair share on the bush for the birds.",
 	}
+}
+
+// maraStanding is Mara's remark on the player's standing with the naturalists. The
+// bands are <20, 20-59, 60-149 and 150+.
+func maraStanding(rep int) string {
+	switch {
+	case rep < 20:
+		return "The naturalists' circle does not know your name yet. It will: every species you document goes into the record, and somebody always reads the record."
+	case rep < 60:
+		return "Your name has started turning up in the circle's notebooks. Mostly spelled correctly."
+	case rep < 150:
+		return "The circle speaks of you the way we speak of good weather: with approval, and a little suspicion that it cannot last."
+	default:
+		return "There is not a naturalist in the valley who has not heard your name. Edith would have pretended not to be impressed. So shall I."
+	}
+}
+
+// maraEdith is Mara's memory of the woman who taught her (40 naturalists reputation).
+func maraEdith(c *dctx) []string {
+	l := []string{
+		"Edith. Well. I was nine or ten when I first climbed her tower, uninvited, and she did not send me down. She gave me a cup of tea and told me to be quiet for an hour. I have been doing it, on and off, ever since.",
+		"She kept two books: the keeper's log for the sky, and her own for the birds. Thirty years of it, and she never published a word. A bird written down by someone who had not seen it was a rumour, she said, and she would not add to the rumours.",
+		"She taught the way I teach you, which is to say infuriatingly. I would describe a bird, and she would ask what it was doing, and where, and at what hour, until I had answered my own question. You may blame her for me.",
+	}
+	if c.owns("forgotten_journal") || c.turnedIn("old_watchtower") {
+		l = append(l, "And you found her papers at the tower. I am glad it was you. She would have looked at you over her spectacles for a long while, and then put the kettle on.")
+	} else {
+		l = append(l, "Her own book went missing when she left the tower. June has her suspicions about where. So, if I am honest, do I.")
+	}
+	return l
+}
+
+// maraMargins explains the Forgotten Field Journal's margin notes (100 naturalists
+// reputation): the client shows one only for a species the player has identified, while
+// the journal is in the player's possession.
+func maraMargins(c *dctx) []string {
+	l := []string{
+		"She wrote in the margins of everything: where, when, and something faintly rude about the weather, beside every bird she knew. Short notes. She said a long note was a sign you had not been paying attention at the time.",
+	}
+	if c.owns("forgotten_journal") {
+		l = append(l, "Keep her journal with you and those notes open up beside your own pages, but only for birds you have named yourself. A note on a bird you have never met would just be another rumour, and you know how she felt about those.")
+	} else {
+		l = append(l, "If her journal ever turns up, keep it with you. Her notes will sit beside the birds you have already named, and keep quiet about the rest. She was very firm about not spoiling things.")
+	}
+	l = append(l, "The ones from beyond the valley are her sister's, copied out of letters. Edith never went further than Amberwood. She always meant to. Read them slowly; she wrote slowly.")
+	return l
 }

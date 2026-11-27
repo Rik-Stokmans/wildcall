@@ -60,6 +60,16 @@ type Sim struct {
 	scratch  []core.Perch
 	nestUsed []int32 // scratch: perches taken by nests while a cell's nests are built
 
+	// Ecological events (mixed.go, predator.go) and the narrator's settling signal.
+	mixed    mixedFlock
+	mixedSeq uint32
+	mixedCD  float32 // seconds before the next mixed flock may form (-1 = not armed)
+	spCount  []uint8 // scratch: birds per species
+	settled  []uint32
+	pass     predPass
+	passSeq  uint32
+	passCD   float32 // seconds before the next predator pass may start (-1 = not armed)
+
 	lures   []lure
 	lureSeq uint32
 	dbgSeq  uint32
@@ -107,6 +117,10 @@ func New(t core.Terrain, species []core.Species, seed int64) *Sim {
 		byID:     make(map[uint32]int32, 1024),
 		cells:    make(map[cellKey]*cell, 128),
 		rate:     make([]float32, len(species)),
+		spCount:  make([]uint8, len(species)),
+		settled:  make([]uint32, 0, 16),
+		mixedCD:  -1,
+		passCD:   -1,
 		events:   make([]core.EcoEvent, 0, 256),
 		scratch:  make([]core.Perch, 0, 1024),
 		birds:    make([]bird, 0, 768),
@@ -134,6 +148,7 @@ var homeCentre = core.Vec3{}
 // occurred. The returned slice is reused by the next Step: copy what you keep.
 func (s *Sim) Step(dt float32, env core.Env, obs core.Observer) []core.EcoEvent {
 	s.events = s.events[:0]
+	s.settled = s.settled[:0]
 	if !(dt > 0) {
 		return s.events
 	}
@@ -164,6 +179,7 @@ func (s *Sim) Step(dt float32, env core.Env, obs core.Observer) []core.EcoEvent 
 	}
 	s.tickLures(dt)
 	s.nestWatch(dt)
+	s.mixedTick(dt)
 
 	far2 := float32(farRadius * farRadius)
 	sub := s.tick % farEvery
@@ -183,6 +199,9 @@ func (s *Sim) Step(dt float32, env core.Env, obs core.Observer) []core.EcoEvent 
 		}
 		s.stepBird(b, int32(i), dt)
 	}
+	// The raptor's pass after the birds have moved: the alarm calls it sets off are
+	// still sounding at the end of this Step.
+	s.predTick(dt)
 	// Arrivals and departures after the birds have moved, so an EvArrive reports
 	// where the newcomer really is at the end of this Step.
 	s.serviceCells(2)
@@ -256,6 +275,11 @@ func (s *Sim) FastForward(hours float32, env core.Env) {
 		return // nothing lives yet; the first Step populates for this env
 	}
 	s.silent = true
+	s.mixed, s.mixedCD = mixedFlock{}, -1
+	if s.pass.id != 0 {
+		s.pass = predPass{}
+		s.passCD = s.rnd(passGapMin, passGapMax)
+	}
 	for i := range s.lures {
 		s.lures[i].ttl -= hours * 3600
 	}
@@ -270,7 +294,8 @@ func (s *Sim) FastForward(hours float32, env core.Env) {
 			continue
 		}
 		b.fear, b.quiet, b.away, b.singT, b.callCD, b.lure, b.lureCD = 0, 0, 0, 0, 0, 0, 0
-		if b.mode == mLeave || b.mode == mAway {
+		b.mixed, b.dive, b.fled = 0, 0, false
+		if b.mode == mLeave || b.mode == mAway || b.mode == mPass {
 			b.mode = mIdle // place() decides where it is now
 		}
 		b.habit *= habitFade
@@ -403,10 +428,10 @@ func (s *Sim) adoptEnv(e core.Env) {
 
 	// Song bouts per second for each species at this hour and weather, before the
 	// per-bird factors (what it is doing, whether it has been disturbed).
-	boost := float32(1)
+	boost, pause := float32(1), float32(pauseMean)
 	switch s.phase {
 	case core.PhaseDawn:
-		boost = 2.2 // the dawn chorus
+		boost, pause = 2.2, pauseMean*0.5 // the dawn chorus
 	case core.PhaseEvening:
 		boost = 1.2
 	}
@@ -415,6 +440,14 @@ func (s *Sim) adoptEnv(e core.Env) {
 		v := p.boutRate / 60 * p.activity[s.phase] * boost * (1 - 0.8*e.Rain)
 		if !p.windProof {
 			v *= 1 - 0.7*clamp((e.Wind-0.3)/0.7, 0, 1)
+		}
+		// A bird cannot start a bout while it is still singing the last one or
+		// pausing after it. Compensate for that dead time so the species really
+		// delivers Behavior.Vocal phrases a minute at its peak.
+		if x := v * (p.boutDur + pause); x < 0.75 {
+			v /= 1 - x
+		} else {
+			v *= 4
 		}
 		s.rate[i] = max32(v, 0)
 	}
@@ -448,6 +481,51 @@ const (
 	approachTangential = 0.8
 )
 
+// moveFactor is the flush-distance factor for how the observer moves. move is
+// core.Observer.Move: when the client names its movement mode that is used as is (a
+// sprint slowed by rough ground is still a sprint); when it is empty or unknown the
+// mode is inferred from the speed sp.
+func moveFactor(move string, still, crouch bool, sp float32) float32 {
+	if still {
+		return moveStill
+	}
+	switch move {
+	case "crouch":
+		return moveCrouch
+	case "walk":
+		return moveWalk
+	case "run":
+		return moveRun
+	case "sprint":
+		return moveSprint
+	}
+	switch {
+	case sp > 5.4:
+		return moveSprint
+	case sp > 3.2:
+		return moveRun
+	case crouch:
+		return moveCrouch
+	}
+	return moveWalk
+}
+
+// observerStill reports whether the observer counts as standing (or sitting) still:
+// sitting always does; otherwise the named movement mode decides, or failing that
+// the speed.
+func observerStill(o core.Observer, sp float32) bool {
+	if o.Sitting {
+		return true
+	}
+	switch o.Move {
+	case "still":
+		return true
+	case "crouch", "walk", "run", "sprint":
+		return false
+	}
+	return sp < 0.35
+}
+
 func (s *Sim) setObserver(o core.Observer) {
 	s.obs = o
 	if !o.Present {
@@ -471,21 +549,11 @@ func (s *Sim) setObserver(o core.Observer) {
 	if hs := float32(math.Hypot(float64(o.Vel.X), float64(o.Vel.Z))); hs > sp {
 		sp = hs
 	}
-	still := o.Sitting || sp < 0.35
-	switch {
-	case still:
-		s.oMove = moveStill
-	case sp > 5.4:
-		s.oMove = moveSprint
-	case sp > 3.2:
-		s.oMove = moveRun
-	case o.Crouch:
-		s.oMove = moveCrouch
-	default:
-		s.oMove = moveWalk
-	}
+	still := observerStill(o, sp)
+	s.oMove = moveFactor(o.Move, still, o.Crouch, sp)
+	crouch := o.Crouch || o.Move == "crouch"
 	s.oPosture = 1
-	if o.Crouch || o.Sitting {
+	if crouch || o.Sitting {
 		s.oPosture = s.obs.CrouchBonus
 	}
 	s.oMoving = !still
@@ -494,7 +562,7 @@ func (s *Sim) setObserver(o core.Observer) {
 		s.oDirX, s.oDirZ = o.Vel.X/hl, o.Vel.Z/hl
 	}
 	// Calm: what lets birds get used to a person (sitting, standing quietly, creeping).
-	s.oCalm = still || (o.Crouch && sp < 1.5)
+	s.oCalm = still || (crouch && sp < 1.5)
 	stillBonus := 1 + min32(o.Still, 30)/6
 	if o.Sitting {
 		stillBonus *= 1.5

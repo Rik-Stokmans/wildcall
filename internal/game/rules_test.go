@@ -72,6 +72,20 @@ func TestIdentifyOutcomes(t *testing.T) {
 		}
 	}
 
+	// Guess cycling (design rule 1): with nothing new since the wrong guess, the
+	// next guess is gently refused, without any penalty.
+	snapCycle := profileJSON(s)
+	h.send(proto.CIdentify, proto.Identify{Mystery: m.ID, Species: robin})
+	d, _ = h.last(proto.SIdentify)
+	if r := decodeAs[proto.IdentifyResult](t, d); r.Outcome != "insufficient" || r.Feedback == "" || r.XP != 0 {
+		t.Fatalf("guess without new evidence: %+v", r)
+	}
+	if profileJSON(s) != snapCycle || s.identified(robin) {
+		t.Fatal("a refused guess changed the profile")
+	}
+	// One new piece of evidence and guessing is open again.
+	m.Evidence["pitch"] = s.spByID(robin).TraitValue("pitch")
+
 	// Certain: full evidence, right guess.
 	h.send(proto.CIdentify, proto.Identify{Mystery: m.ID, Species: robin})
 	d, _ = h.last(proto.SIdentify)
@@ -297,8 +311,19 @@ func TestCachesAndCollectibles(t *testing.T) {
 	h := newHarness(t, false)
 	s := h.s
 
-	// The page in the Old Watchtower: page_0 with its lore.
+	// The page in the Old Watchtower: page_0 with its lore. It lies up on the
+	// platform: from the ground beneath it is out of reach.
+	page, _ := s.world.POI("page_0")
+	if ground := s.world.HeightAt(page.Pos.X, page.Pos.Z); page.Pos.Y-ground < 6 {
+		t.Fatalf("page_0 is not up on the tower platform: y %.1f, ground %.1f", page.Pos.Y, ground)
+	}
 	h.standNear("page_0", 1.5)
+	h.take()
+	h.send(proto.CInteract, proto.Interact{POI: "page_0"})
+	if _, bad := hasError(h.take()); !bad || s.p.Flags["taken:page_0"] {
+		t.Fatal("page_0 could be picked up from the ground under the tower")
+	}
+	h.stand(page.Pos.Add(core.V(0.8, 0, 0)), 0)
 	h.send(proto.CInteract, proto.Interact{POI: "page_0"})
 	if _, ok := s.p.Journal.Collectibles["page_0"]; !ok || !s.p.Flags["taken:page_0"] {
 		t.Fatalf("page_0 not collected: %v", s.p.Journal.Collectibles)

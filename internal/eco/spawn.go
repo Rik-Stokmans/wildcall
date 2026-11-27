@@ -129,26 +129,46 @@ func (s *Sim) leave(b *bird) {
 // Perch memory
 
 // memCand is a candidate perch in a weighted random selection without replacement:
-// the k smallest keys -ln(u)/w win (exponential-key sampling).
+// the k smallest keys -ln(u)/w win (exponential-key sampling). Unsuitable
+// candidates (bad) only win where there are not enough suitable ones.
 type memCand struct {
 	key float32
 	i   int32
+	bad bool
 }
 
-func insertCand(list []memCand, n *int, key float32, i int32) {
+func (a memCand) less(b memCand) bool {
+	if a.bad != b.bad {
+		return !a.bad
+	}
+	return a.key < b.key
+}
+
+func insertCand(list []memCand, n *int, key float32, i int32, bad bool) {
+	c := memCand{key, i, bad}
 	k := *n
 	if k < len(list) {
-		list[k] = memCand{key, i}
+		list[k] = c
 		k++
 		*n = k
-	} else if key >= list[k-1].key {
+	} else if !c.less(list[k-1]) {
 		return
 	} else {
-		list[k-1] = memCand{key, i}
+		list[k-1] = c
 	}
-	for j := k - 1; j > 0 && list[j].key < list[j-1].key; j-- {
+	for j := k - 1; j > 0 && list[j].less(list[j-1]); j-- {
 		list[j], list[j-1] = list[j-1], list[j]
 	}
+}
+
+// trimBad drops the unsuitable candidates from a sorted selection as long as at
+// least keep remain, and returns the new length.
+func trimBad(list []memCand, keep int) int {
+	n := len(list)
+	for n > keep && list[n-1].bad {
+		n--
+	}
+	return n
 }
 
 func expKey(u uint64, w float32) float32 {
@@ -157,8 +177,10 @@ func expKey(u uint64, w float32) float32 {
 }
 
 // buildMemory chooses the bird's remembered places from the perches around its
-// home: a song post (high and open), a roost (sheltered), a bathing spot at the
-// water's edge, feeding spots and everyday perches. The choice depends only on who
+// home: a song post (prominent), a roost (sheltered), a bathing spot at the water's
+// edge, feeding spots and everyday perches. Every choice respects the species' perch
+// kinds (most preferred first) and its height habit: a wren remembers brambles,
+// ferns and low branches, not the crowns above them. The choice depends only on who
 // the bird is and the terrain, so it is the same every time the bird comes back.
 func (s *Sim) buildMemory(b *bird, p *profile, c *cell) {
 	b.memOK = 0
@@ -169,6 +191,7 @@ func (s *Sim) buildMemory(b *bird, p *profile, c *cell) {
 	var feed [maxFeed]memCand
 	var song, roost, bath [1]memCand
 	var nGen, nFeed, nSong, nRoost, nBath int
+	limited := p.hiMax < noHeightLimit
 	for i, pc := range c.perches {
 		d2 := distXZ2(pc.Pos, b.home)
 		if d2 > r2 {
@@ -176,22 +199,41 @@ func (s *Sim) buildMemory(b *bird, p *profile, c *cell) {
 		}
 		u := s.loc.Uint64()
 		near := 1 - 0.85*sqrt32(d2)/r // territories have a heart: most perches are near home
+		h := c.perchH[i]
+		hf := p.heightFit(h)
 		pref := p.perchPref[pc.Kind]
 		if pref > 0 {
-			insertCand(gen[:], &nGen, expKey(u, pref*near), int32(i))
-			// Song posts: high, open perches it likes.
-			hi := 1 + clamp((pc.Pos.Y-b.home.Y)/8, 0, 1.5)
-			insertCand(song[:], &nSong, expKey(u>>16, pref*near*hi*(1.15-pc.Cover)), int32(i))
+			fit := pref * hf
+			bad := fit < suitFit
+			insertCand(gen[:], &nGen, expKey(u, fit*near), int32(i), bad)
+			// Song posts: prominent perches it likes. A bird of the tree tops sings
+			// from high and open; a low-living one from the top of its thicket.
+			var hi float32
+			if limited {
+				hi = 1 + 0.5*clamp(h/p.hiMax, 0, 1)
+			} else {
+				hi = 1 + clamp((pc.Pos.Y-b.home.Y)/8, 0, 1.5)
+			}
+			insertCand(song[:], &nSong, expKey(u>>16, fit*near*hi*(1.15-pc.Cover)), int32(i), bad)
 			// Roosts: sheltered.
-			insertCand(roost[:], &nRoost, expKey(u>>32, pref*near*(0.15+pc.Cover)), int32(i))
+			insertCand(roost[:], &nRoost, expKey(u>>32, fit*near*(0.15+pc.Cover)), int32(i), bad)
 		}
 		if p.feedSpot[pc.Kind] {
-			insertCand(feed[:], &nFeed, expKey(u>>48, (0.3+pref)*near), int32(i))
+			// It forages where it likes to be: kinds outside its perch list only when
+			// the territory offers nothing else.
+			w := float32(0.03)
+			if pref > 0 {
+				w = 0.3 + pref
+			}
+			insertCand(feed[:], &nFeed, expKey(u>>48, w*hf*near), int32(i), pref == 0 || hf < 0.4)
 		}
 		if pc.Kind == core.PerchShore && p.specBathe {
-			insertCand(bath[:], &nBath, expKey(u>>40, near), int32(i))
+			insertCand(bath[:], &nBath, expKey(u>>40, near), int32(i), false)
 		}
 	}
+	// Unsuitable perches only make up the numbers when there are too few good ones.
+	nGen = trimBad(gen[:nGen], 2)
+	nFeed = trimBad(feed[:nFeed], 1)
 	set := func(slot int, i int32) {
 		pc := c.perches[i]
 		// Birds sharing a tree do not sit on exactly the same twig.

@@ -254,6 +254,13 @@ func (s *Session) discover() {
 			title = "A hidden place"
 		}
 		s.toast("location", title, poi.Name, xp, "map")
+		if poi.Kind != "npc" && poi.Kind != "shop" && poi.Kind != "cabin" {
+			n := repPlace
+			if poi.Hidden {
+				n = 2 * repPlace
+			}
+			s.deedRep(content.FactionRangers, "place", poi.ID, n, "a place on the rangers' map")
+		}
 		s.questEvent(content.Discovered(poi.ID, poi.Kind, s.at(poi.Pos)))
 		s.narrate(narrator.Event{Kind: narrator.PlaceFound, POIKind: poi.Kind, POIName: poi.Name, Hidden: poi.Hidden, Subject: poi.ID})
 		s.changed()

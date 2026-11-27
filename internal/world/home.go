@@ -408,12 +408,20 @@ func newHomeLayout(g *gen) *homeLayout {
 	hfx, hfz := headingDir(float64(yawTo(hcab.x, hcab.z, pondS.x, pondS.z)))
 	add("cache_hidden_cabin", "cache", "Dusty Leather Case", hcab.x-hfz*3.2, hcabY, hcab.z+hfx*3.2, 0, false, map[string]string{"item": "historical_binoculars"})
 	add("cache_camp", "cache", "Oilcloth Bundle", camp.x+2.4, campY, camp.z+1.2, 0, false, map[string]string{"item": "vintage_recorder"})
+	// The torn page lies up on the tower's platform, out of the rain (the quest says
+	// to climb): its height is lifted by oldTowerPlatform once the home POIs are
+	// settled onto the final terrain (world.go).
 	add("page_0", "page", "Torn Journal Page", tower.x+tfx*0.6, towerY, tower.z+tfz*0.6, 0, false, map[string]string{"collectible": "page_0"})
 
 	hl.spawn = vec(doorX+fx*6, cabinY, doorZ+fz*6)
 	hl.spawnYaw = float32(cabinYaw)
 	return hl
 }
+
+// oldTowerPlatform is the platform height of the Old Watchtower above the tower's
+// base as the client builds it (web/js/props/logic.js towerLayout("old_watchtower")
+// .height = 7.931 m). The torn page (page_0) lies on those boards.
+const oldTowerPlatform = 7.93
 
 // splineValley interpolates control points (valley coordinates) with a centripetal-
 // ish Catmull-Rom spline, maps to the world and resamples every ~6 m.

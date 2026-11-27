@@ -152,6 +152,7 @@ func (s *Session) foundNest(n core.Nest, photo string, stars int) {
 	xp := 0
 	if sp != nil {
 		xp = s.award(progress.SrcBehavior, progress.BehaviorKey(sp.ID, "nest"), progress.BehaviorXP(s.p))
+		s.deedRep(content.FactionRangers, "nest", sp.ID, repNest, "a nest on the survey")
 	}
 	text := siteWords[n.Site]
 	if text == "" {
@@ -161,6 +162,9 @@ func (s *Session) foundNest(n core.Nest, photo string, stars int) {
 		text += ": " + withArticleLower(known.Name) + "'s"
 	}
 	text += " (" + field.NestStageKey(n.Stage) + ")"
+	if l := s.lensNest(sp, n); l != "" {
+		text += ". " + l
+	}
 	s.toast("behavior", "Nest found", text, xp, "nest")
 	if sp != nil && n.Stage != core.NestOld {
 		// An active nest is nesting behaviour seen (quests that ask for it).

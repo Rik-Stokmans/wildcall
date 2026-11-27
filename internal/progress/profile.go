@@ -14,7 +14,47 @@ const (
 	UnlockQuest   = "quest:"   // "quest:<id>"   → Profile.Flags["unlock:quest:<id>"]
 	UnlockFeature = "feature:" // "feature:<key>" → Profile.Flags["unlock:feature:<key>"]
 	UnlockFlag    = "unlock:"  // prefix of the flags set for non-region unlocks
+	// UnlockUpgrade fits an item upgrade for free: "upgrade:<item id>:<upgrade id>"
+	// → Profile.Upgrades[item]. Already fitted, it is paid out as its price instead.
+	UnlockUpgrade = "upgrade:"
 )
+
+// RewardUpgrade builds the Reward.Unlock entry that fits an item upgrade for free.
+func RewardUpgrade(itemID, upgradeID string) string {
+	return UnlockUpgrade + itemID + ":" + upgradeID
+}
+
+// ParseRewardUpgrade splits an "upgrade:<item>:<upgrade>" unlock entry.
+func ParseRewardUpgrade(u string) (itemID, upgradeID string, ok bool) {
+	rest, ok := strings.CutPrefix(u, UnlockUpgrade)
+	if !ok {
+		return "", "", false
+	}
+	itemID, upgradeID, ok = strings.Cut(rest, ":")
+	return itemID, upgradeID, ok && itemID != "" && upgradeID != ""
+}
+
+// grantUpgrade fits a rewarded upgrade ("<item>:<upgrade>"). An upgrade that does
+// not exist is ignored; one already fitted is paid out as its price, so a player
+// who bought it before finishing the quest is not out of pocket.
+func grantUpgrade(p *proto.Profile, key string) {
+	item, upID, ok := ParseRewardUpgrade(UnlockUpgrade + key)
+	if !ok {
+		return
+	}
+	u, known := Upgrade(item, upID)
+	if !known {
+		return
+	}
+	if p.Upgrades == nil {
+		p.Upgrades = map[string][]string{}
+	}
+	if containsString(p.Upgrades[item], upID) {
+		p.Credits += u.Price
+		return
+	}
+	p.Upgrades[item] = append(p.Upgrades[item], upID)
+}
 
 // NewProfile creates a brand-new naturalist: level 1, rank 1 (Beginner), 60 Field
 // Credits, the starting kit equipped (no recorder yet — Mara provides it), an empty
@@ -29,6 +69,7 @@ func NewProfile(name string) *proto.Profile {
 		Credits:  StartingCredits,
 		Equipped: StartingKit(),
 		Regions:  []int{int(core.RegionGreenhollow)},
+		Ledger:   []proto.LedgerEntry{{Day: 1, Amount: StartingCredits, Reason: "Starting funds"}},
 	}
 	Normalize(p)
 	return p
@@ -168,7 +209,8 @@ func RegionUnlocked(p *proto.Profile, r core.RegionID) bool {
 //   - Rep is added per faction.
 //   - SkillPoints are added.
 //   - Unlock entries: "region:<key>" adds the region to Profile.Regions (unknown
-//     keys are ignored); every other entry — "quest:<id>", "feature:<key>" — sets
+//     keys are ignored); "upgrade:<item>:<upgrade>" fits that item upgrade for free
+//     (or pays its price if it is already fitted); every other entry — "quest:<id>", "feature:<key>" — sets
 //     Profile.Flags["unlock:<entry>"].
 //   - Lore ids are appended to Journal.Lore and Badge to Journal.Badges (no
 //     duplicates).
@@ -196,6 +238,10 @@ func ApplyReward(p *proto.Profile, r proto.Reward) (levels int, newItems []strin
 	}
 
 	for _, u := range r.Unlock {
+		if key, ok := strings.CutPrefix(u, UnlockUpgrade); ok {
+			grantUpgrade(p, key)
+			continue
+		}
 		if key, ok := strings.CutPrefix(u, UnlockRegion); ok {
 			if id, known := core.RegionFromKey(key); known {
 				UnlockRegionID(p, id)

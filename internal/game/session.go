@@ -154,6 +154,13 @@ type Session struct {
 	lures  []lure
 	lureID uint32
 
+	// ledgerCredits is the balance the credit ledger has accounted for.
+	ledgerCredits int
+
+	// The mixed feeding flock being watched: its id and when each species was seen.
+	flockID   uint32
+	flockSeen map[string]float64
+
 	// Narration held back while a client message is handled (sent after its reply),
 	// and the time until which a dialogue is assumed open (the narrator stays quiet).
 	holdNarr    bool
@@ -202,7 +209,7 @@ func New(cfg Config) (*Session, error) {
 	s := &Session{
 		cfg:     cfg,
 		species: species.All(),
-		tracker: content.NewTracker(),
+		tracker: content.NewTracker().WithSpecies(species.All()),
 		poiCh:   make(chan poiResult, 1),
 	}
 	f, st, aside, err := cfg.Store.Load()
@@ -309,6 +316,8 @@ func (s *Session) adopt(f *save.File) {
 	clock := env.New(f.Seed, s.cfg.DayLen)
 	clock.Restore(f.Clock)
 	clock.SetDayLen(s.cfg.DayLen)
+	// Saves from before the credit ledger: open it with the balance brought forward.
+	progress.MigrateLedger(f.Profile, clock.Env().Day)
 	s.install(f.Seed, f.SeedText, f.Profile, clock, f.Narrator, f.Seq)
 }
 
@@ -336,6 +345,10 @@ func (s *Session) install(sd int64, seedText string, p *proto.Profile, clock *en
 		progress.UnlockRegionID(p, core.RegionID(r))
 	}
 	s.tracker.Sync(p)
+	// Quests accepted before the journal held their evidence (or saved by an older
+	// build that only counted later events) catch up with what the journal proves.
+	s.tracker.Reconcile(p)
+	s.ledgerCredits = p.Credits
 	progress.Recompute(p)
 	// Buffs run on the game clock: whatever ran out while the game was closed (or
 	// was saved with an older clock) is gone now.
@@ -619,13 +632,16 @@ func (s *Session) welcome() proto.Welcome {
 		Lore:         content.Lore(),
 		Plants:       content.Plants(),
 		Recipes:      content.Recipes(),
-		POIs:         pois,
-		Trails:       trails,
-		Shop:         progress.ShopItems(),
-		Profile:      s.clientView(),
-		Env:          s.envMsg(),
-		Spawn:        proto.Teleport{Pos: s.feet, Yaw: spawnYaw},
-		Trees:        s.world.TreeModels(),
+		// Always sent: the client shows a species' note only while the player owns
+		// the forgotten_journal item AND has identified that species.
+		MarginNotes: content.MarginNotes(),
+		POIs:        pois,
+		Trails:      trails,
+		Shop:        progress.ShopItems(),
+		Profile:     s.clientView(),
+		Env:         s.envMsg(),
+		Spawn:       proto.Teleport{Pos: s.feet, Yaw: spawnYaw},
+		Trees:       s.world.TreeModels(),
 	}
 }
 

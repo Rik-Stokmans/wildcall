@@ -44,7 +44,7 @@ func Plants() []proto.PlantDef {
 			Uses:    "Eaten raw, or cooked into bars, tarts and jam. A favourite of thrushes and blackbirds as well.",
 			Caution: "Pick above knee height and away from the path. Leave the red ones: they are not ripe, and they are not wasted either.",
 			Yields:  []proto.PlantYield{yield("blackberry", 1, 3, summer, autumn)},
-			Regrow:  4, Regions: []int{r.green, r.amber}, Habitat: "Woodland edges and sunny clearings", Icon: "seed",
+			Regrow:  4, Regions: []int{r.green, r.amber, r.coast}, Habitat: "Woodland edges and sunny clearings", Icon: "seed",
 		},
 		{
 			ID: "wild_strawberry", Veg: int(core.VegStrawberry), Name: "Wild Strawberry", Sci: "Fragaria vesca",
@@ -60,7 +60,7 @@ func Plants() []proto.PlantDef {
 			Uses:    "Raw, or baked into a tart. Bilberries are the berry foragers remember: more flavour than a blueberry and a darker stain.",
 			Caution: "Pick berries singly; do not strip the shrub. It is slow to recover from rough handling and its fruit feeds grouse and many small birds.",
 			Yields:  []proto.PlantYield{yield("bilberry", 1, 3, summer, autumn)},
-			Regrow:  5, Regions: []int{r.green, r.wind}, Habitat: "Pine woods and heather heath", Icon: "seed",
+			Regrow:  5, Regions: []int{r.green, r.amber, r.wind, r.frost}, Habitat: "Pine woods and heather heath", Icon: "seed",
 		},
 		{
 			ID: "elder", Veg: int(core.VegElder), Name: "Elder", Sci: "Sambucus nigra",
@@ -116,7 +116,7 @@ func Plants() []proto.PlantDef {
 			Uses:    "Fresh leaves make a refreshing tea, hot or cold.",
 			Caution: "Pick leaves from plants growing in clean, flowing water, not stagnant puddles, and wash them.",
 			Yields:  []proto.PlantYield{yield("water_mint", 2, 3, spring, summer, autumn)},
-			Regrow:  3, Regions: []int{r.green, r.marsh}, Habitat: "Stream and pond edges", Icon: "leaf",
+			Regrow:  3, Regions: []int{r.green, r.amber, r.marsh}, Habitat: "Stream and pond edges", Icon: "leaf",
 		},
 		{
 			ID: "chamomile", Veg: int(core.VegChamomile), Name: "Chamomile", Sci: "Matricaria chamomilla",
@@ -124,7 +124,7 @@ func Plants() []proto.PlantDef {
 			Uses:    "The flower heads, dried or fresh, make a gentle, calming tea.",
 			Caution: "Check that the centre is hollow when you cut it in half: stinking mayweed looks similar but smells foul, and the cone is solid.",
 			Yields:  []proto.PlantYield{yield("chamomile", 2, 3, summer)},
-			Regrow:  4, Regions: []int{r.green, r.coast}, Habitat: "Open meadows and field edges", Icon: "leaf",
+			Regrow:  4, Regions: []int{r.green, r.amber, r.coast}, Habitat: "Open meadows and field edges", Icon: "leaf",
 		},
 		{
 			ID: "young_pine", Veg: int(core.VegYoungPine), Name: "Young Pine", Sci: "Pinus sylvestris",
@@ -132,7 +132,7 @@ func Plants() []proto.PlantDef {
 			Uses:    "The soft tips make a resinous, lemony tea with a clean, woody smell. Best in spring; usable all year.",
 			Caution: "Not a yew: yew needles are flat, in two rows, and have red berry-like arils, and every part of it is poisonous. Take only the tips, never a whole branch, and only a few per tree.",
 			Yields:  []proto.PlantYield{yield("pine_tips", 2, 3, spring, summer, autumn, winter)},
-			Regrow:  5, Regions: []int{r.green, r.wind, r.frost}, Habitat: "Pine stands and open conifer woodland", Icon: "tree",
+			Regrow:  5, Regions: []int{r.green, r.amber, r.wind}, Habitat: "Pine stands and open conifer woodland", Icon: "tree",
 		},
 		{
 			ID: "chanterelle", Veg: int(core.VegChanterelle), Name: "Chanterelle", Sci: "Cantharellus cibarius",
@@ -164,7 +164,7 @@ func Plants() []proto.PlantDef {
 			Uses:    "Briefly blanched, it makes a crisp, salty salad or side.",
 			Caution: "Pick the tips only and cut rather than pull, so the plant is left in the mud. Only from clean, unpolluted marsh.",
 			Yields:  []proto.PlantYield{yield("samphire", 2, 3, summer)},
-			Regrow:  4, Regions: []int{r.coast}, Habitat: "Salt marsh and muddy shores", Icon: "leaf",
+			Regrow:  4, Regions: []int{r.coast, r.marsh}, Habitat: "Salt marsh and muddy shores", Icon: "leaf",
 		},
 		{
 			ID: "cloudberry", Veg: int(core.VegCloudberry), Name: "Cloudberry", Sci: "Rubus chamaemorus",

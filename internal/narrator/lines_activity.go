@@ -390,6 +390,22 @@ func init() {
 			"From up here, the whole valley's breathing.",
 			"The top. Now, let's just listen for a while.",
 		},
+		// ---- The first quest's beats (never name the singer) ----
+		"tutorial.singer_heard": {
+			"There. That loud, rattling little song. That's the one Mara meant.",
+			"Listen to that. A big voice from somewhere low down. That's our singer.",
+			"That's it, I'd put money on it. Low in the tangle, and not at all shy about singing.",
+		},
+		"tutorial.singer_raised": {
+			"Gently now. Something small, low in the cover. Give it a moment to show itself.",
+			"Steady. Let it come to the edge of the leaves on its own.",
+			"Could that be our singer? Watch it, don't chase it.",
+		},
+		"tutorial.first_stars": {
+			"A photograph with a bird in it, and in focus. That's the start of a collection.",
+			"Our first proper photograph. That one deserves a place on the wall.",
+			"That's a keeper. Everyone remembers their first.",
+		},
 		"climb.any": {
 			"Up we go.",
 			"Well. That was a climb.",

@@ -55,12 +55,14 @@ func (s *Sim) fly(b *bird, p *profile, to core.Perch, dest int8, act core.BirdAc
 	// Clearance grows with distance: a hop inside a crown needs little, a long
 	// flight goes over the tree tops.
 	clear := 1.2 + b.wob + clamp((hl-10)/50, 0, 1)*14
-	n := int(hl / 18)
-	if n > 8 {
-		n = 8
+	// Short hops are sampled densely too: a bank or the edge of a pond can rise
+	// metres within a few steps of the take-off.
+	n := int(hl / 12)
+	if n > 10 {
+		n = 10
 	}
-	if hl > 3 && n < 1 {
-		n = 1
+	if hl > 0.5 && n < 4 {
+		n = 4
 	}
 	for i := 1; i <= n; i++ {
 		t := float32(i) / float32(n+1)
@@ -177,6 +179,10 @@ func (s *Sim) arrive(b *bird, p *profile) {
 		b.act = b.base
 		b.sub = s.rnd(0.4, 1.6)
 	case thenPerch:
+		if b.fled && b.mode == mIdle {
+			b.fled = false
+			s.noteSettled(b) // back home after being flushed
+		}
 		s.rest(b, p, s.rnd(8, 35))
 	case thenSong:
 		s.rest(b, p, s.rnd(25, 70))

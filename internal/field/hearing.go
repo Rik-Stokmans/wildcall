@@ -175,7 +175,9 @@ func Hear(c *Context, ev core.EcoEvent, bird core.BirdState, p proto.Pose, rng *
 		cl.Pattern = capitalise(call.Pattern)
 		evid["pattern"] = call.Pattern
 	}
-	if st.HabitatInfo >= 1 {
+	// Focused listening places the voice in its habitat for everyone (spec §27 stage
+	// 3); Habitat Reading does it without focusing.
+	if st.HabitatInfo >= 1 || p.Focus {
 		hab := c.Terrain.HabitatAt(ev.Pos.X, ev.Pos.Z)
 		cl.Habitat = hab.Label()
 		if !bird.Act.Airborne() {
@@ -183,7 +185,8 @@ func Hear(c *Context, ev core.EcoEvent, bird core.BirdState, p proto.Pose, rng *
 			evid["habitat"] = hab.Key()
 		}
 	}
-	if st.PerchHint >= 1 && bird.ID != 0 {
+	// Habitat Reading: rank 1 suggests the perch while focusing, rank 2 always.
+	if (st.PerchHint >= 1 || (p.Focus && st.HabitatInfo >= 1)) && bird.ID != 0 {
 		cl.Perch = perchHint(bird, ev.Pos.Y-c.Terrain.HeightAt(ev.Pos.X, ev.Pos.Z))
 	}
 	if st.Instinct >= 1 && isUnusual(sp, bird.Flags) {

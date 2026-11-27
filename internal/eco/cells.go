@@ -66,6 +66,7 @@ type cell struct {
 	samples [16]sample    // habitat and region on a 4 x 4 grid
 	hab     [core.HabCount]float32
 	perches []core.Perch // every usable perch in and around the cell
+	perchH  []float32    // height of each perch above the ground (or the water plane)
 	roster  []resident
 	vagTry  int // last (day*6 + 4-hour block) for which a vagrant was rolled
 
@@ -223,6 +224,7 @@ func (s *Sim) retire(c *cell) {
 	if len(s.cellPool) < maxPooled {
 		c.roster = c.roster[:0]
 		c.perches = c.perches[:0]
+		c.perchH = c.perchH[:0]
 		c.nests, c.nestOK, c.alarms = c.nests[:0], false, 0
 		s.cellPool = append(s.cellPool, c)
 	}
@@ -267,9 +269,12 @@ func (s *Sim) buildCell(c *cell) {
 	// Keep only perches a bird may really occupy: never inside the ground, never
 	// under water (except floating on it).
 	n := 0
+	c.perchH = c.perchH[:0]
 	for _, p := range c.perches {
-		if s.perchValid(p) {
+		g := s.t.HeightAt(p.Pos.X, p.Pos.Z)
+		if perchValidAt(p, g) {
 			c.perches[n] = p
+			c.perchH = append(c.perchH, p.Pos.Y-max32(g, 0))
 			n++
 		}
 	}
@@ -377,7 +382,11 @@ func (s *Sim) homeFor(p *profile, x, z, spread float32, h uint64) (core.Vec3, bo
 
 // perchValid: never inside the ground or under the water plane (floating excepted).
 func (s *Sim) perchValid(p core.Perch) bool {
-	g := s.t.HeightAt(p.Pos.X, p.Pos.Z)
+	return perchValidAt(p, s.t.HeightAt(p.Pos.X, p.Pos.Z))
+}
+
+// perchValidAt is perchValid with the ground height g under the perch known.
+func perchValidAt(p core.Perch, g float32) bool {
 	if p.Kind == core.PerchWater {
 		return g < -0.05 && p.Pos.Y >= -0.01
 	}

@@ -50,11 +50,16 @@ type profile struct {
 
 	perchPref [core.PerchKindCount]float32 // 0 = never chosen as a general perch; 1 = favourite
 	feedSpot  [core.PerchKindCount]bool    // perch kinds this species forages at
-	habW      [core.HabCount]float32
-	regions   [core.RegionCount]bool
-	seasons   [4]bool
-	activity  [core.PhaseCount]float32
-	asleep    [core.PhaseCount]bool // phases this species spends at roost
+	// Height habit: perches up to hiMax metres above the ground suit the species
+	// fully; above it they suit it less and less (hiFall metres per step of the
+	// falloff). Low-living skulkers (wren, reed warbler) keep to the bottom 3 m.
+	hiMax, hiFall float32
+	lowLiving     bool // strict height habit: high perches are a last resort
+	habW          [core.HabCount]float32
+	regions       [core.RegionCount]bool
+	seasons       [4]bool
+	activity      [core.PhaseCount]float32
+	asleep        [core.PhaseCount]bool // phases this species spends at roost
 
 	feed   feedKind
 	flight flightKind
@@ -67,6 +72,9 @@ type profile struct {
 	soarer                           bool // spends foraging time circling
 	hoverer                          bool // hunts by hovering
 	specBathe, specSocial, specPreen bool
+	mixed                            bool        // joins mixed feeding flocks in autumn and winter (mixed.go)
+	raptor                           bool        // a bird of prey: small birds dive for cover when it passes low
+	small                            bool        // a small bird that dives for cover from a passing raptor
 	nest                             nestProfile // how and when it breeds (nest.go)
 
 	// Rare and legendary species only show themselves under strict conditions.
@@ -81,6 +89,7 @@ type profile struct {
 	length                      float32
 	soarAlt, hoverAlt           float32
 	boutRate                    float32 // song bouts per minute at peak activity
+	boutDur                     float32 // seconds a typical bout of the primary call lasts
 	callSong, callContact       int
 	callAlarm, callDrum         int
 	senseR2                     float32 // beyond this squared distance the observer cannot matter
@@ -99,6 +108,69 @@ func has(list []string, key string) bool {
 	}
 	return false
 }
+
+// lowKind: perch kinds that are, by their nature, close to the ground or water.
+func lowKind(k core.PerchKind) bool {
+	switch k {
+	case core.PerchShrub, core.PerchGround, core.PerchReed, core.PerchShore, core.PerchWater, core.PerchRock, core.PerchBank:
+		return true
+	}
+	return false
+}
+
+const noHeightLimit = 1e4
+
+// heightHabit derives the species' preferred height band from its perch list and
+// how much it skulks. A species whose favourite perch is low (shrub, ground, reed,
+// shore, water, rock) lives low: a skulker strictly so (the bottom 3 m), a bolder
+// one loosely (it may sing from a tree top now and then). Species that prefer tree
+// perches (canopy, branch, trunk, snag...) may go as high as the trees take them.
+func (p *profile) heightHabit(b *core.Behavior) {
+	p.hiMax, p.hiFall = noHeightLimit, 1
+	first := core.PerchKindCount
+	var low, all float32
+	for _, key := range b.Perches {
+		k, ok := core.PerchKindFromKey(key)
+		if !ok {
+			continue
+		}
+		if first == core.PerchKindCount {
+			first = k
+		}
+		all += p.perchPref[k]
+		if lowKind(k) {
+			low += p.perchPref[k]
+		}
+	}
+	if first == core.PerchKindCount || !lowKind(first) || all <= 0 {
+		return
+	}
+	if b.Skulking >= 0.6 {
+		p.hiMax, p.hiFall, p.lowLiving = 3, 0.7, true
+		return
+	}
+	share := low / all
+	p.hiMax, p.hiFall = 4+8*(1-share), 5
+}
+
+// heightFit is how well a perch h metres above the ground suits the species'
+// height habit: 1 inside the preferred band, falling off above it.
+func (p *profile) heightFit(h float32) float32 {
+	if h <= p.hiMax {
+		return 1
+	}
+	x := (h - p.hiMax) / p.hiFall
+	return 1 / (1 + x + x*x)
+}
+
+// perchFit is how much the species likes a perch of kind k, h metres up: its kind
+// preference times its height habit. 0 = not a kind it chooses.
+func (p *profile) perchFit(k core.PerchKind, h float32) float32 {
+	return p.perchPref[k] * p.heightFit(h)
+}
+
+// suitFit: from this perchFit on, a perch counts as suitable for everyday use.
+const suitFit = 0.2
 
 func buildProfiles(species []core.Species) []profile {
 	out := make([]profile, len(species))
@@ -200,6 +272,7 @@ func buildProfile(sp *core.Species) profile {
 	if !anyPerch {
 		p.perchPref[core.PerchGround] = 1
 	}
+	p.heightHabit(b)
 
 	switch p.feed {
 	case feedGround:
@@ -265,6 +338,8 @@ func buildProfile(sp *core.Species) profile {
 		p.flockMax = 14 // keep any one flock a manageable knot of birds
 	}
 
+	p.mixed = has(mixedSpecies, sp.ID)
+	p.raptor = sp.Traits.Shape == "raptor"
 	p.specBathe = has(b.Specials, "bathing")
 	p.specSocial = has(b.Specials, "social")
 	p.specPreen = has(b.Specials, "preening")
@@ -278,6 +353,7 @@ func buildProfile(sp *core.Species) profile {
 	p.habituate = clamp(b.Habituate, 0, 1)
 	p.density = max32(b.Density, 0)
 	p.length = clamp(sp.Look.Length, 0.07, 1.6)
+	p.small = sp.Look.Length < smallBird && !p.raptor
 
 	// Big wings ride higher thermals; small hoverers work close to the ground.
 	p.soarAlt = 22 + 45*clamp(sp.Look.Wingspan/1.4, 0.2, 1.3)
@@ -314,6 +390,7 @@ func buildProfile(sp *core.Species) profile {
 			mean = 1
 		}
 		p.boutRate = b.Vocal / mean
+		p.boutDur = max32(mean*c.PhraseDur()+(mean-1)*c.Gap, 0.1)
 	}
 
 	// Furthest the observer can matter: the largest flush distance (sprint, direct
