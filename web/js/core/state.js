@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = {
   quality: 'medium',  // low | medium | high  (view distance, shadows, foliage density)
   hints: true,        // tutorial hints
   subtitles: true,    // sound captions in the clue panel
+  soundRing: true,    // ring around the centre of the view showing where sounds come from
 };
 
 export function createState(bus) {

@@ -73,16 +73,15 @@ Three.js + Web Audio client renders it; an Electron shell packages both into one
 - Tests: `go test ./...` and `cd web && node --test $(find js -name '*.test.js')`
 - Screenshots without a window: [`tools/shot/shot.cjs`](tools/shot/shot.cjs)
 
-## Optional asset packs
+## Voice and sound
 
-Both packs are generated or fetched locally, are git-ignored, and are embedded into
-any app you build on that machine. Builds from GitHub Actions do not contain them.
-
-- **Narrator voice** — `tools/voice/` pregenerates every narrator line into
-  `web/voice/` (needs an OpenRouter API key in `.env`). Without it the narrator uses
-  the system's speech synthesis.
-- **Real bird recordings** — `node tools/birdsong/fetch.mjs --fetch` downloads and
-  trims the openly licensed recordings listed in `tools/birdsong/plan.md` into
-  `web/birdsong/` with full credits (`CREDITS.md`). Most are CC BY-SA: if you
-  redistribute them, keep the attribution and the licence. Without them calls are
-  synthesised.
+- **Narrator voice** — every line the narrator can say is pregenerated into
+  `web/voice/` by `tools/voice/generate.mjs` (text-to-speech through OpenRouter; needs
+  an API key in a git-ignored `.env`). Lines without a clip fall back to the system's
+  speech synthesis. Re-run the tool after editing narrator lines; it only voices what
+  is new.
+- **Real bird recordings** — `web/birdsong/` holds 125 trimmed excerpts of openly
+  licensed recordings of all 40 species, fetched and credited by `tools/birdsong/`
+  (see `web/birdsong/CREDITS.md`). Most are CC BY-SA: if you redistribute them, keep
+  the attribution and the licence. Call types without their own recording borrow the
+  species' ordinary call.

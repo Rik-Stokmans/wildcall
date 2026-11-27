@@ -20,6 +20,7 @@ export const KEYMAP = {
   ControlLeft: 'crouch', KeyC: 'crouch',    // toggle
   Space: 'jump',
   KeyX: 'sit',                              // toggle: settle down and wait
+  KeyZ: 'prone',                            // toggle: lie down flat; move to crawl
   // field actions
   KeyE: 'interact',
   KeyF: 'focus',                            // hold: focused listening

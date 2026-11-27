@@ -212,8 +212,14 @@ async function boot() {
     fail('The Wildcall engine stopped unexpectedly',
       `It exited (${signal ? 'signal ' + signal : 'code ' + code}). Your progress was saved when possible.\n\n${engine.output()}`);
   };
-  // Deny every permission request: the game needs none (audio output is not a permission).
-  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  // The game needs exactly two browser permissions, and only for its own page: capturing
+  // the mouse for first-person look (pointer lock) and fullscreen. Everything else is denied.
+  const GAME_PERMISSIONS = new Set(['pointerLock', 'fullscreen']);
+  const fromGame = (wc, details) => {
+    try { return new URL((details && details.requestingUrl) || wc.getURL()).origin === engineOrigin; } catch { return false; }
+  };
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb, details) => cb(GAME_PERMISSIONS.has(perm) && fromGame(wc, details)));
+  session.defaultSession.setPermissionCheckHandler((wc, perm, origin) => GAME_PERMISSIONS.has(perm) && (origin === engineOrigin || (wc && fromGame(wc))));
   installMenu();
   createWindow(url);
 }

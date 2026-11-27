@@ -71,10 +71,11 @@ type Pose struct {
 	Yaw   float32 `json:"yaw"`   // compass heading rad
 	Pitch float32 `json:"pitch"` // rad, + up
 	Speed float32 `json:"speed"` // m/s horizontal
-	// Move: still|crouch|walk|run|sprint
+	// Move: still|crouch|crawl|walk|run|sprint
 	Move   string `json:"move"`
 	Crouch bool   `json:"crouch"`
 	Sit    bool   `json:"sit"`   // sitting down to wait
+	Prone  bool   `json:"prone"` // lying flat: crawling or still (eye ~0.35 m)
 	Focus  bool   `json:"focus"` // focused-listening mode held
 	// Tool: none|binoculars|camera|recorder   Raised: tool is up at the eye / aimed
 	Tool   string  `json:"tool"`

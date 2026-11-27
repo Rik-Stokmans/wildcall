@@ -182,7 +182,8 @@ type Observer struct {
 	Speed   float32 // m/s (walk ≈ 2.2, run ≈ 4.2, sprint ≈ 6.5, crouch ≈ 1.1)
 	Crouch  bool
 	Sitting bool // settled down to wait (strongly calming once still)
-	// Move is the player's own movement mode when known: still|crouch|walk|run|sprint
+	Prone   bool // lying flat on the ground (crawling or still): the least visible posture
+	// Move is the player's own movement mode when known: still|crouch|crawl|walk|run|sprint
 	// ("" = infer it from Speed). A sprint slowed by rough ground is still a sprint.
 	Move string
 	// Still is the number of seconds the player has been (nearly) motionless.
