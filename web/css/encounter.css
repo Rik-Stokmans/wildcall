@@ -456,3 +456,19 @@
 @media (prefers-reduced-motion: reduce) {
   .enc-root *, .enc-root *::before { animation: none !important; transition: none !important; }
 }
+.enc-rare-abilities { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.enc-rare-abilities li { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; line-height: 1.4; color: var(--ink); }
+.enc-rare-abilities li svg { margin-top: 2px; color: var(--forest); }
+.enc-rare-activate { margin-top: 7px; font: italic 13px/1.3 var(--font-journal); color: var(--bark); }
+
+/* Overlay screens (rewards, rare item, region, rank-up) stack ABOVE whatever screen is
+   open, even when that screen's root was added to #screens later (journal, quest log). */
+#screens > .enc-root.enc-overlay { z-index: 2; }
+/* Short windows (720p): a smaller medallion so the special ability shows without scrolling. */
+@media (max-height: 820px) {
+  .enc-rare .enc-medallion { width: 150px; height: 150px; margin: 0; }
+  .enc-rare .enc-medallion-ring { width: 128px; height: 128px; }
+  .enc-rare .enc-medallion-face { width: 108px; height: 108px; }
+  .enc-rare .enc-medallion-face svg { width: 70px; height: 70px; }
+  .enc-rare .enc-medallion-glow { inset: -22px; }
+}

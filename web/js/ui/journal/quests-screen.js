@@ -4,6 +4,7 @@
 import { el, fill, icon, button, progressBar, itemCard, confirmDialog } from '../kit.js';
 import {
   questTabs, groupByCategory, objectiveRows, questProgress, giverName, turnInText, availableText, rewardLines, readyToTurnIn, categoryInfo,
+  objectiveConditions, requirementRows, lockedQuests,
 } from './quest-logic.js';
 import { formatDay, plural } from './format.js';
 import { screenRoot, sheet, emptyNote, chip, sectionTitle, keepScroll, uiSound } from './widgets.js';
@@ -27,8 +28,11 @@ export function createQuestScreen(ctx) {
     const profile = ctx.state.profile;
     const tabs = questTabs(Object.values(ctx.state.quests), profile.quests);
     const list = tabs[st.tab];
-    if (!list.some((e) => e.def.id === st.sel)) st.sel = list[0]?.def.id || null;
-    const entry = list.find((e) => e.def.id === st.sel);
+    // Quests in sight but still gated by rank or reputation (shown under Available).
+    const locked = st.tab === 'available' ? lockedQuests(Object.values(ctx.state.quests), profile, { ranks: ctx.state.ranks, quests: ctx.state.quests }) : [];
+    const all = [...list, ...locked];
+    if (!all.some((e) => e.def.id === st.sel)) st.sel = all[0]?.def.id || null;
+    const entry = all.find((e) => e.def.id === st.sel);
     const ready = readyToTurnIn(profile.quests);
     frame.setSubtitle(ready ? `${plural(ready, 'quest')} ready to turn in` : '');
 
@@ -43,7 +47,10 @@ export function createQuestScreen(ctx) {
         groups.length ? groups.map((g) => el('div', { class: 'jr-group' },
           el('div', { class: 'jr-qcat' }, icon(g.icon, 16), el('span', g.label), el('small', String(g.entries.length))),
           g.entries.map((e) => questRow(e))))
-          : emptyNote(emptyText(st.tab), 'quest')),
+          : (locked.length ? null : emptyNote(emptyText(st.tab), 'quest')),
+        locked.length ? el('div', { class: 'jr-group jr-group-locked' },
+          el('div', { class: 'jr-qcat' }, icon('lock', 16), el('span', 'Not yet open'), el('small', String(locked.length))),
+          locked.map((e) => questRow(e))) : null),
       el('div', { class: 'jr-qdetail', 'data-scroll': 'qdetail' }, entry ? questDetail(entry) : emptyNote('Choose a quest to read its details.', 'journal')));
     restore();
   }
@@ -58,19 +65,42 @@ export function createQuestScreen(ctx) {
     const prog = questProgress(def, state);
     const readyNow = state.status === 'complete';
     return el('button', {
-      type: 'button', class: 'jr-qrow' + (def.id === st.sel ? ' selected' : '') + (readyNow ? ' ready' : ''),
+      type: 'button', class: 'jr-qrow' + (def.id === st.sel ? ' selected' : '') + (readyNow ? ' ready' : '') + (state.status === 'locked' ? ' locked' : ''),
       onclick: () => { st.sel = def.id; uiSound(ctx, 'click'); render(); },
     },
-    el('span', { class: 'jr-qrow-main' }, el('b', def.name), el('small', readyNow ? 'Ready to turn in' : state.status === 'turned_in' ? `Completed ${formatDay(state.day)}` : state.status === 'available' ? giverName(def.giver, ctx.state.npcs) : `${prog.done} of ${prog.total} steps`)),
+    el('span', { class: 'jr-qrow-main' }, el('b', def.name), el('small', readyNow ? 'Ready to turn in' : state.status === 'turned_in' ? `Completed ${formatDay(state.day)}`
+      : state.status === 'available' ? giverName(def.giver, ctx.state.npcs)
+        : state.status === 'locked' ? lockedSummary(def) : `${prog.done} of ${prog.total} steps`)),
     state.tracked ? el('span', { class: 'jr-qrow-pin', title: 'Tracked' }, icon('pin', 14)) : null,
     readyNow ? el('span', { class: 'jr-qrow-pin amber', title: 'Ready to turn in' }, icon('check', 14)) : null);
   }
 
+  /** "Needs 40 Rangers reputation" — the first thing still missing. */
+  function lockedSummary(def) {
+    const miss = requirementRows(def, ctx.state.profile, { ranks: ctx.state.ranks, quests: ctx.state.quests }).find((r) => !r.met);
+    if (!miss) return giverName(def.giver, ctx.state.npcs);
+    return miss.short;
+  }
+
+  function requirementsBlock(def, state) {
+    const reqs = requirementRows(def, ctx.state.profile, { ranks: ctx.state.ranks, quests: ctx.state.quests });
+    if (!reqs.length || state.status === 'turned_in' || state.status === 'active' || state.status === 'complete') return null;
+    return [sectionTitle('Requirements', reqs.every((r) => r.met) ? 'all met' : 'not yet met'),
+      el('ul', { class: 'jr-reqs' }, reqs.map((r) => el('li', { class: 'jr-req ' + (r.met ? 'met' : 'unmet') },
+        el('span', { class: 'jr-req-icon' }, icon(r.met ? 'check' : r.kind === 'rep' ? 'reputation' : 'lock', 13)),
+        el('span', { class: 'jr-req-text' }, r.text),
+        r.kind === 'rep' ? el('span', { class: 'jr-req-standing' },
+          progressBar(Math.min(r.have, r.need), r.need, { height: 6 }), el('b', `${r.have} / ${r.need}`))
+          : r.kind === 'rank' && !r.met ? el('span', { class: 'jr-req-standing' }, el('small', `you are ${/^[aeiou]/i.test(r.have) ? 'an' : 'a'} ${r.have}`)) : null)))];
+  }
+
   function questDetail({ def, state }) {
     const rows = objectiveRows(def, state);
+    // A quest not yet open reads as a preview: every step dim, no hints yet.
+    if (state.status === 'locked') for (const r of rows) { r.status = 'locked'; r.hint = ''; }
     const prog = questProgress(def, state);
     const cat = categoryInfo(def.category);
-    const rewards = rewardLines(def.rewards, { regions: ctx.state.regions, quests: ctx.state.quests, lore: ctx.state.lore });
+    const rewards = rewardLines(def.rewards, { regions: ctx.state.regions, quests: ctx.state.quests, lore: ctx.state.lore, rep: ctx.state.profile?.rep, items: ctx.state.items });
     const items = (def.rewards?.items || []).map((id) => ctx.state.items[id]).filter(Boolean);
     const active = state.status === 'active' || state.status === 'complete';
     const npcs = ctx.state.npcs;
@@ -84,18 +114,22 @@ export function createQuestScreen(ctx) {
         el('div', { class: 'jr-muted' }, `From ${giverName(def.giver, npcs)}`)),
       state.status === 'complete' ? el('div', { class: 'jr-banner' }, icon('check', 18), el('span', turnInText(def, npcs))) : null,
       state.status === 'available' ? el('div', { class: 'jr-banner soft' }, icon('info', 18), el('span', availableText(def, npcs))) : null,
+      state.status === 'locked' ? el('div', { class: 'jr-banner soft locked' }, icon('lock', 18), el('span', `Not yet open. ${giverName(def.giver, npcs)} will offer it once you meet the requirements below.`)) : null,
       def.summary ? el('p', { class: 'jr-qsummary' }, def.summary) : null,
       def.story ? el('p', { class: 'jr-qstory' }, def.story) : null,
+      requirementsBlock(def, state),
       sectionTitle('Objectives', prog.total ? `${prog.done} of ${prog.total}` : ''),
       prog.total ? progressBar(prog.done, prog.total, { height: 8 }) : null,
       el('ul', { class: 'jr-objs' }, rows.map((r) => el('li', { class: 'jr-obj ' + r.status },
         el('span', { class: 'jr-obj-check' }, r.done ? icon('check', 13) : ''),
         el('span', { class: 'jr-obj-body' },
           el('span', { class: 'jr-obj-text' }, r.text, r.need > 1 ? el('b', { class: 'jr-obj-count' }, ` ${r.have}/${r.need}`) : null),
+          objConditions(r, active),
           r.hint ? el('small', { class: 'jr-obj-hint' }, r.hint) : null)))),
       sectionTitle('Rewards'),
       (rewards.length || items.length) ? [
-        el('ul', { class: 'jr-rewards' }, rewards.map((l) => el('li', icon(l.icon, 16), el('span', l.text)))),
+        el('ul', { class: 'jr-rewards' }, rewards.map((l) => el('li', { class: l.kind ? 'jr-reward-' + l.kind : '' }, icon(l.icon, 16), el('span', l.text),
+          l.note ? el('small', { class: 'jr-reward-note' }, l.note) : null))),
         items.length ? el('div', { class: 'jr-reward-items' }, items.map((it) => itemCard(it, { compact: true }))) : null,
       ] : el('p', { class: 'jr-muted' }, 'The satisfaction of a job well done.'),
       active ? el('div', { class: 'jr-actions' },
@@ -109,6 +143,19 @@ export function createQuestScreen(ctx) {
             if (await confirmDialog(`Set aside “${def.name}”? You can pick it up again later.`, { ok: 'Set aside', cancel: 'Keep it' })) ctx.net.send('quest', { id: def.id, action: 'abandon' });
           },
         }) : null) : null);
+  }
+
+  /** Where and how an objective counts, and for counted ones the credited tally as pips. */
+  function objConditions(r, active) {
+    // Skip words the objective already says ("Identify two species in Frostveil").
+    const text = String(r.text || '').toLowerCase();
+    const words = objectiveConditions(r.params, ctx.state.regions).filter((w) => !text.includes(w.replace(/^in /, '').toLowerCase()));
+    if (!words.length && !(r.need > 1 && active)) return null;
+    return el('span', { class: 'jr-obj-cond' },
+      words.length ? el('span', { class: 'jr-obj-where' }, words.join(' · ')) : null,
+      r.need > 1 && active && r.need <= 12 ? el('span', { class: 'jr-obj-pips', title: `${r.have} of ${r.need} counted so far` },
+        Array.from({ length: r.need }, (_, i) => el('i', { class: i < r.have ? 'on' : '' }))) : null,
+      r.need > 1 && active ? el('small', { class: 'jr-obj-credited' }, `${r.have} of ${r.need} counted`) : null);
   }
 
   ctx.bus.on('profile', () => { if (isOpen) render(); });

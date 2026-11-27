@@ -11,6 +11,8 @@ import {
   buildPhoto, outOfFilm, outOfFilmText, filmLeft, focusTarget, recorderHint, recResultText, TOOLS, FOCUS_FAR,
 } from './field.js';
 import { lookDir } from './look.js';
+import { windSway } from './mantle.js';
+import { toolSlot, missingToolText } from './field.js';
 import { createOverlay } from './overlay.js';
 
 const DEG = Math.PI / 180;
@@ -66,9 +68,22 @@ export function createTools(ctx, player) {
   // ---------------------------------------------------------------------------------
   // Selecting
 
+  /** Is the instrument's equipment slot filled? (No binoculars, no binoculars view.) */
+  const hasTool = (name) => {
+    const slot = toolSlot(name);
+    return !slot || !!state.profile?.equipped?.[slot];
+  };
+
   function select(name) {
     if (!TOOLS.includes(name)) return false;
     if (name === t.active) return true;
+    // Tools need their slot: a kind word instead of an empty viewfinder. The equipment
+    // screen says the same next to an empty optics / camera / audio slot.
+    if (!hasTool(name)) {
+      overlay.message(missingToolText(name), 2.6);
+      ctx.audio?.uiSound?.('error');
+      return false;
+    }
     if (t.recording && name !== 'recorder') stopRecording();
     t.active = name;
     t.raiseAmt = 0;           // a new instrument starts lowered
@@ -156,7 +171,15 @@ export function createTools(ctx, player) {
     if (r?.noFilm) overlay.message(outOfFilmText(state.profile), 3);
     else if (r?.notes?.length && t.active === 'camera') overlay.message(r.notes[0], 2.2);
   });
-  bus.on('profile', () => { t.pendingShots = 0; clampZooms(); });
+  bus.on('profile', () => {
+    t.pendingShots = 0; clampZooms();
+    // The instrument in hand was unequipped (equipment screen, storage): put it away.
+    if (t.active !== 'none' && !hasTool(t.active)) {
+      if (t.recording) stopRecording();
+      t.active = 'none'; t.raiseAmt = 0; t.lmb = false; t.rmb = false;
+      emitTool();
+    }
+  });
 
   function clampZooms() {
     for (const k of ['binoculars', 'camera']) {
@@ -278,6 +301,8 @@ export function createTools(ctx, player) {
         speed: player.api.speed, stillTime: player.api.stillTime,
       }) * t.raiseAmt;
       if (t.active === 'binoculars' && t.lmb) amp *= breathFactor(t.lmbHeld);
+      // Wind tugs at a raised instrument (spec §20.2); a held breath still steadies it.
+      amp *= windSway(num(state.env?.wind, 0));
     }
     t.swayAmp += (amp - t.swayAmp) * (1 - Math.exp(-4 * dt));
     const off = swayOffset(ctx.time, t.swayAmp, 0.37);

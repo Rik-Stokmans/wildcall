@@ -4,6 +4,9 @@ import { el, icon, button, itemCard, rarityBadge, formatMod, STAT_INFO, statIsGo
 import * as L from './logic.js';
 import { section, note, sfx, modRows } from './common.js';
 
+// Instruments need their slot (player/tools.js refuses to raise an empty one).
+const TOOL_OF_SLOT = { optics: ['binoculars', '1'], camera: ['camera', '2'], audio: ['recorder', '3'] };
+
 const SLOT_ICON = { optics: 'binoculars', camera: 'camera', audio: 'microphone', backpack: 'backpack', navigation: 'compass', clothing: 'clothing' };
 
 export function renderEquipment(ctx, st) {
@@ -41,9 +44,12 @@ export function renderEquipment(ctx, st) {
         el('ul', { class: 'menu-prosons pros' }, (cur.pros || []).map((t) => el('li', t))),
         el('ul', { class: 'menu-prosons cons' }, (cur.cons || []).map((t) => el('li', t)))) : null,
       el('div', { class: 'menu-detail-actions' },
-        button('Unequip', { icon: 'down', onClick: () => { sfx(ctx, 'equip'); net.send('unequip', { slot }); } })),
+        button('Unequip', { icon: 'down', title: TOOL_OF_SLOT[slot] ? `Key ${TOOL_OF_SLOT[slot][1]} will do nothing until something is equipped here.` : '',
+          onClick: () => { sfx(ctx, 'equip'); net.send('unequip', { slot }); } }),
+        TOOL_OF_SLOT[slot] ? el('span', { class: 'menu-faint' }, `Without it, the ${TOOL_OF_SLOT[slot][0]} (${TOOL_OF_SLOT[slot][1]}) cannot be raised.`) : null),
       upgradesBlock(cur, p, state),
-    ] : [note(`Nothing equipped in the ${L.SLOT_NAMES[slot].toLowerCase()} slot.`)]);
+    ] : [note(`Nothing equipped in the ${L.SLOT_NAMES[slot].toLowerCase()} slot.`),
+      TOOL_OF_SLOT[slot] ? note(`Until you equip something here, the ${TOOL_OF_SLOT[slot][0]} (key ${TOOL_OF_SLOT[slot][1]}) stays in the pack.`) : null]);
 
   // Alternatives with comparison -------------------------------------------------
   const alts = L.alternativesForSlot(p, state.items, slot);

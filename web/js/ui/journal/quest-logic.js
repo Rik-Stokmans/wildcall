@@ -79,9 +79,80 @@ export function objectiveRows(def, state) {
         status = 'current';
       }
     }
-    rows.push({ id: o.id, text: o.text, hint: status === 'current' ? o.hint : '', need, have: done ? need : have, done, status });
+    rows.push({ id: o.id, text: o.text, hint: status === 'current' ? o.hint : '', need, have: done ? need : have, done, status, kind: o.kind, params: o.params || null });
   }
   return rows;
+}
+
+const PARAM_WORDS = {
+  minStars: (v) => `${v}★ or better`,
+  method: (v) => ({ sight: 'by sight', sound: 'by ear', photo: 'from a photo', mixed: 'by sight and sound' })[v] || capital(v),
+  behavior: (v) => `while ${String(v).replace(/_/g, ' ')}`,
+  phase: (v) => `at ${String(v).toLowerCase()}`,
+  rarity: (v) => `${v} birds`,
+  distinct: (v) => (v === 'true' ? 'each one different' : ''),
+};
+
+/**
+ * Where and how an objective counts, as short display words: ["in Murmur Marsh", "2★ or
+ * better"]. Region and habitat keys are resolved to names; unknown params are skipped.
+ */
+export function objectiveConditions(params, regions) {
+  const out = [];
+  if (!params) return out;
+  if (params.region) out.push('in ' + (regions?.find((r) => r.key === params.region)?.name || capital(params.region)));
+  if (params.habitat) out.push('in ' + String(params.habitat).replace(/_/g, ' '));
+  for (const k of ['method', 'minStars', 'behavior', 'phase', 'rarity', 'distinct']) {
+    if (params[k] != null && params[k] !== '') { const w = PARAM_WORDS[k](params[k]); if (w) out.push(w); }
+  }
+  return out;
+}
+
+/**
+ * Requirements that gate a quest: naturalist rank, reputation per faction and earlier
+ * quests, each with the player's standing. [{kind, text, met, have?, need?}]
+ */
+export function requirementRows(def, profile, { ranks, quests } = {}) {
+  const rows = [];
+  if (!def) return rows;
+  const rank = profile?.rank || 1;
+  if ((def.reqRank || 0) > 1) {
+    const title = ranks?.find((r) => r.index === def.reqRank)?.title || `rank ${def.reqRank}`;
+    const cur = ranks?.find((r) => r.index === rank)?.title || `rank ${rank}`;
+    rows.push({ kind: 'rank', text: `Naturalist rank: ${title}`, short: `Needs the rank of ${title}`, met: rank >= def.reqRank, have: cur, need: title });
+  }
+  for (const [f, need] of Object.entries(def.reqRep || {})) {
+    if (!(need > 0)) continue;
+    const have = profile?.rep?.[f] || 0;
+    const name = FACTION_NAMES[f] || capital(f);
+    rows.push({ kind: 'rep', faction: f, text: `${name} reputation ${need}`, short: `Needs ${need} ${name} reputation`, met: have >= need, have, need });
+  }
+  for (const id of def.requires || []) {
+    const q = quests?.[id];
+    const text = `Finish ${q?.name && !q.hidden ? q.name : 'an earlier quest'}`;
+    rows.push({ kind: 'quest', text, short: text, met: profile?.quests?.[id]?.status === 'turned_in' });
+  }
+  return rows;
+}
+
+/**
+ * Quests the player can see coming but cannot take yet: not started, not hidden (or
+ * revealed), every earlier quest done, but rank or reputation still short. Sorted by
+ * how close they are (fewest unmet requirements first).
+ */
+export function lockedQuests(defs, profile, opts = {}) {
+  const out = [];
+  for (const def of defs || []) {
+    if (!def || def.tutorial || profile?.quests?.[def.id]) continue;
+    if (def.hidden && !profile?.flags?.['quest:' + def.id]) continue;
+    const reqs = requirementRows(def, profile, opts);
+    if (reqs.some((r) => r.kind === 'quest' && !r.met)) continue;
+    const unmet = reqs.filter((r) => !r.met);
+    if (!unmet.length) continue; // it would be available; the server lists those itself
+    out.push({ def, state: { status: 'locked', progress: {} }, reqs, unmet: unmet.length });
+  }
+  out.sort((a, b) => a.unmet - b.unmet || a.def.name.localeCompare(b.def.name));
+  return out;
 }
 
 /** {done, total, frac} over the objectives. */
@@ -118,6 +189,10 @@ export function unlockLine(u, regions, quests) {
     // A hidden quest stays a surprise until it is revealed.
     return q?.name && !q.hidden ? `Unlocks the quest ${q.name}` : 'Opens a new line of enquiry';
   }
+  if (kind === 'upgrade') {
+    const [item, up] = String(rest || '').split('/');
+    return `Unlocks the ${capital(up || item || 'equipment')} upgrade`;
+  }
   if (kind === 'feature') {
     if (String(rest).startsWith('trail_')) return 'Reveals a hidden trail on your map';
     return `Unlocks ${capital(rest)}`;
@@ -128,12 +203,24 @@ export function unlockLine(u, regions, quests) {
 export const FACTION_NAMES = { naturalists: 'Naturalists', outfitters: 'Outfitters', research: 'Research', rangers: 'Rangers' };
 
 /** Reward as display lines [{icon, text}] (items are rendered separately as cards). */
-export function rewardLines(reward, { regions, quests, lore } = {}) {
+export function rewardLines(reward, { regions, quests, lore, rep, items } = {}) {
   const r = reward || {};
   const lines = [];
   if (r.xp) lines.push({ icon: 'xp', text: `${r.xp} XP` });
   if (r.credits) lines.push({ icon: 'credits', text: `${r.credits} Field Credits` });
-  for (const [f, n] of Object.entries(r.rep || {})) if (n) lines.push({ icon: 'reputation', text: `+${n} ${FACTION_NAMES[f] || capital(f)} reputation` });
+  for (const [f, n] of Object.entries(r.rep || {})) {
+    if (!n) continue;
+    // With the player's standing when it is known: "+30 Rangers reputation (you have 45)".
+    const have = rep ? (rep[f] || 0) : null;
+    lines.push({ icon: 'reputation', kind: 'rep', text: `+${n} ${FACTION_NAMES[f] || capital(f)} reputation`, note: have != null ? `you have ${have}` : '' });
+  }
+  // Upgrades for equipment (when the server sends them): "Upgrade: Coated lenses".
+  for (const u of r.upgrades || []) {
+    const [item, up] = String(u).split('/');
+    const def = items?.[item];
+    const name = def?.upgrades?.find((x) => x.id === (up || item))?.name || capital(up || item);
+    lines.push({ icon: 'upgrade', kind: 'upgrade', text: `Upgrade: ${name}${def?.name ? ` for your ${def.name}` : ''}` });
+  }
   if (r.skillPoints) lines.push({ icon: 'skillpoint', text: `${r.skillPoints} skill point${r.skillPoints > 1 ? 's' : ''}` });
   for (const id of r.lore || []) lines.push({ icon: 'note', text: `Natural history: ${lore?.[id]?.title || 'a new entry'}` });
   for (const u of r.unlock || []) lines.push({ icon: 'lock', text: unlockLine(u, regions, quests) });

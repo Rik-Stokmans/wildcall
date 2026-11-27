@@ -63,9 +63,9 @@ test('next step text', () => {
 });
 
 test('knowledge gates', () => {
-  assert.deepEqual(infoGates({}), { fact: false, habitats: false, seasons: false, relations: false, similar: false });
+  assert.deepEqual(infoGates({}), { fact: false, habitats: false, seasons: false, relations: false, similar: false, depth: false });
   const g = infoGates({ journalInfo: 2, habitatKnow: 1, seasonKnow: 0, ecoKnow: 1 });
-  assert.deepEqual(g, { fact: true, habitats: true, seasons: false, relations: true, similar: true });
+  assert.deepEqual(g, { fact: true, habitats: true, seasons: false, relations: true, similar: true, depth: false });
 });
 
 test('activity bars normalise to the busiest phase', () => {

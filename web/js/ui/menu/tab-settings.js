@@ -5,6 +5,7 @@ import { el, button } from '../kit.js';
 import { KEYMAP } from '../../core/input.js';
 import { controlsReference } from './controls.js';
 import { section, sfx } from './common.js';
+import { narratorVoiceLabel } from '../journal/sky-logic.js';
 
 const pct = (v) => Math.round(v * 100) + '%';
 const SLIDERS = [
@@ -66,9 +67,21 @@ export function renderSettings(ctx, st) {
     return el('label', { class: 'menu-setting' },
       el('span', { class: 'menu-setting-name' }, 'Voice', voices.length ? null : el('small', 'Captions only: no system voice found')), sel);
   };
+  // Which voice is actually speaking: the pregenerated recorded voice pack (contract §13)
+  // when it loaded, otherwise the system's speech synthesis.
+  const voiceInUse = () => {
+    const recorded = narratorVoiceLabel(ctx.narrator) === 'Recorded voice';
+    const pack = ctx.narrator?.voicePack;
+    return el('div', { class: 'menu-setting menu-voice-in-use' },
+      el('span', { class: 'menu-setting-name' }, 'Voice in use',
+        el('small', recorded ? 'The narrator\'s recorded lines; new lines fall back to the system voice' : 'Spoken by your system\'s speech synthesis')),
+      el('span', { class: 'menu-pill' + (recorded ? '' : ' amber'), title: recorded && pack?.voice ? `${pack.voice}${pack.lines ? `, ${pack.lines} lines` : ''}` : '' },
+        recorded ? 'Recorded voice' : 'System voice'));
+  };
   const narratorCard = section('Narrator', el('div', { class: 'menu-card menu-settings-card' },
     segmented('narrator', 'How often he speaks', [['off', 'Off'], ['sparse', 'Sparse'], ['normal', 'Normal'], ['chatty', 'Chatty']]),
     slider(['volNarrator', 'Narrator volume', 0, 1, 0.01, pct]),
+    voiceInUse(),
     voiceSelect()));
 
   const left = el('div', { class: 'menu-col', 'data-scroll': 'set-l' },

@@ -6,12 +6,15 @@ import { renderSpecies } from './journal-species.js';
 import { renderPhotos, renderRecordings, renderLocations, renderHistory, renderRare } from './journal-sections.js';
 import { screenRoot, closeButton, createCallPlayer, keepScroll, uiSound } from './widgets.js';
 import { mysteryCards } from './species-logic.js';
+import { renderSky } from './sky-section.js';
 
 const SECTIONS = [
   { id: 'species', label: 'Species', icon: 'bird', render: renderSpecies },
   { id: 'photos', label: 'Photographs', icon: 'camera', render: renderPhotos },
   { id: 'recordings', label: 'Recordings', icon: 'microphone', render: renderRecordings },
   { id: 'locations', label: 'Places', icon: 'compass', render: renderLocations },
+  // Spec screen 19 (Weather & Time). The HUD's time readout points here (J).
+  { id: 'sky', label: 'Weather & Time', icon: 'sunny', render: renderSky },
   { id: 'history', label: 'Natural History', icon: 'journal', render: renderHistory },
   { id: 'rare', label: 'Rare Discoveries', icon: 'star', render: renderRare },
   // c-field hooks: the Herbarium (web/js/forage/herbarium.js) and the Nests list
@@ -87,6 +90,9 @@ export function createJournalScreen(ctx) {
       closeButton(ctx, 'journal'));
     restore();
   }
+
+  // The Weather & Time page follows the clock (env arrives once a second).
+  ctx.bus.on('env', () => { if (isOpen && st.section === 'sky') render(); });
 
   // A profile update must not wipe a note the player is typing: hold it until they click away.
   ctx.bus.on('profile', () => {

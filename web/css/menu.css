@@ -361,3 +361,45 @@
 /* Narrator voice picker (settings tab). */
 .menu-select { margin-left: auto; max-width: 260px; padding: 4px 8px; border-radius: var(--r-sm); border: 1px solid rgba(85, 69, 55, .3); background: var(--cream); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
 .menu-select:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* ============================================================ credits (spec screen 13) */
+.menu-credits-text { flex: 1; }
+.menu-wallet { display: flex; align-items: center; gap: 16px; }
+.menu-wallet-coin {
+  flex: none; width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #f0cf9f, var(--amber) 70%); color: var(--cream);
+  box-shadow: inset 0 0 0 2px rgba(169, 109, 56, .45), 0 2px 6px rgba(60, 40, 20, .2);
+}
+.menu-wallet-num { font: 700 34px/1.05 var(--font-journal); color: var(--ink); font-variant-numeric: tabular-nums; }
+.menu-wallet-totals { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 13px; font-weight: 600; }
+.menu-wallet-totals .menu-faint { font-weight: 400; font-size: 12px; width: 100%; }
+.menu-credits-tab .earned { color: var(--forest-soft); }
+.menu-credits-tab .spent { color: var(--bark); }
+.menu-wallet-ways .menu-h3.spend { margin-top: 12px; }
+.menu-wallet-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; color: var(--ink-soft); }
+.menu-wallet-list li { display: flex; gap: 8px; align-items: center; }
+.menu-wallet-list svg { flex: none; color: var(--amber-deep); }
+.menu-ledger { padding: 6px 16px 10px; }
+.menu-ledger-day + .menu-ledger-day { border-top: 1px solid rgba(85, 69, 55, .14); }
+.menu-ledger-dayhead {
+  display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0 3px;
+  font: italic 600 13px/1.2 var(--font-journal); color: var(--ink-soft);
+}
+.menu-ledger-dayhead b { font: 600 12px/1 var(--font-ui); font-style: normal; font-variant-numeric: tabular-nums; }
+.menu-ledger-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 4px 0; font-size: 14px; }
+.menu-ledger-mark { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; }
+.menu-ledger-row.earned .menu-ledger-mark { background: rgba(74, 116, 89, .16); color: var(--forest-soft); }
+.menu-ledger-row.spent .menu-ledger-mark { background: rgba(85, 69, 55, .12); color: var(--bark); }
+.menu-ledger-reason { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-ledger-amt { font-variant-numeric: tabular-nums; }
+.menu-ledger-row.earned .menu-ledger-amt { color: var(--forest-soft); }
+.menu-ledger-row.spent .menu-ledger-amt { color: var(--bark); }
+.menu-ledger-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 26px 20px; color: var(--paper-deep); }
+.menu-ledger-empty p { margin: 6px 0 0; color: var(--ink); font-family: var(--font-journal); font-size: 15px; }
+.menu-special { padding: 10px 12px; border-radius: var(--r-md); background: rgba(227, 182, 133, .2); border: 1px solid rgba(201, 138, 80, .35); }
+.menu-special .menu-effect { font-weight: 500; color: var(--ink); line-height: 1.5; }
+.menu-abilities { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; }
+.menu-abilities li { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+.menu-abilities svg { flex: none; margin-top: 2px; color: var(--forest); }
+.menu-activate { margin: 8px 0 0; font-style: italic; }
+.menu-gear .menu-detail-actions { margin-bottom: 14px; align-items: center; }

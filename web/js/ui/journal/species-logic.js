@@ -4,6 +4,7 @@
 // has not identified: unidentified cards carry NO name, rarity or colour data.
 
 import { PHASE_NAMES, capital } from './format.js';
+import { SITE_WORDS } from '../../nests/sites.js';
 
 export const LEVELS = { UNKNOWN: 1, HEARD: 2, ENCOUNTERED: 3, IDENTIFIED: 4, DOCUMENTED: 5, STUDIED: 6 };
 export const DEFAULT_LEVEL_NAMES = ['', 'Unknown', 'Heard', 'Encountered', 'Identified', 'Documented', 'Studied'];
@@ -112,7 +113,73 @@ export function infoGates(stats) {
     seasons: (s.seasonKnow || 0) >= 1,
     relations: (s.ecoKnow || 0) >= 1,
     similar: (s.journalInfo || 0) >= 2,
+    // Field Experience rank 3: how hard the bird is to find, and how and when it nests.
+    depth: (s.journalInfo || 0) >= 3,
   };
+}
+
+const DIFFICULTY_WORDS = ['', 'Easy to find', 'Usually found with a little patience', 'Takes some searching', 'Hard to find', 'Very elusive'];
+
+/** {value 1..5, word} for Species.difficulty, or null when the catalog has none. */
+export function difficultyInfo(sp) {
+  const d = Math.round(Number(sp?.difficulty) || 0);
+  if (d < 1) return null;
+  const v = Math.min(5, d);
+  return { value: v, max: 5, word: DIFFICULTY_WORDS[v] };
+}
+
+const SEASON_WORDS = ['spring', 'summer', 'autumn', 'winter'];
+
+/** "spring and summer" / "spring, summer and autumn" / "all year". */
+export function seasonList(flags) {
+  const on = SEASON_WORDS.filter((_, i) => flags?.[i]);
+  if (on.length === 4) return 'all year';
+  if (!on.length) return '';
+  return on.length === 1 ? on[0] : `${on.slice(0, -1).join(', ')} and ${on[on.length - 1]}`;
+}
+
+/**
+ * The nest paragraph for a species page: {site, height, season, desc} as display text,
+ * or null when the species does not nest in the game (site "none" or missing).
+ */
+export function nestInfo(sp) {
+  const n = sp?.nest;
+  if (!n || !n.site || n.site === 'none') return null;
+  const lo = Number(n.heightMin) || 0, hi = Number(n.heightMax) || 0;
+  let height = '';
+  if (hi > 0.3) height = lo > 0.3 ? `${fmtM(lo)}–${fmtM(hi)} above the ground` : `up to ${fmtM(hi)} above the ground`;
+  else if (n.site !== 'burrow') height = 'on or near the ground';
+  const season = seasonList(n.seasons);
+  return {
+    site: SITE_WORDS[n.site] || capital(n.site),
+    height,
+    season: season ? (season === 'all year' ? 'Nests may be active at any time of year' : `Active in ${season}`) : '',
+    desc: n.desc || '',
+  };
+}
+function fmtM(v) { return v >= 10 ? `${Math.round(v)} m` : `${Math.round(v * 10) / 10} m`; }
+
+/**
+ * Does the player have the Forgotten Field Journal? 'carried' when it is in the pack or
+ * equipped, 'stored' when it waits in cabin storage, '' otherwise.
+ */
+export const OLD_JOURNAL = 'forgotten_journal';
+export function oldJournalState(profile) {
+  const has = (list) => (list || []).some((s) => s?.item === OLD_JOURNAL && (s.qty == null || s.qty > 0));
+  if (has(profile?.inventory) || Object.values(profile?.equipped || {}).includes(OLD_JOURNAL)) return 'carried';
+  if (has(profile?.storage)) return 'stored';
+  return '';
+}
+
+/**
+ * The previous naturalist's margin note on a species, shown only for species the player
+ * has identified and only while the old journal is carried. Returns the text or ''.
+ */
+export function marginNote(marginNotes, profile, speciesId) {
+  if (!speciesId || !profile?.journal?.species?.[speciesId]) return '';
+  if (oldJournalState(profile) !== 'carried') return '';
+  const t = marginNotes?.[speciesId];
+  return typeof t === 'string' ? t.trim() : '';
 }
 
 /** The player's own encounters per day phase as normalised bars. */

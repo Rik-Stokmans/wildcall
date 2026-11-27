@@ -37,8 +37,9 @@ export function renderCharacter(ctx, st) {
     button('Open skills', { small: true, variant: points > 0 ? 'primary' : 'secondary', onClick: () => st.goTab('skills') }));
 
   const credits = el('div', { class: 'menu-card menu-credits' },
-    icon('credits', 22), el('div', el('div', { class: 'menu-faint' }, 'Field Credits'),
-      el('div', { class: 'menu-credits-num' }, L.formatNumber(p.credits))));
+    icon('credits', 22), el('div', { class: 'menu-credits-text' }, el('div', { class: 'menu-faint' }, 'Field Credits'),
+      el('div', { class: 'menu-credits-num' }, L.formatNumber(p.credits))),
+    button('Ledger', { small: true, variant: 'ghost', onClick: () => st.goTab('credits') }));
 
   const factions = [...new Set([...Object.keys(L.FACTION_NAMES), ...Object.keys(p.rep || {})])];
   const repCard = el('div', { class: 'menu-card' },
@@ -48,7 +49,7 @@ export function renderCharacter(ctx, st) {
       return el('div', { class: 'menu-rep-row' },
         el('span', L.FACTION_NAMES[f] || label(f)),
         progressBar(v, Math.max(100, Math.ceil(v / 50) * 50), { height: 8 }),
-        el('b', v));
+        el('b', String(v)));
     })));
 
   // --- right column: unlocks, totals, stats ----------------------------------

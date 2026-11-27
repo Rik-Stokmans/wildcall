@@ -6,7 +6,7 @@ import { el, icon, button, stars, progressBar, rarityColor, DISCOVERY_LEVELS, WI
 import {
   speciesCards, filterCards, progressCounts, discoveryLadder, nextStepText, infoGates, activityBars, expectedActivity, mysteryCards,
   photosOfSpecies, photosOfMystery, recordingsOfSpecies, recordingsOfMystery, observationsOfSpecies, similarSpecies, habitatList,
-  studyPercent, METHOD_LABELS, GENERIC_BIRD,
+  studyPercent, METHOD_LABELS, GENERIC_BIRD, difficultyInfo, nestInfo, marginNote, oldJournalState,
 } from './species-logic.js';
 import { regionName, capital, formatDay, clockText, plural, wildRarityColorIndex, SEASON_LABELS } from './format.js';
 import { qualityWord } from './journal-logic.js';
@@ -62,7 +62,7 @@ function speciesCard(env, c) {
     return el('div', { class: 'jr-card unknown', title: 'Not yet identified' },
       el('div', { class: 'jr-card-art' }, illustration(real, { size: 78, silhouette: true })),
       el('div', { class: 'jr-card-name' }, 'Unknown'),
-      el('div', { class: 'jr-card-level' }, DISCOVERY_LEVELS[1]));
+      el('div', { class: 'jr-card-level' }, 'Not yet met'));
   }
   const card = el('button', {
     type: 'button', class: 'jr-card known' + (sel ? ' selected' : ''),
@@ -175,8 +175,37 @@ function aboutTab(env, sp, entry) {
   out.push(el('p', { class: 'jr-next' }, nextStepText(entry, DISCOVERY_LEVELS)));
   out.push(el('p', { class: 'jr-desc' }, sp.desc));
   if (sp.idTips) out.push(el('div', { class: 'jr-note-box' }, el('b', 'How to tell it apart'), el('p', sp.idTips)));
+  // The previous naturalist's note, in another hand, while the old journal is carried.
+  const margin = marginNote(ctx.state.welcome?.marginNotes, ctx.state.profile, sp.id);
+  if (margin) {
+    out.push(el('aside', { class: 'jr-margin-note', title: 'From the Forgotten Field Journal' },
+      el('span', { class: 'jr-margin-who' }, 'In the margin, in another hand:'),
+      el('p', margin)));
+  } else if (ctx.state.welcome?.marginNotes?.[sp.id] && oldJournalState(ctx.state.profile) === 'stored') {
+    out.push(el('p', { class: 'jr-muted small' }, 'The old field journal in your cabin storage has a note on this bird. Carry it to read it here.'));
+  }
   if (gates.fact) { if (sp.fact) out.push(el('div', { class: 'jr-fact' }, icon('info', 16), el('p', sp.fact))); }
   else out.push(lockedHint('A little trivia about this bird is tucked away.'));
+
+  // Field Experience rank 3: discovery difficulty and the nest.
+  const diff = difficultyInfo(sp);
+  const nest = nestInfo(sp);
+  if (gates.depth) {
+    if (diff) {
+      out.push(el('div', { class: 'jr-difficulty', title: `Discovery difficulty ${diff.value} of ${diff.max}` },
+        el('span', { class: 'jr-difficulty-label' }, 'Discovery difficulty'),
+        el('span', { class: 'jr-difficulty-pips' }, Array.from({ length: diff.max }, (_, i) => el('i', { class: i < diff.value ? 'on' : '' }))),
+        el('span', { class: 'jr-difficulty-word' }, diff.word)));
+    }
+    if (nest) {
+      out.push(el('div', { class: 'jr-nest-box' },
+        el('div', { class: 'jr-nest-head' }, icon('nest', 18), el('b', nest.site)),
+        nest.desc ? el('p', nest.desc) : null,
+        el('div', { class: 'jr-nest-meta' }, [nest.height, nest.season].filter(Boolean).join(' · '))));
+    }
+  } else if (diff || nest) {
+    out.push(lockedHint('How hard this bird is to find, and how it nests, opens up at Field Experience rank 3.'));
+  }
 
   out.push(sectionTitle('Where and when'));
   if (gates.habitats) {

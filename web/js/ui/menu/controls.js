@@ -6,7 +6,7 @@
 export const CONTROL_SECTIONS = [
   ['Moving', [
     ['forward', 'Walk forward'], ['back', 'Walk back'], ['left', 'Step left'], ['right', 'Step right'],
-    ['run', 'Run (hold)'], ['crouch', 'Crouch (toggle)'], ['jump', 'Jump'], ['sit', 'Sit and wait (toggle)'],
+    ['run', 'Run (hold)'], ['crouch', 'Crouch (toggle)'], ['jump', 'Jump · climb a ledge'], ['sit', 'Sit and wait (toggle)'],
   ]],
   ['In the field', [
     ['interact', 'Interact / talk'], ['focus', 'Focused listening (hold)'], ['identify', 'Identify the bird you are watching'],

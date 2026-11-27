@@ -9,6 +9,18 @@ const r3 = (v) => Math.round((Number(v) || 0) * 1000) / 1000;
 export const POSE_HZ_PLAY = 10;
 export const POSE_HZ_IDLE = 2;
 export const TOOLS = Object.freeze(['none', 'binoculars', 'camera', 'recorder']);
+
+/** Equipment slot each instrument needs ('' for none). */
+export const TOOL_SLOTS = Object.freeze({ binoculars: 'optics', camera: 'camera', recorder: 'audio' });
+export function toolSlot(name) { return TOOL_SLOTS[name] || ''; }
+
+/** The kind word shown when an instrument's slot is empty. */
+export function missingToolText(name) {
+  if (name === 'binoculars') return 'No binoculars equipped. Choose a pair in Equipment (Tab).';
+  if (name === 'camera') return 'No camera equipped. Choose one in Equipment (Tab).';
+  if (name === 'recorder') return 'No recorder equipped. Choose one in Equipment (Tab).';
+  return '';
+}
 export const MOVES = Object.freeze(['still', 'crouch', 'walk', 'run', 'sprint']);
 
 /** Seconds between pose messages for a game mode (contract §4). */

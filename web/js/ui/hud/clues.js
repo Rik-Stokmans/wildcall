@@ -53,6 +53,41 @@ export function clueCard(clue, resolve = {}) {
 }
 
 /**
+ * Which clue cards the panel shows (spec §29.1: subtle). The server may send more live
+ * sources than are worth a card; the rest fold into one quiet "+2 more sounds" line.
+ *
+ * @param live    ClueStore.list() entries ({id, clue, born}), strongest first
+ * @param opts    { max = 2, quarry: Set|array of mystery ids a quest is about,
+ *                  tutorial: bool (the first quest is under way) }
+ * Order: the quest's quarry first, then sounds the player has never heard, then the
+ * newest, then the loudest. During the tutorial only the quarry plus one other card is
+ * shown (one card in all while the quarry is still unknown), so a beginner is never
+ * handed a wall of cards.
+ * @returns {{shown: object[], hidden: number}}
+ */
+export function selectClueCards(live, opts = {}) {
+  const list = Array.isArray(live) ? live.filter(Boolean) : [];
+  const quarry = new Set(opts.quarry || []);
+  const isQuarry = (e) => !!(e.clue?.mystery && quarry.has(e.clue.mystery));
+  const rank = (e) => (isQuarry(e) ? 0 : e.clue?.new ? 1 : 2);
+  const sorted = list.slice().sort((a, b) => (rank(a) - rank(b))
+    || ((b.born || 0) - (a.born || 0))
+    || ((b.clue?.strength || 0) - (a.clue?.strength || 0))
+    || (a.id - b.id));
+  let max = Math.max(1, (opts.max ?? 2) | 0);
+  if (opts.tutorial) max = Math.min(max, sorted.some(isQuarry) ? 2 : 1);
+  const shown = sorted.slice(0, max);
+  return { shown, hidden: Math.max(0, sorted.length - shown.length) };
+}
+
+/** "+1 more sound" / "+3 more sounds", or '' for none. */
+export function moreSoundsText(n) {
+  n = n | 0;
+  if (n <= 0) return '';
+  return `+${n} more sound${n === 1 ? '' : 's'}`;
+}
+
+/**
  * Live clues keyed by id. Times are seconds on any monotonic clock the caller picks.
  * `cap` is the number of simultaneous sources shown (stats.clueSlots); the strongest win.
  */
@@ -87,6 +122,13 @@ export class ClueStore {
     if (left <= 0) return 0;
     const f = Math.min(this.fade, entry.ttl);
     return left >= f ? 1 : left / f;
+  }
+
+  /** Every live clue, strongest first (no slot cap): the panel folds the extras. */
+  all(now) {
+    const live = [...this.map.values()].filter((e) => e.expires > now);
+    live.sort((a, b) => (b.clue.strength - a.clue.strength) || (a.id - b.id));
+    return live;
   }
 
   /** Live clues, strongest first, capped to the slot count. */

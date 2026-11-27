@@ -1,4 +1,5 @@
 // Pure toast stack model: lifetimes, XP coalescing and the sound each kind plays.
+import { resolveIcon } from '../kit/icons.js';
 
 const LIFE = { level: 6.5, warn: 6, discovery: 5.5, quest: 5.5, xp: 3.2 };
 export const DEFAULT_LIFE = 4.5;
@@ -11,8 +12,19 @@ export function toastLife(kind) { return LIFE[kind] || DEFAULT_LIFE; }
 const ICONS = {
   xp: 'xp', discovery: 'bird', level: 'level', quest: 'quest', item: 'backpack', info: 'info',
   warn: 'warning', location: 'pin', journal: 'journal', rep: 'reputation', credits: 'credits', behavior: 'eye',
+  buff: 'heart', lens: 'lens', nest: 'nest', forage: 'leaf', rare: 'star',
 };
-export function toastIcon(t) { return t.icon || ICONS[t.kind] || 'info'; }
+/** Neutral icon for kinds this client does not know yet (never the kit's bare dot). */
+export const FALLBACK_TOAST_ICON = 'leaf';
+/**
+ * Icon for a toast: the server's icon when the kit can draw it, else the kind's icon,
+ * else a neutral leaf. Item icons the kit lacks (and new toast kinds) degrade softly.
+ */
+export function toastIcon(t) {
+  if (t?.icon && resolveIcon(t.icon)) return t.icon;
+  const k = ICONS[t?.kind];
+  return k && resolveIcon(k) ? k : FALLBACK_TOAST_ICON;
+}
 
 const SOUNDS = { level: 'level', discovery: 'discover', quest: 'page', item: 'reward', credits: 'coin', warn: 'error', location: 'discover', journal: 'page' };
 /** ui sound for a toast kind, or '' for silence (plain XP gains stay quiet). */

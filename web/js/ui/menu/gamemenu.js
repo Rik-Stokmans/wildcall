@@ -7,6 +7,7 @@ import { renderInventory } from './tab-inventory.js';
 import { renderEquipment } from './tab-equipment.js';
 import { renderRank } from './tab-rank.js';
 import { renderSettings } from './tab-settings.js';
+import { renderCredits } from './tab-credits.js';
 
 export const TABS = [
   { id: 'character', label: 'Character', icon: 'level', render: renderCharacter },
@@ -14,6 +15,7 @@ export const TABS = [
   { id: 'inventory', label: 'Inventory', icon: 'backpack', render: renderInventory },
   { id: 'equipment', label: 'Equipment', icon: 'binoculars', render: renderEquipment },
   { id: 'rank', label: 'Rank', icon: 'rank', render: renderRank },
+  { id: 'credits', label: 'Credits', icon: 'credits', render: renderCredits },
   { id: 'settings', label: 'Settings', icon: 'settings', render: renderSettings, static: true },
 ];
 

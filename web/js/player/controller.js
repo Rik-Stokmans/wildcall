@@ -11,6 +11,9 @@ import {
   waterPushBack, refuseWaterStep, JUMP_SPEED, GRAVITY, STILL_SPEED, EYE_HEIGHT, STEP_UP,
 } from './movement.js';
 import {
+  findLedge, mantlePose, mantleDuration, pushClimb, collectTops, topAt, weatherSlow,
+} from './mantle.js';
+import {
   buildPose, poseInterval, pickInteractable, gateStep, cinematicPose, chooseCinematicPath, cinematicObstacles, easeYaw, REGION_WATER,
 } from './field.js';
 
@@ -19,6 +22,8 @@ const SNAP_DOWN = 0.4;         // stick to the ground when it drops less than th
 const INTERACT_EVERY = 0.12;   // seconds between interaction target scans
 const REGION_EVERY = 0.25;     // seconds between region checks
 const HAB_MARSH = 5, HAB_SHRUB = 10;
+const TOPS_EVERY = 0.4;        // seconds between refreshes of the climbable rock/stump tops nearby
+const TOPS_REACH = 10;         // metres around the player searched for them
 
 /** Density of scrub underfoot from the habitat byte (contract: core.Habitat ids). */
 function shrubFor(habitat) {
@@ -53,7 +58,15 @@ export function createController(ctx, getTools) {
     hintY: 0,            // height carried by the last teleport (platform lookup)
     jumpQueued: false,
     busy: false,         // a modal prompt (field note) is capturing the keyboard
+    onRock: null,        // the rock/stump top the player stands on ({x, z, y, r}) or null
+    pushT: 0,            // seconds spent pushing forward against an obstacle (auto-climb)
+    climbAgain: 0,       // time before another climb attempt may be probed
   };
+  // A climb in progress: {t, dur, from:{x,y,z}, to:{x,y,z}} or null (spec §19.1).
+  let mantle = null;
+  // Climbable rock and stump tops around the player (refreshed a few times a second).
+  const tops = [];
+  let topsT = 0, topsX = Infinity, topsZ = Infinity;
   const sprint = createSprintState();
   const gate = { safe: null, inside: false };
   const cine = { t: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, init: false, path: null, planned: false };
@@ -82,12 +95,69 @@ export function createController(ctx, getTools) {
     } else {
       out.h = ground; out.platform = false;
     }
+    // The top of a boulder or stump the player has climbed onto.
+    const top = tops.length ? topAt(tops, x, z, y) : null;
+    out.rock = null;
+    if (top && top.y > out.h) { out.h = top.y; out.platform = false; out.rock = top; }
     out.ground = ground;
     return out;
   }
-  const sup = { h: 0, platform: false, ground: 0 };
+  const sup = { h: 0, platform: false, ground: 0, rock: null };
+  const climbSup = { h: 0, platform: false, ground: 0, rock: null };
+  const climbSupport = (x, z, y) => (loadedAt(x, z) ? supportAt(x, z, y, climbSup).h : NaN);
+
+  function refreshTops(dt) {
+    topsT -= dt;
+    const moved = Math.hypot(feet.x - topsX, feet.z - topsZ);
+    if (topsT > 0 && moved < 3) return;
+    topsT = TOPS_EVERY; topsX = feet.x; topsZ = feet.z;
+    tops.length = 0;
+    const w = world();
+    const size = w?.chunkSize;
+    if (!size || typeof w.vegOf !== 'function') return;
+    for (let cx = Math.floor((feet.x - TOPS_REACH) / size); cx <= Math.floor((feet.x + TOPS_REACH) / size); cx++) {
+      for (let cz = Math.floor((feet.z - TOPS_REACH) / size); cz <= Math.floor((feet.z + TOPS_REACH) / size); cz++) {
+        let veg = null;
+        try { veg = w.vegOf(cx, cz); } catch { veg = null; }
+        if (veg) collectTops(veg, feet.x, feet.z, TOPS_REACH, tops);
+      }
+    }
+  }
+
+  /** Try to climb onto what is straight ahead. Returns true when a climb starts. */
+  function tryMantle() {
+    if (mantle || !s.grounded || s.sitting || ctx.time < s.climbAgain) return false;
+    s.climbAgain = ctx.time + 0.4;
+    const dir = headingDir(s.yaw);
+    const to = findLedge(feet, dir, climbSupport);
+    if (!to) return false;
+    if (s.crouching) s.crouching = false;
+    mantle = { t: 0, dur: mantleDuration(to.rise), from: { x: feet.x, y: feet.y, z: feet.z }, to };
+    s.vx = s.vz = s.vy = 0;
+    s.pushT = 0;
+    s.noise = Math.max(s.noise, 0.15); // a soft scuffle, not a crash
+    bus.emit('footstep', { surface: surfaceHere(), move: 'walk' });
+    return true;
+  }
+
+  function stepMantle(dt) {
+    mantle.t += dt / mantle.dur;
+    const p = mantlePose(mantle.t, mantle.from, mantle.to);
+    feet.set(p.x, p.y, p.z);
+    s.speed += (0.8 - s.speed) * damp(8, dt);
+    if (mantle.t >= 1) {
+      supportAt(feet.x, feet.z, feet.y + 0.05, sup);
+      feet.y = Math.max(sup.h, sup.ground);
+      s.grounded = true; s.vy = 0;
+      s.onPlatform = sup.platform;
+      s.onRock = sup.rock;
+      bus.emit('footstep', { surface: s.onRock ? 'rock' : surfaceHere(), move: 'walk', land: true });
+      mantle = null;
+    }
+  }
 
   function surfaceHere() {
+    if (s.onRock) return 'rock';
     if (s.onPlatform) return 'wood';
     if (heightAt(feet.x, feet.z) < -0.05) return 'water';
     return world()?.surfaceAt?.(feet.x, feet.z) || 'grass';
@@ -108,6 +178,9 @@ export function createController(ctx, getTools) {
     s.needsGround = true;
     s.viewY = feet.y;
     s.speed = 0;
+    s.onRock = null; s.pushT = 0;
+    mantle = null;
+    topsT = 0;
     gate.safe = null;
     eye.set(feet.x, feet.y + s.eyeH, feet.z);
   }
@@ -211,8 +284,10 @@ export function createController(ctx, getTools) {
     const tf = terrainFactor({
       grade: Math.max(0, grade), shrub: s.onPlatform ? 0 : shrubFor(habitat), depth, terrain: num(stats.terrain, 0),
     });
+    // Rain and strong wind slow the walk a little unless rain gear covers it (spec §20.2).
+    const wx2 = weatherSlow(state.env, num(stats.rainProof, 0));
     const tSpeed = moving
-      ? targetSpeed(s.crouching ? 'crouch' : s.gait, { moveSpeed: num(stats.moveSpeed, 1), terrainFactor: tf, focus, raised })
+      ? targetSpeed(s.crouching ? 'crouch' : s.gait, { moveSpeed: num(stats.moveSpeed, 1) * wx2, terrainFactor: tf, focus, raised })
       : 0;
 
     // Smooth acceleration; little control while airborne.
@@ -243,6 +318,13 @@ export function createController(ctx, getTools) {
     let nx = ox + s.vx * dt, nz = oz + s.vz * dt;
     probe.set(nx, feet.y, nz);
     world()?.collide?.(probe, RADIUS);
+    // Standing on a boulder or stump: its own collider would shove the player off the
+    // top, so a push pointing away from its centre is ignored.
+    const rk = s.onRock;
+    if (rk && (probe.x !== nx || probe.z !== nz)) {
+      const px = probe.x - nx, pz = probe.z - nz;
+      if (px * (nx - rk.x) + pz * (nz - rk.z) >= 0) { probe.x = nx; probe.z = nz; }
+    }
     nx = probe.x; nz = probe.z;
 
     // Never walk onto terrain that is not loaded yet (held at the edge of what exists).
@@ -285,9 +367,18 @@ export function createController(ctx, getTools) {
     if (s.jumpQueued) {
       s.jumpQueued = false;
       if (s.grounded && state.mode === 'play') {
+        // Jump while walking into a ledge, rock or low wall: climb onto it instead.
+        if (f > 0 && tryMantle()) return;
         if (s.crouching) s.crouching = false;              // first press stands up
         else if (dNow < 0.9) { s.vy = JUMP_SPEED; s.grounded = false; }
       }
+    }
+    // Or simply keep walking into it for a moment.
+    if (state.mode === 'play' && !s.busy) {
+      const want = moving ? Math.hypot(tvx, tvz) : 0;
+      const pc = pushClimb(s.pushT, f, want > 0.3 ? moved / Math.max(dt, 1e-4) : 9, s.grounded, dt);
+      s.pushT = pc.pushT;
+      if (pc.go && tryMantle()) return;
     }
     if (s.grounded && s.vy <= 0) {
       if (sup.h >= feet.y - SNAP_DOWN && sup.h <= feet.y + STEP_UP) {
@@ -310,6 +401,7 @@ export function createController(ctx, getTools) {
     }
     if (feet.y < sup.ground) feet.y = sup.ground;
     s.onPlatform = s.grounded && sup.platform;
+    s.onRock = s.grounded && sup.rock && Math.abs(feet.y - sup.rock.y) < 0.06 ? sup.rock : null;
 
     // Speed and move mode from what actually happened (collisions, gate, water).
     const actual = dt > 0 ? moved / dt : 0;
@@ -447,9 +539,12 @@ export function createController(ctx, getTools) {
         s.viewY = feet.y;
         s.needsGround = false;
       }
+      refreshTops(dt);
       if (!loadedAt(feet.x, feet.z)) {
         // The ground was unloaded beneath us (should not happen): freeze rather than fall.
         s.vx = s.vz = s.vy = 0;
+      } else if (mantle) {
+        stepMantle(dt);
       } else {
         physics(dt, tools);
       }
@@ -488,6 +583,8 @@ export function createController(ctx, getTools) {
     get sprinting() { return sprint.sprinting; },
     get grounded() { return s.grounded; },
     get onPlatform() { return s.onPlatform; },
+    /** True while climbing onto a ledge (spec §19.1). */
+    get climbing() { return !!mantle; },
     get stillTime() { return s.stillTime; },
     get ready() { return s.spawned && !s.needsGround; },
     get target() { return target; },

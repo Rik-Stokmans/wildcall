@@ -8,13 +8,16 @@
 // ctx.player / ctx.tools / ctx.audio is not there yet.
 import { el, fill, icon, label, formatClock, WEATHER_NAMES, WEATHER_ICONS } from '../kit.js';
 import { RAD2DEG, tickTable, stripOffset, headingDegrees, arrowDegrees, spreadWidth, landmarkPips, cuePlacement } from './compass.js';
-import { ClueStore, clueCard } from './clues.js';
+import { ClueStore, clueCard, selectClueCards, moreSoundsText } from './clues.js';
 import { ToastStack, toastSound } from './toasts.js';
-import { trackedQuest, questForMystery } from './quest.js';
+import { trackedQuest, questForMystery, quarryMysteries } from './quest.js';
 import { HintTracker, HINTS } from './hints.js';
 import { sightingView } from './sighting.js';
 import { hudLevel, toastsVisible } from './visibility.js';
 import { forecastSlots } from './weather.js';
+import { nextNudge, nudgeTarget, nudgeBearing, nudgeComplete, tutorialActive } from './nudges.js';
+
+const FOCUS_TIP_USES = 3;         // after this many uses of focused listening the card tip retires
 
 const HALF_SPAN = (80 / RAD2DEG); // compass strip shows +-80 degrees around the heading
 const SIGHT_STALE = 1.5;          // seconds without a net:sighting before the readout hides
@@ -96,13 +99,17 @@ export default {
     const phaseText = el('span', { class: 'hud-phase' });
     const weatherIcon = el('span', { class: 'hud-weather-icon' });
     const forecastEl = el('div', { class: 'hud-forecast' });
-    const timeEl = el('div', { class: 'hud-part hud-time' },
-      el('div', { class: 'hud-time-row' }, weatherIcon, clockText, phaseText), forecastEl);
+    // The readout hints at the Weather & Time page in the journal (J).
+    const timeEl = el('div', { class: 'hud-part hud-time', title: 'Weather & Time: open the journal (J)' },
+      el('div', { class: 'hud-time-row' }, weatherIcon, clockText, phaseText,
+        el('kbd', { class: 'hud-time-key', 'aria-label': 'Journal key' }, 'J')), forecastEl);
 
     const questEl = el('div', { class: 'hud-part hud-quest', hidden: true });
     const clueList = el('div', { class: 'hud-part hud-clues' });
+    const moreEl = el('div', { class: 'hud-clue-more', hidden: true });
     const cueLayer = el('div', { class: 'hud-part hud-cues' });
     const hintEl = el('div', { class: 'hud-part hud-hint', hidden: true });
+    let nudgeTick = null; // compass tick toward a nudge target (Finn's stall)
 
     const promptEl = el('div', { class: 'hud-part hud-prompt', hidden: true });
     const sightEl = el('div', { class: 'hud-sight', hidden: true });
@@ -113,12 +120,17 @@ export default {
     const sightName = el('div', { class: 'hud-sight-name' });
     const sightChips = el('div', { class: 'hud-chips' });
     const sightBehavior = el('div', { class: 'hud-sight-behavior' });
+    // Identification progress: "3 marks noted" and a pip per watchable mark (no names).
+    const sightPips = el('span', { class: 'hud-pips' });
+    const sightMarksText = el('span', { class: 'hud-marks-text' });
+    const sightQuarry = el('span', { class: 'hud-marks-quarry', title: 'The bird your quest is about', hidden: true }, icon('quest', 11));
+    const sightMarks = el('div', { class: 'hud-marks', hidden: true }, sightQuarry, sightPips, sightMarksText);
     const sightIdentify = el('div', { class: 'hud-sight-identify', hidden: true }, keycaps(['T']), el('span', 'Identify'));
     const sightMoment = el('div', { class: 'hud-sight-moment', hidden: true, title: 'A moment worth photographing' }, icon('camera', 15));
     sightEl.append(
       el('div', { class: 'hud-sight-top' },
         el('div', { class: 'hud-sight-ringwrap' }, sightRing, sightProgress, sightCenter, sightMoment),
-        el('div', { class: 'hud-sight-text' }, sightName, sightBlocked, sightBehavior)),
+        el('div', { class: 'hud-sight-text' }, sightName, sightMarks, sightBlocked, sightBehavior)),
       sightChips, sightIdentify);
 
     // tools (bottom right)
@@ -145,8 +157,18 @@ export default {
       if (next !== level) { level = next; hudRoot.dataset.level = next; }
       const tv = toastsVisible(state.mode);
       toastRoot.classList.toggle('hud-toasts-hidden', !tv);
+      // Over an open screen the stack starts below the screen's header (close button).
+      toastRoot.classList.toggle('hud-toasts-over-screen', state.mode === 'ui');
     }
-    bus.on('focus', ({ on }) => { focusOn = !!on; if (on) hints.complete('focus'); applyLevel(); renderHint(); });
+    bus.on('focus', ({ on }) => {
+      focusOn = !!on;
+      if (on) {
+        hints.complete('focus');
+        // After a few uses the "Hold F" line on the cards has done its job.
+        if (hints.bump('focusUses') >= FOCUS_TIP_USES) for (const rec of cards.values()) if (rec.showTip) { rec.showTip = false; rec.sig = ''; }
+      }
+      applyLevel(); renderHint();
+    });
     bus.on('mode', applyLevel);
     bus.on('tool', ({ active, raised }) => {
       if (active === 'binoculars' && raised) hints.complete('binoculars');
@@ -193,7 +215,9 @@ export default {
       let rec = cards.get(c.id);
       if (!rec) {
         rec = { n: el('div', { class: 'hud-card' }), arrow: el('span', { class: 'hud-arrow', html: ARROW_SVG }), sig: '' };
-        rec.showTip = isNew && hints.tipAvailable('focusTip', 4, 'focus');
+        // One "Hold F" line at a time, and only until focus has been used a few times.
+        const tipOnScreen = [...cards.values()].some((r) => r.showTip && r.n.isConnected);
+        rec.showTip = isNew && !tipOnScreen && hints.count('focusUses') < FOCUS_TIP_USES && hints.tipAvailable('focusTip', 6, 'focusTipRetired');
         if (rec.showTip) hints.tipShown('focusTip');
         cards.set(c.id, rec);
       }
@@ -208,22 +232,41 @@ export default {
               el('b', view.title),
               view.subtitle ? el('span', view.subtitle) : null),
             view.dir ? el('em', { class: 'hud-card-dir' }, view.dir) : null),
-          view.facts.length ? el('div', { class: 'hud-card-facts' }, view.facts.map((f) => el('span', { class: 'hud-fact hud-fact-' + f.key }, f.text))) : null,
+          view.facts.length || view.confidence ? el('div', { class: 'hud-card-facts' },
+            view.facts.map((f) => el('span', { class: 'hud-fact hud-fact-' + f.key }, f.text)),
+            view.confidence ? el('span', { class: 'hud-card-conf' }, view.confidence) : null) : null,
           view.quest ? el('div', { class: 'hud-card-quest' }, icon('quest', 11), el('span', view.quest)) : null,
           view.unusual ? el('div', { class: 'hud-card-unusual' }, 'Something unusual…') : null,
-          view.confidence ? el('div', { class: 'hud-card-conf' }, view.confidence) : null,
           rec.showTip ? el('div', { class: 'hud-card-tip' }, 'Hold F to listen closely') : null);
       }
       return rec;
     }
+    /** Mystery ids any active quest is about (tracked quest first). */
+    function quarrySet() {
+      const p = state.profile;
+      const out = new Set();
+      for (const [id, qs] of Object.entries(p?.quests || {})) {
+        if (qs?.status !== 'active') continue;
+        for (const m of quarryMysteries(p, id)) out.add(m);
+      }
+      return out;
+    }
+    let shownIds = new Set();
     function syncClues(now) {
-      const live = clues.list(now);
+      const pick = selectClueCards(clues.all(now), { max: 2, quarry: quarrySet(), tutorial: tutorialActive(state.profile) });
+      const live = pick.shown;
       const keep = new Set(live.map((e) => e.id));
-      for (const [id, rec] of cards) if (!keep.has(id)) { rec.n.remove(); cards.delete(id); }
+      shownIds = keep;
+      // Cards of sounds that are still live but folded away keep their record (and tip state).
+      for (const [id, rec] of cards) if (!keep.has(id)) { rec.n.remove(); if (!clues.map.has(id)) cards.delete(id); }
       live.forEach((entry, i) => {
         const rec = cardFor(entry, false);
         if (rec.n.parentNode !== clueList || clueList.children[i] !== rec.n) clueList.insertBefore(rec.n, clueList.children[i] || null);
       });
+      const more = moreSoundsText(pick.hidden);
+      moreEl.textContent = more;
+      moreEl.hidden = !more;
+      if (moreEl.parentNode !== clueList || clueList.lastChild !== moreEl) clueList.appendChild(moreEl);
     }
     bus.on('net:clue', (c) => {
       if (!c) return;
@@ -251,7 +294,7 @@ export default {
     /* ------------------------------------------------------------ observation readout */
     let sightAt = -99, lastBird = 0, chipEls = new Map(), newKeyUntil = 0;
     bus.on('net:sighting', (s) => {
-      const v = sightingView(s, speciesName);
+      const v = sightingView(s, speciesName, (m) => quarrySet().has(m));
       if (!v) { sightAt = -99; sightEl.hidden = true; lastBird = 0; return; }
       sightAt = nowT();
       if (v.bird !== lastBird) {
@@ -270,6 +313,14 @@ export default {
       sightBehavior.textContent = v.behavior;
       sightBehavior.hidden = !v.behavior;
       sightIdentify.hidden = !v.identify;
+      sightIdentify.classList.toggle('pulse', v.pulse);
+      sightMarks.hidden = !v.marks.have && !v.quarry;
+      if (!sightMarks.hidden) {
+        sightMarksText.textContent = v.marksText || 'Watching…';
+        sightQuarry.hidden = !v.quarry;
+        if (sightPips.childElementCount !== v.marks.total) fill(sightPips, Array.from({ length: v.marks.total }, () => el('i')));
+        [...sightPips.children].forEach((n, i) => n.classList.toggle('on', i < v.marks.have));
+      }
       sightMoment.hidden = !v.moment;
       const seen = new Set();
       for (const chip of v.chips) {
@@ -294,6 +345,7 @@ export default {
         t.label ? el('span', { class: 'hud-prompt-label' }, t.label) : null);
       promptEl.hidden = false;
       wantHint('interact');
+      if (String(t.id || '').startsWith('fg@') && /pick/i.test(t.verb || 'pick')) nearForage = true;
     });
     bus.on('action:interact', () => hints.complete('interact'));
 
@@ -370,6 +422,7 @@ export default {
     });
 
     /* ------------------------------------------------------------ hints */
+    let lastHint = '';
     const wanted = new Map(); // id -> earliest time
     function wantHint(id, delay = 0) { if (!wanted.has(id) && hints.available(id)) wanted.set(id, nowT() + delay); }
     function renderHint() {
@@ -378,16 +431,28 @@ export default {
       hintEl.hidden = !show;
       if (!show) return;
       const h = HINTS[a.id] || {};
-      fill(hintEl, keycaps(h.keys || []), el('span', h.text || ''));
+      fill(hintEl,
+        h.icon ? el('span', { class: 'hud-hint-icon' }, icon(h.icon, 16)) : null,
+        h.keys?.length ? keycaps(h.keys) : null,
+        el('span', h.text || ''),
+        h.once ? el('button', { type: 'button', class: 'hud-hint-close', title: 'Dismiss', 'aria-label': 'Dismiss hint',
+          onclick: () => { hints.dismiss(); lastHint = ''; renderHint(); } }, icon('close', 12)) : null);
+      hintEl.classList.toggle('nudge', !!h.once);
     }
     for (const a of ['forward', 'back', 'left', 'right']) bus.on('action:' + a, () => { if (hints.complete('movement')) renderHint(); wanted.delete('movement'); });
     bus.on('action:focus', () => { hints.complete('focus'); wanted.delete('focus'); renderHint(); });
     bus.on('action:journal', () => { hints.complete('journal'); wanted.delete('journal'); renderHint(); });
-    bus.on('ui:open', ({ name }) => { if (name === 'journal') { hints.complete('journal'); wanted.delete('journal'); } });
+    bus.on('ui:open', ({ name }) => {
+      if (name === 'journal') { hints.complete('journal'); wanted.delete('journal'); }
+      for (const id of ['finn', 'cabin', 'cook', 'nest']) {
+        if (nudgeComplete(id, { opened: name }) && hints.wasShown(id)) { hints.complete(id); wanted.delete(id); }
+      }
+    });
+    // Talking to Finn counts as finding his stall.
+    bus.on('net:dialog', (d) => { if (d?.npc === 'finn' && hints.wasShown('finn')) { hints.complete('finn'); wanted.delete('finn'); } });
     bus.on('game:start', () => wantHint('movement', 2.5));
 
     /* ------------------------------------------------------------ frame update */
-    let lastHint = '';
     function updateCompass(now) {
       const yaw = ctx.player?.yaw ?? 0;
       const st = stats();
@@ -426,6 +491,19 @@ export default {
         n.style.width = `${spreadWidth(e.clue.spread, HALF_SPAN) * 100}%`;
         n.style.opacity = String(Math.max(0.15, clues.alpha(e, now) * (0.35 + 0.5 * (e.clue.strength || 0))));
       });
+
+      // A soft moss tick toward the place an onboarding nudge points at (Finn's stall).
+      const target = hints.active ? nudgeTarget(hints.active.id, state.pois) : null;
+      const b = target ? nudgeBearing(target, px, pz) : null;
+      const off = b == null ? null : stripOffset(b, yaw, HALF_SPAN);
+      if (off != null && !nudgeTick) { nudgeTick = el('div', { class: 'hud-nudge-tick' }, el('i'), el('span')); compassStrip.appendChild(nudgeTick); }
+      if (nudgeTick) {
+        nudgeTick.style.display = off == null ? 'none' : '';
+        if (off != null) {
+          nudgeTick.style.left = `${50 + off * 50}%`;
+          nudgeTick.lastChild.textContent = target?.kind === 'shop' ? 'Finn' : '';
+        }
+      }
     }
 
     function updateClues(now) {
@@ -433,8 +511,9 @@ export default {
       const gone = clues.prune(now);
       if (gone.length) syncClues(now);
       for (const e of clues.list(now)) {
+        if (!shownIds.has(e.id)) continue;
         const rec = cards.get(e.id);
-        if (!rec) { syncClues(now); continue; }
+        if (!rec || !rec.n.parentNode) { syncClues(now); continue; }
         rec.n.style.opacity = String(clues.alpha(e, now));
         rec.arrow.style.transform = `rotate(${arrowDegrees(e.clue.bearing, yaw)}deg)`;
       }
@@ -471,11 +550,32 @@ export default {
       renderHintIfChanged();
     };
 
+    let nudgeAt = 0, nearForage = false;
+    function checkNudges(now) {
+      if (now < nudgeAt) return;
+      nudgeAt = now + 1;
+      const p = state.profile;
+      if (!p) return;
+      // Finn's stall reached (or the hint already shown and the player walked there).
+      if (hints.wasShown('finn') && !hints.isDone('finn')) {
+        const t = nudgeTarget('finn', state.pois);
+        const f = ctx.player?.feet;
+        if (t?.pos && f && nudgeComplete('finn', { near: Math.hypot(t.pos.x - f.x, t.pos.z - f.z) })) {
+          if (hints.complete('finn')) lastHint = '';
+        }
+      }
+      const id = nextNudge({ profile: p, items: state.items, nearForage, wasShown: (k) => hints.wasShown(k) }, (k) => hints.available(k));
+      if (id && !wanted.has(id)) wanted.set(id, now + (id === 'finn' ? 4 : 1.2));
+      nearForage = false;
+    }
     function renderHintIfChanged() {
       const now = ctx.time;
+      if (level === 'full') checkNudges(now);
       if (hints.tick(now)) lastHint = '';
       if (!hints.active && level === 'full') {
-        for (const [id, at] of wanted) {
+        // Onboarding nudges (shown once) go before the repeatable first-time tips.
+        const queue = [...wanted].sort((a, b) => (HINTS[b[0]]?.once ? 1 : 0) - (HINTS[a[0]]?.once ? 1 : 0));
+        for (const [id, at] of queue) {
           if (at > now) continue;
           wanted.delete(id);
           if (hints.request(id, now)) break;

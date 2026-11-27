@@ -3,6 +3,7 @@
 import { el, icon, button, itemCard, rarityBadge, label } from '../kit.js';
 import * as L from './logic.js';
 import { section, note, sfx, modRows } from './common.js';
+import { abilityLines, activationLine, hasSpecial } from '../encounter/itemlogic.js';
 
 const KIND_TEXT = { equipment: 'Equipment', gadget: 'Gadget', supply: 'Supply', keepsake: 'Keepsake', ingredient: 'Ingredient', food: 'Food' };
 const TIER_TEXT = ['', 'Basic', 'Explorer', 'Specialist', 'Unique'];
@@ -104,10 +105,13 @@ function itemDetail(ctx, st, cap) {
           el('span', { class: 'menu-faint' }, [KIND_TEXT[def.kind] || label(def.kind), def.slot ? label(def.slot) : '', TIER_TEXT[def.tier] ? `Tier ${def.tier} · ${TIER_TEXT[def.tier]}` : ''].filter(Boolean).join(' · '))))),
     isEquipped ? el('span', { class: 'menu-tag purchased' }, 'Equipped') : (stack?.qty > 1 ? el('span', { class: 'menu-tag' }, `×${stack.qty} carried`) : null),
     el('p', { class: 'menu-desc' }, def.desc),
+    hasSpecial(def) ? section('Special ability', el('div', { class: 'menu-special' },
+      el('p', { class: 'menu-effect' }, def.special),
+      abilityLines(def).length ? el('ul', { class: 'menu-abilities' }, abilityLines(def).map((l) => el('li', icon(l.icon, 14), el('span', l.text)))) : null,
+      activationLine(def) ? el('p', { class: 'menu-faint menu-activate' }, activationLine(def)) : null)) : null,
     Object.values(mods).some((v) => v) ? section('Effects', el('div', { class: 'menu-mods' }, modRows(mods))) : null,
     def.pros?.length || def.cons?.length ? section('In the field', lines(def.pros, 'pros'), lines(def.cons, 'cons')) : null,
     (def.rarity >= 2 && def.history) ? section('History', el('p', { class: 'menu-history' }, def.history)) : null,
-    def.rarity >= 2 && def.special ? section('Special', el('p', { class: 'menu-effect' }, def.special)) : null,
     el('div', { class: 'menu-detail-actions' }, actions));
 }
 

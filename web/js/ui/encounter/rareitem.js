@@ -3,6 +3,7 @@
 // history and the item's special effect.
 import { icon, rarityBadge, rarityColor, rarityName, formatMod, statIsGood, STAT_INFO, label } from '../kit.js';
 import { el, fill, button, ico, sound, screenFrame, confirmKey } from './shell.js';
+import { abilityLines, activationLine } from './itemlogic.js';
 
 const KIND_TEXT = { equipment: 'Equipment', gadget: 'Gadget', supply: 'Supply', keepsake: 'Keepsake' };
 
@@ -33,14 +34,18 @@ export function createRareItem(ctx) {
       el('div', { class: 'enc-rare-meta' }, rarityBadge(item.rarity),
         el('span', {}, [KIND_TEXT[item.kind], item.slot && label(item.slot), item.tier && `Tier ${item.tier}`].filter(Boolean).join(' · '))),
       item.desc ? el('p', { class: 'enc-rare-desc' }, item.desc) : null,
+      item.special ? el('div', { class: 'enc-rare-special' }, ico('star', 18), el('div', {}, el('div', { class: 'enc-tips-title' }, 'Special effect'), el('p', {}, item.special),
+        abilityLines(item).length ? el('ul', { class: 'enc-rare-abilities' }, abilityLines(item).map((l) => el('li', {}, ico(l.icon, 14), el('span', {}, l.text)))) : null,
+        activationLine(item) ? el('div', { class: 'enc-rare-activate' }, activationLine(item)) : null)) : null,
       item.history ? el('blockquote', { class: 'enc-rare-history' }, el('div', { class: 'enc-tips-title' }, 'History'), item.history) : null,
-      item.special ? el('div', { class: 'enc-rare-special' }, ico('star', 18), el('div', {}, el('div', { class: 'enc-tips-title' }, 'Special effect'), el('p', {}, item.special))) : null,
       mods.length || item.cons?.length ? el('div', { class: 'enc-rare-mods' },
         mods.map(([k, v]) => el('span', { class: 'enc-mod ' + (statIsGood(k, v) ? 'good' : 'bad'), title: STAT_INFO[k].label }, `${STAT_INFO[k].label} ${formatMod(k, v)}`)),
         (item.cons || []).map((c) => el('span', { class: 'enc-mod bad' }, c))) : null,
       el('div', { class: 'enc-unlock' }, ico('check', 16), 'Unlocked: added to your pack and noted in your journal'));
     fill(frame.footer, el('div', { class: 'enc-foot-actions' },
-      button('Open equipment', { variant: 'secondary', icon: 'backpack', onClick: () => { sound(ctx, 'page'); ui.open('menu', { tab: 'inventory' }); } }),
+      item.kind === 'equipment'
+        ? button('Open equipment', { variant: 'secondary', icon: 'binoculars', onClick: () => { sound(ctx, 'page'); ui.open('menu', { tab: 'equipment' }); } })
+        : button('Open inventory', { variant: 'secondary', icon: 'backpack', onClick: () => { sound(ctx, 'page'); ui.open('menu', { tab: 'inventory' }); } }),
       button('Continue', { variant: 'primary', onClick: close })));
   }
 

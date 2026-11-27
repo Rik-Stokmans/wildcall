@@ -60,6 +60,11 @@ body:has(#hud .hud-sight:not([hidden])) .nar-caption {
   top: 104px;
 }
 
+/* With the forecast strip under the clock (Weather Sense) the readout is taller. */
+body:has(#hud .hud-sight:not([hidden])):has(#hud .hud-forecast:not([hidden])) .nar-caption {
+  top: 132px;
+}
+
 /* While a screen is open the caption sits a little lower and softer. */
 body:has(#screens > .screen:not([hidden])) .nar-caption {
   bottom: 6vh;
