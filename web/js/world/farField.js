@@ -18,7 +18,7 @@ import { inRing } from './streamer.js';
 /** Far ring radius in chunks per quality (0 = no far field). */
 export const FAR_RADIUS = Object.freeze({ low: 8, medium: 12, high: 16 });
 /** Chunks per sector side. */
-export const SECTOR = 4;
+export const SECTOR = 8;
 /** Far requests allowed in flight at once. */
 export const FAR_INFLIGHT = 3;
 /** Seconds before an unanswered far request may be sent again. */

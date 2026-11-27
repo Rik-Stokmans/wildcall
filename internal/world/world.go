@@ -31,10 +31,10 @@ const (
 	capCells   = 4096 // structure-grid cells (stage 1: features)
 	capTrails  = 4096 // generated trails, one slot per cell
 	capPOIs    = 2048 // finished per-cell POI lists
-	capGrids   = 384  // chunk vertex grids (~80 KB each)
+	capGrids   = 512  // chunk vertex grids (~80 KB each)
 	capVeg     = 384  // chunk vegetation + foliage shapes
 	capPerches = 384  // chunk perch lists
-	capChunks  = 768  // encoded chunk frames (all LODs)
+	capChunks  = 2560 // encoded chunk frames (all LODs; the client holds a far ring of coarse chunks)
 	capTiles   = 96   // encoded map tiles
 )
 
@@ -188,6 +188,9 @@ func (w *World) finishHome() {
 			continue
 		}
 		p.Pos.Y = float32(height(float64(p.Pos.X), float64(p.Pos.Z)))
+		if p.ID == "page_0" {
+			p.Pos.Y += oldTowerPlatform // up on the tower's platform
+		}
 	}
 	hl.spawn.Y = float32(height(float64(hl.spawn.X), float64(hl.spawn.Z)))
 	hl.special = append(hl.special, core.Veg{Kind: core.VegOak, Variant: 6, Pos: vec(hl.oakX, height(hl.oakX, hl.oakZ), hl.oakZ), Scale: 2.6, Rot: quantRot(0.8)})
