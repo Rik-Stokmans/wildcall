@@ -168,3 +168,18 @@ test('bout fitting: no bout length plays the whole recording once; near-equal pl
   assert.ok(fitBout(1, 1000, mulberry32(3)).segments.length <= 16, 'loops are capped');
   for (const bad of [NaN, -3, Infinity]) assert.ok(fitBout(3, bad, mulberry32(1)).duration > 0);
 });
+
+test('a call type without its own recording borrows the species plain call, never a song', async () => {
+  const { SampleBank } = await import('./samples.js');
+  const manifest = { species: {
+    robin: { 0: [{ file: 'robin/0-song-1.ogg' }], 1: [{ file: 'robin/1-call-1.ogg' }, { file: 'robin/1-call-2.ogg' }] },
+    wheatear: { 0: [{ file: 'wheatear/0-song-1.ogg' }] },
+  } };
+  const bank = new SampleBank({ fetchJson: async () => manifest, fetchBytes: async () => new ArrayBuffer(8), decode: async () => ({ duration: 1, length: 48000, numberOfChannels: 1 }) });
+  await bank.load();
+  assert.deepEqual(bank.list('robin', 2).map((e) => e.file), ['robin/1-call-1.ogg', 'robin/1-call-2.ogg']); // alarm -> call
+  assert.equal(bank.list('robin', 0)[0].file, 'robin/0-song-1.ogg');
+  assert.equal(bank.has('robin', 2), true);
+  assert.deepEqual(bank.list('wheatear', 1), []); // only a song exists: stay synthesised
+  assert.equal(bank.pick('wheatear', 1), null);
+});

@@ -42,7 +42,10 @@ export function parseManifest(json) {
         if (!file || file.startsWith('/') || file.includes('..') || file.includes('\\') || /^[a-z][a-z0-9+.-]*:/i.test(file)) continue;
         const dur = Number.isFinite(+e.dur) && +e.dur > 0 ? +e.dur : 0;
         const gain = Number.isFinite(+e.gain) && +e.gain > 0 ? Math.min(3, Math.max(0.1, +e.gain)) : 1;
-        entries.push({ file, url: BASE_URL + file.split('/').map(encodeURIComponent).join('/'), dur, gain });
+        // Files are named <species>/<call index>-<kind>-<n>.ogg; the kind lets a call type
+        // without its own recording borrow the species' plain call (see SampleBank.list).
+        const kind = (/(?:^|\/)\d+-([a-z]+)-\d+\.[a-z0-9]+$/i.exec(file) || [])[1] || '';
+        entries.push({ file, url: BASE_URL + file.split('/').map(encodeURIComponent).join('/'), dur, gain, kind: kind.toLowerCase() });
       }
       if (entries.length) byCall.set(idx, entries);
     }
@@ -107,6 +110,7 @@ export class SampleBank {
     this.bags = new Map(); // "id/call" -> remaining shuffled indices
     this.last = new Map(); // "id/call" -> last index played
     this.loaded = null;
+    this.borrowed = new Map(); // species id -> plain-call recordings, for call types without their own
   }
 
   /** Load the manifest once. Never rejects. */
@@ -115,15 +119,31 @@ export class SampleBank {
       try {
         const json = await this.io.fetchJson(MANIFEST_URL);
         this.manifest = parseManifest(json);
+        this.borrowed.clear();
       } catch { this.manifest = new Map(); }
       return this.manifest.size;
     })();
     return this.loaded;
   }
 
-  /** Recordings of a species' call (empty array when there are none). */
+  /**
+   * Recordings of a species' call (empty array when there are none). A call type with no
+   * recording of its own (mostly alarm calls) borrows the species' plain "call"
+   * recordings, so the bird is still heard in its own real voice; it never borrows a
+   * song, which would teach the wrong sound.
+   */
   list(speciesId, callIndex) {
-    return this.manifest.get(speciesId)?.get(callIndex | 0) || [];
+    const byCall = this.manifest.get(speciesId);
+    if (!byCall) return [];
+    const exact = byCall.get(callIndex | 0);
+    if (exact) return exact;
+    let borrowed = this.borrowed.get(speciesId);
+    if (!borrowed) {
+      borrowed = [];
+      for (const list of byCall.values()) for (const e of list) if (e.kind === 'call') borrowed.push(e);
+      this.borrowed.set(speciesId, borrowed);
+    }
+    return borrowed;
   }
 
   has(speciesId, callIndex) {
