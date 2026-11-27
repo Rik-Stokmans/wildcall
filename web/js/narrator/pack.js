@@ -9,10 +9,12 @@
 // into ONE backend with createSpeech's shape, so the controller is unchanged: a line
 // with a clip plays the clip, any other line falls back to speech synthesis.
 //
-// Playback goes through Web Audio on the game's AudioContext when ctx.audio has a
-// running one (ctx.audio.voiceOut, if the audio engine ever exposes such a node, is used
-// as the destination; it must not apply volMaster again), else an HTMLAudioElement.
-// Volume is what the controller passes: volNarrator × volMaster.
+// Playback goes through the audio engine's narrator bus (ctx.audio.voice.play) when it
+// exists and its context is running: the clip then passes the master limiter, obeys
+// volNarrator × volMaster live (also while it plays) and ducks music and ambience. Where
+// the engine has no voice bus, a private gain on the game's AudioContext is used, and
+// without a running context an HTMLAudioElement. Those two fallbacks take the volume
+// the controller passes (volNarrator × volMaster) once, at the start.
 
 /** The JS fallback when crypto.subtle is unavailable (non-secure context). */
 const K = new Uint32Array([
@@ -103,7 +105,10 @@ export function createVoicePack({ baseUrl = 'voice/', fetchImpl = globalThis.fet
     try {
       const a = getAudio?.();
       const ac = a?.context;
-      if (ac && ac.state === 'running' && typeof ac.decodeAudioData === 'function') return { ac, out: a.voiceOut || ac.destination };
+      if (ac && ac.state === 'running' && typeof ac.decodeAudioData === 'function') {
+        const voice = a.voice && typeof a.voice.play === 'function' ? a.voice : null;
+        return { ac, voice, out: a.voiceOut || ac.destination };
+      }
     } catch { /* none */ }
     return null;
   }
@@ -123,6 +128,13 @@ export function createVoicePack({ baseUrl = 'voice/', fetchImpl = globalThis.fet
   /** Play a clip through Web Audio. Resolves to {ended: Promise, stop()} once sounding. */
   async function playWebAudio(wa, id, e, volume) {
     const buf = await decoded(wa.ac, id, e);
+    if (wa.voice) {
+      // The engine's narrator bus owns the volume (live) and the ducking.
+      let end;
+      const ended = new Promise((resolve) => { end = resolve; });
+      const h = wa.voice.play(buf, { gain: 1, onEnded: () => end() });
+      return { ended, stop() { try { h.stop(); } catch { /* ignore */ } }, bus: true };
+    }
     const src = wa.ac.createBufferSource();
     const g = wa.ac.createGain();
     src.buffer = buf;
@@ -152,7 +164,7 @@ export function createVoicePack({ baseUrl = 'voice/', fetchImpl = globalThis.fet
       el.onerror = () => reject(new Error('audio element error'));
     });
     await el.play();
-    return { ended, stop() { try { el.onended = null; el.pause(); el.removeAttribute('src'); el.load?.(); } catch { /* ignore */ } } };
+    return { ended, stop() { try { el.onended = null; el.pause(); el.removeAttribute('src'); el.load?.(); } catch { /* ignore */ } }, bus: false };
   }
 
   return {
@@ -214,7 +226,10 @@ export function createVoicePack({ baseUrl = 'voice/', fetchImpl = globalThis.fet
  * One backend (createSpeech's shape) over a voice pack and system speech: clips where
  * the pack has the line, speech synthesis for everything else (and when a clip fails).
  */
-export function createNarratorVoice(speech, pack) {
+export function createNarratorVoice(speech, pack, { onSpeaking = null } = {}) {
+  // Speaking state for the engine's ducking: clips on the engine's bus report themselves;
+  // speech synthesis and element playback are reported here.
+  const speaking = (on) => { try { onSpeaking?.(!!on); } catch { /* ignore */ } };
   return {
     get available() { return !!speech?.available || !!pack?.loaded; },
     voices: () => speech?.voices?.() || [],
@@ -224,16 +239,19 @@ export function createNarratorVoice(speech, pack) {
       let settle;
       const done = new Promise((r) => { settle = r; });
       let finished = false, cancelled = false;
-      let clip = null, synth = null, guard = null;
+      let clip = null, synth = null, guard = null, reported = false;
+      const report = (on) => { if (on !== reported) { reported = on; speaking(on); } };
       const finish = (ok, reason) => {
         if (finished) return;
         finished = true;
         clearTimeout(guard);
+        report(false);
         settle({ ok, reason });
       };
       const viaSpeech = () => {
         if (cancelled) return;
         if (!speech?.available) { finish(false, 'unavailable'); return; }
+        report(true);
         synth = speech.speak(text, opts);
         Promise.resolve(synth?.done).then((r) => finish(!!r?.ok, r?.reason || 'end'), () => finish(false, 'error'));
       };
@@ -243,6 +261,7 @@ export function createNarratorVoice(speech, pack) {
         if (cancelled) { h?.stop?.(); return; }
         if (!h) { viaSpeech(); return; }
         clip = h;
+        if (!h.bus) report(true);
         // Never hang if 'ended' is lost.
         const limit = (h.dur || opts.expect || 6) * 1.5 + 3;
         guard = setTimeout(() => { clip?.stop?.(); finish(true, 'timeout'); }, limit * 1000);

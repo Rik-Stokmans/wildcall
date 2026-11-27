@@ -28,7 +28,9 @@ export default {
       const win = typeof window !== 'undefined' ? window : globalThis;
       const system = createSpeech(win);
       const pack = createVoicePack({ baseUrl: 'voice/', getAudio: () => ctx.audio, win });
-      const speech = createNarratorVoice(system, pack);
+      const speech = createNarratorVoice(system, pack, {
+        onSpeaking: (on) => ctx.audio?.voice?.setSpeaking?.(on),
+      });
       const root = typeof document !== 'undefined' ? document.getElementById('narrator') : null;
       const caption = createCaption(root);
       let focusOn = false;

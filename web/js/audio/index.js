@@ -14,6 +14,8 @@ import { CallManager } from './calls.js';
 import { SampleBank } from './samples.js';
 import { Ambience } from './ambience.js';
 import { Sfx } from './sfx.js';
+import { Wildlife } from './wildlife.js';
+import { NarratorBus } from './narratorbus.js';
 import { Music } from './music.js';
 import { ambienceMix, probeWater, creekDistance, runningWaterDist } from './mix.js';
 import { STRIDE } from './footsteps.js';
@@ -31,6 +33,7 @@ let eng = null;
 let calls = null;
 let bank = null;
 let ambience = null;
+let wildlife = null;
 let sfx = null;
 let music = null;
 let readyEmitted = false;
@@ -43,7 +46,7 @@ let level = 0;
 const listener = { x: 0, y: 0, z: 0 };
 let envClock = 0, waterClock = 0;
 let probe = { waterDist: Infinity, seaDist: Infinity, dirX: 0, dirZ: 0 };
-let region = 0, canopy = 0;
+let region = 0, canopy = 0, habitat = -1;
 const trails = new Map();
 let footstepEvents = 0;
 let stepAcc = 0;
@@ -51,6 +54,17 @@ let lastTool = { active: 'none', raised: false };
 let lastRecording = false;
 let lastZoomSound = 0;
 const emptySpectrum = new Uint8Array(FFT_SIZE / 2);
+
+/** The narrator bus lives for the whole session: speaking state reported before the
+ * engine exists is applied when it does. */
+const narBus = new NarratorBus(null, {
+  fetchBytes: async (url) => {
+    const res = await fetch(url, { cache: 'force-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.arrayBuffer();
+  },
+  canPlay: () => canPlay(),
+});
 
 /** Create (once) and resume the AudioContext. Must run inside a user gesture in browsers. */
 function start() {
@@ -70,6 +84,8 @@ function start() {
     calls = new CallManager(eng, ctx, bank);
     ambience = new Ambience(eng, ((ctx.state?.welcome?.seed ?? 1) >>> 0) || 1);
     sfx = new Sfx(eng);
+    wildlife = new Wildlife(eng, ((ctx.state?.welcome?.seed ?? 1) >>> 0) || 1);
+    narBus.attach(eng);
     music = new Music(eng);
     eng.applySettings(ctx.state?.settings, 0.01);
     applyDucks(0.01);
@@ -189,6 +205,8 @@ function sampleEnvironment(dt) {
       if (Number.isFinite(r)) region = r;
       const c = w.canopyAt?.(x, z);
       if (Number.isFinite(c)) canopy = c;
+      const h = w.habitatAt?.(x, z);
+      habitat = Number.isFinite(h) ? h : -1;
     } catch { /* keep the last values */ }
     if (waterClock >= WATER_SAMPLE_S) {
       waterClock = 0;
@@ -201,6 +219,14 @@ function sampleEnvironment(dt) {
     creekDist: creek, waterDist: probe.waterDist, seaDist: probe.seaDist, altitude: listener.y,
   });
   ambience.setInputs(mix, listener, { x: probe.dirX, z: probe.dirZ });
+  wildlife.setInputs({
+    env: ctx.state?.env || {}, region, habitat: loaded ? habitat : -1, canopy,
+    waterDist: probe.waterDist, seaDist: probe.seaDist, creekDist: creek,
+    listener, world: loaded && w ? {
+      habitatAt: w.habitatAt?.bind(w), waterDepthAt: w.waterDepthAt?.bind(w),
+      canopyAt: w.canopyAt?.bind(w), heightAt: w.heightAt?.bind(w),
+    } : {},
+  });
   eng.revReturn.gain.setTargetAtTime(0.55 * reverbReturn(canopy, region), eng.now, 1);
 }
 
@@ -287,6 +313,29 @@ const api = {
     if (!sfx || !canPlay()) return;
     if (!sfx.ui(name)) console.warn('[audio] unknown ui sound', name);
   },
+  /**
+   * The narrator's bus: his clips go through the master limiter and volume structure
+   * (volNarrator x volMaster, both live) and music (-8 dB) and ambience (-3 dB) duck
+   * under him over 250 ms. The bird bus is never ducked.
+   */
+  voice: {
+    /**
+     * Decode and play a clip on the narrator bus.
+     * @param {ArrayBuffer|AudioBuffer|string} source encoded bytes, a decoded buffer or a URL
+     * @param {{gain?: number, onEnded?: () => void}} [opts] gain: per-clip trim (default 1)
+     * @returns {{stop(): void, readonly duration: number, readonly playing: boolean}}
+     *   duration (s) is 0 until a clip given as bytes/URL has been decoded. onEnded fires
+     *   once however it ends (finished, stopped, or never started).
+     */
+    play(source, opts = {}) {
+      start();
+      return narBus.play(source, opts);
+    },
+    /** True while a clip plays here or setSpeaking(true) is in force (drives the duck). */
+    get speaking() { return narBus.speaking; },
+    /** The narrator module reports speech synthesis (which cannot be routed here). */
+    setSpeaking(on) { narBus.setSpeaking(on); },
+  },
   /** Current bird-bus loudness 0..1 (fast attack, slow release). */
   get level() { return level; },
   /** True once the AudioContext is running. */
@@ -344,6 +393,8 @@ export default {
     calls.update(dt);
     sampleEnvironment(dt);
     ambience.update(dt);
+    wildlife.focus = focusAmt;
+    wildlife.update(dt);
     fallbackFootsteps(dt);
     watchTools();
 

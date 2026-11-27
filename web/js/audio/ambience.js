@@ -7,9 +7,9 @@ import { setPannerPos } from './calls.js';
 import { ambienceLoad, loadCompensation } from './mix.js';
 
 /** Per-layer gain trims: mix levels are 0..1, these set the real loudness. */
-const TRIM = {
+export const TRIM = {
   wind: 0.32, windHowl: 0.07, leaves: 0.16, creek: 0.26, lap: 0.16, surf: 0.42,
-  rainOpen: 0.3, rainCanopy: 0.26, insects: 0.018, crickets: 0.02, night: 0.09,
+  rainOpen: 0.3, rainCanopy: 0.26, insects: 0.013, crickets: 0.02, night: 0.09,
 };
 const LEVEL_HZ = 10;
 

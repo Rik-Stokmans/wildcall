@@ -4,7 +4,9 @@
 //   rev return ──┴→ birdIn → birdFocus ────┴→ birdUser(volBirds) ─┐
 //   ambience layers → ambIn → ambDuck → ambUser(volAmbient) ──────┤
 //   music → musIn → musDuck → musUser(volMusic) ──────────────────┼→ master(volMaster) → limiter → out
-//   ui one-shots → uiIn → uiUser(volUI) ──────────────────────────┘
+//   ui one-shots → uiIn → uiUser(volUI) ──────────────────────────┤
+//   narrator clips → narIn → narUser(volNarrator) ────────────────┘
+//   (ambience and music also pass a narrator-duck stage, ambVo / musVo: -3 / -8 dB while he speaks)
 //   voice sends → revIn → convolver(forest IR) → revReturn → birdIn
 //   master → limiter → safety soft-clip → out
 //
@@ -62,21 +64,32 @@ export class AudioEngine {
     this.ambIn = g(1);
     this.ambDuck = g(1);
     this.ambUser = g(1);
+    this.ambVo = g(1); // narrator duck (never on the bird bus: bird sound is gameplay)
     this.ambIn.connect(this.ambDuck);
-    this.ambDuck.connect(this.ambUser);
+    this.ambDuck.connect(this.ambVo);
+    this.ambVo.connect(this.ambUser);
     this.ambUser.connect(this.master);
 
     this.musIn = g(1);
     this.musDuck = g(0);
     this.musUser = g(1);
+    this.musVo = g(1);
     this.musIn.connect(this.musDuck);
-    this.musDuck.connect(this.musUser);
+    this.musDuck.connect(this.musVo);
+    this.musVo.connect(this.musUser);
     this.musUser.connect(this.master);
 
     this.uiIn = g(1);
     this.uiUser = g(1);
     this.uiIn.connect(this.uiUser);
     this.uiUser.connect(this.master);
+
+    // The narrator: his clips go through the master limiter like everything else, so
+    // volMaster applies once (here: volNarrator only; master adds volMaster).
+    this.narIn = g(1);
+    this.narUser = g(0.9);
+    this.narIn.connect(this.narUser);
+    this.narUser.connect(this.master);
 
     // Shared forest reverb (one convolver for every voice).
     this.revIn = g(1);
@@ -163,6 +176,7 @@ export class AudioEngine {
     set(this.ambUser, s?.volAmbient ?? 0.7);
     set(this.musUser, s?.volMusic ?? 0.35);
     set(this.uiUser, s?.volUI ?? 0.6);
+    set(this.narUser, s?.volNarrator ?? 0.9);
   }
 
   /** Glide a bus gain to a dB value. */
