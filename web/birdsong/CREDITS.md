@@ -152,6 +152,11 @@ the excerpts stay under the same licence, and attribution must be kept.
 - `golden_oriole/1-call-1.ogg` (call): Golden Oriole, recorded by Andreas Plank, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Pirol_N%C3%A4he_Dahme-Mark_(Andreas_Plank,_21.05.2011).ogg>
 - `golden_oriole/1-call-2.ogg` (call): Golden Oriole, recorded by SanoAK: Alexanderr Kürthy, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:OriolusOriolus_Call_Slovakia_OlympusDM550_file0176.ogg>
 
+## Great Cormorant
+
+- `great_cormorant/0-call-1.ogg` (call): Great Cormorant, recorded by Sonothèque ADVL, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Cormor%C3%A1n_grande_(Phalacrocorax_carbo).mp3>
+- `great_cormorant/0-call-2.ogg` (call): Great Cormorant, recorded by Sharadapte, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Great_cormorant_call_recorded_in_August_2003_at_Ranganathittu_Bird_Sanctuary,_Karnataka.wav>
+
 ## Great Spotted Woodpecker
 
 - `great_spotted_woodpecker/0-drum-1.ogg` (drum): Great Spotted Woodpecker, recorded by Vladimir Yu. Arkhipov, Arkhivov, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Dendrocopos_major.ogg>
@@ -214,6 +219,18 @@ the excerpts stay under the same licence, and attribution must be kept.
 - `ring_ouzel/0-song-1.ogg` (song): Ring Ouzel, recorded by Pascal Christe, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://xeno-canto.org/477951>
 - `ring_ouzel/0-song-2.ogg` (song): Ring Ouzel, recorded by Anthony Wetherhill, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://xeno-canto.org/467639>
 - `ring_ouzel/1-alarm-1.ogg` (alarm): Ring Ouzel, recorded by Anthony Wetherhill, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://xeno-canto.org/468594>
+
+## Rock Ptarmigan
+
+- `rock_ptarmigan/0-call-1.ogg` (call): Rock Ptarmigan, recordist not named in the archive metadata (see the source page), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Ptarmigan_(Lagopus_mutus)_(W1CDR0001418_BD38).ogg>
+
+## Snow Bunting
+
+- `snow_bunting/0-call-1.ogg` (call): Snow Bunting, recorded by Vladimir Yu. Arkhipov, Arkhivov, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Plectrophenax_nivalis_song.ogg>
+
+## Snowy Owl
+
+- `snowy_owl/0-call-1.ogg` (call): Snowy Owl, recorded by HEtonis2, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), Wikimedia Commons <https://commons.wikimedia.org/wiki/File:Snowy_owl_scream_(loud).wav>
 
 ## Song Thrush
 
