@@ -16,13 +16,17 @@ import * as THREE from 'three';
 import {
   GROUND_RES, GROUND_TEXEL, LATTICE_BIAS, FADE_START, FADE_END,
   groundOrigin, allocGroundPlanes, fillGroundRows, createCanopyCache, ringLayout, ringHole, ringPatches,
-  MAX_GAPS,
+  MAX_GAPS, blurStyle,
 } from './groundField.js';
 import { groundQualityOf } from './constants.js';
 import { tuftGeometry, flowerGeometry, fernGeometry } from './groundModels.js';
 
 const ROWS_PER_FRAME = 16;
 const REFRESH_SECONDS = 0.5;
+/** Zoom from which the ground-cover rings widen (binoculars and long lenses). */
+const ZOOM_AT = [2.5, 3.5];
+/** How much wider the rings are then. */
+const ZOOM_RINGS = [2, 4];
 
 // --- shared GLSL ------------------------------------------------------------------
 
@@ -35,6 +39,26 @@ vec3 grassTip(vec3 root) {
 }
 // The colour a stretch of grass averages to from a distance.
 vec3 grassField(vec3 root) { return mix(root, grassTip(root), 0.42); }
+`;
+
+/** Open water standing in the marsh flats (0..1), shared with the terrain shader. */
+export const MARSH_POOL_GLSL = /* glsl */`
+float mpHash(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float mpNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mpHash(i), mpHash(i + vec2(1.0, 0.0)), u.x), mix(mpHash(i + vec2(0.0, 1.0)), mpHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+// Low, level ground only.
+float marshPool(vec2 p, float h) {
+  float n = mpNoise(p / 13.0 + 31.0) * 0.62 + mpNoise(p / 3.7 - 7.0) * 0.38;
+  n += 0.24 * (1.0 - smoothstep(0.35, 1.3, h));
+  return smoothstep(0.57, 0.61, n) * (1.0 - smoothstep(1.1, 1.6, h));
+}
 `;
 
 const NOISE_GLSL = /* glsl */`
@@ -58,6 +82,8 @@ uniform highp sampler2D uGH;
 uniform sampler2D uGC;
 uniform sampler2D uGV;
 uniform sampler2D uGA;
+uniform sampler2D uGS;    // soft region weights: marsh, highland, coast, frost
+uniform float uZoom;      // optical magnification (1 = naked eye)
 uniform vec2 uGOrigin;
 uniform float uTime;
 uniform float uWind;
@@ -83,6 +109,7 @@ const float G_RES = ${GROUND_RES.toFixed(1)};
 const float G_TEXEL = ${GROUND_TEXEL.toFixed(1)};
 
 ${NOISE_GLSL}
+${MARSH_POOL_GLSL}
 
 uint gHash(vec2 idx) {
   uvec2 u = uvec2(ivec2(idx) + ${LATTICE_BIAS});
@@ -195,21 +222,43 @@ vShape = vec3(0.0);
     vec2 uv = gUV(p);
     vec4 cov = texture(uGV, uv);
     float gy = gHeight(p);
-    if (gRand(h) < cov.r * uAmount.x * uBoost && gy > 0.06) {
+    // Region styles (soft weights): x marsh, y highland, z coast, w frost.
+    vec4 st = texture(uGS, uv);
+    vec4 colS = texture(uGC, uv);
+    float green = colS.g - (colS.r + colS.b) * 0.5;
+    float sandy = st.z * (1.0 - smoothstep(0.03, 0.08, green));
+    float clumpN = vnoise(p * 0.55 + 17.0) * 0.7 + vnoise(p * 1.9 - 3.0) * 0.3;
+    float dens = cov.r;
+    if (st.x > 0.02) dens *= 1.0 - smoothstep(0.3, 0.6, marshPool(p, gy)) * st.x;
+    dens *= mix(1.0, smoothstep(0.5, 0.62, clumpN) * 1.5, sandy);
+    dens *= mix(1.0, smoothstep(0.56, 0.68, clumpN) * 1.4, st.w);
+    if (gRand(h) < dens * uAmount.x * uBoost && gy > 0.06) {
       vec4 aux = texture(uGA, uv);
-      vec3 root = pow(texture(uGC, uv).rgb, vec3(2.2));
+      vec3 root = pow(colS.rgb, vec3(2.2));
       float grow = smoothstep(0.0, 0.65, fade);
-      float H = (0.13 + 0.85 * cov.g) * (0.6 + 0.75 * gRand(h)) * uAmount.y * (0.35 + 0.65 * grow);
+      float rr = gRand(h);
+      float H = (0.13 + 0.85 * cov.g) * (0.6 + 0.75 * rr) * uAmount.y * (0.35 + 0.65 * grow);
+      // Marsh: stands of tall reed and lawns of shorter sedge; the reeds stand upright.
+      float stand = st.x * smoothstep(0.54, 0.66, vnoise(p * 0.035 + 3.3) * 0.75 + vnoise(p * 0.21) * 0.25);
+      float reedH = (0.8 + 0.65 * rr) * (0.45 + 0.55 * cov.g) * uAmount.y * (0.35 + 0.65 * grow);
+      H *= 1.0 - 0.5 * (st.x - stand);    // the sedge between the stands stays low
+      H = mix(H, reedH, stand);
+      H = mix(H, (0.5 + 0.4 * rr) * (0.35 + 0.65 * grow), sandy);   // marram
+      H *= 1.0 - 0.45 * st.w;                                         // frosted tufts
       bool gapped = d < ${GAP_RANGE_GLSL} && uGapN > 0;
       if (gapped) H *= gapShrink(p);
+      // Through optics distances shrink by the zoom: blades are sized for how big they
+      // look, not how far they are, so far grass stays fine instead of saw-toothed.
+      float ds = d / uZoom;
       // 30–70 m: fewer, wider, slightly lower blades whose colour settles towards the
       // field colour, so the band reads as continuous soft cover, not sawtooth tufts.
-      float farBand = smoothstep(26.0, 60.0, d);
+      float farBand = smoothstep(26.0, 60.0, ds);
       H *= 1.0 - 0.2 * farBand;
-      float widen = max(1.0, d * 0.3) * grow * (1.0 + 0.6 * farBand);
-      float w = 0.034 * (0.75 + 0.5 * gRand(h)) * widen;
+      float widen = max(1.0, ds * 0.3) * grow * (1.0 + 0.6 * farBand) * mix(1.0, 1.35, min(1.0, (uZoom - 1.0) * 0.25));
+      float w = 0.034 * (0.75 + 0.5 * gRand(h)) * widen * (1.0 - 0.3 * stand - 0.25 * sandy);
       float yaw = gRand(h) * 6.2831853;
-      float curve = 0.18 + 0.4 * gRand(h);
+      float curve = (0.18 + 0.4 * gRand(h)) * (1.0 - 0.7 * stand);
+      curve = mix(curve, 0.5 + 0.35 * rr, sandy);
       float ph = gRand(h) * 6.2831853;
       float shade = 0.86 + 0.26 * gRand(h);
 
@@ -217,9 +266,10 @@ vShape = vec3(0.0);
       float by = yaw + b * 2.39996;
       vec2 fdir = vec2(cos(by), sin(by));
       vec2 across = vec2(-fdir.y, fdir.x);
-      vec2 off = b > 0.5 ? vec2(cos(ph + b * 2.1), sin(ph + b * 2.1)) * 0.05 * max(1.0, d * 0.3) : vec2(0.0);
+      vec2 off = b > 0.5 ? vec2(cos(ph + b * 2.1), sin(ph + b * 2.1)) * 0.05 * max(1.0, ds * 0.3) : vec2(0.0);
       float gust = windGust(p);
       float sway = uWind * (0.2 + 1.05 * gust) + 0.07 * (0.3 + uWind) * sin(uTime * 2.4 + ph);
+      sway *= 1.0 + 0.45 * stand;
       vec2 lean = fdir * curve + uWindDir * sway * 0.8;
       float bl = min(1.0, length(lean) * v);
       float y = H * v * (1.0 - 0.32 * bl * bl);
@@ -229,10 +279,29 @@ vShape = vec3(0.0);
       gNrm = normalize(gNormal(aux) + vec3(fdir.x, 0.0, fdir.y) * 0.2 * v);
 
       vec3 tip = grassTip(root);
-      vec3 c = mix(root * 0.6, tip, smoothstep(0.0, 1.0, v)) * shade;
-      c *= 1.0 + 0.28 * uWind * smoothstep(0.5, 0.95, gust) * v;
-      c = mix(c, grassField(root) * mix(0.92, 1.04, v), 0.6 * farBand);
-      c = mix(grassField(root), c, smoothstep(0.0, 0.7, fade));
+      // Region colours: straw-tipped reeds with dark plumes, wind-cropped ochre turf,
+      // silvery blue-green marram, golden Amberwood grass, white hoar-frost tips.
+      // (each blade its own: some still green, some straw, a few rusty)
+      float bt = fract(rr * 7.31);
+      vec3 marshTip = bt < 0.55 ? vec3(0.3, 0.36, 0.13) : bt < 0.9 ? vec3(0.58, 0.45, 0.18) : vec3(0.48, 0.25, 0.1);
+      tip = mix(tip, marshTip, st.x * (0.35 + 0.45 * stand));
+      float tl = dot(tip, vec3(0.3, 0.6, 0.1));
+      tip = mix(tip, mix(vec3(tl), tip, 0.65) * vec3(1.18, 1.0, 0.62), st.y * 0.7);
+      vec3 rootC = mix(root, vec3(0.08, 0.15, 0.09), sandy);
+      tip = mix(tip, mix(vec3(0.26, 0.36, 0.26), vec3(0.5, 0.48, 0.3), step(0.7, rr)), sandy);
+      tip = mix(tip, root * vec3(1.12, 1.16, 1.14) + vec3(0.0, 0.006, 0.012), (st.z - sandy) * 0.8);
+      float amberish = smoothstep(0.03, 0.12, colS.r - colS.g) * (1.0 - st.w);
+      tip = mix(tip, vec3(0.74, 0.46, 0.12), amberish * 0.6);
+      rootC = mix(rootC, vec3(0.34, 0.25, 0.11), st.w);
+      tip = mix(tip, vec3(0.9, 0.93, 0.97), st.w);
+      vec3 c = mix(rootC * 0.6, tip, smoothstep(0.0, 1.0, v)) * shade;
+      float plume = stand * step(0.45, gRand(h));
+      c = mix(c, vec3(0.2, 0.11, 0.1), smoothstep(0.82, 0.92, v) * plume);
+      c *= 1.0 + (0.28 + 0.35 * st.x) * uWind * smoothstep(0.5, 0.95, gust) * v;
+      // (marram and frosted tufts settle to their own colour, not the sand's or snow's)
+      vec3 fieldC = mix(grassField(root), (rootC + tip) * 0.5, max(sandy, st.w));
+      c = mix(c, fieldC * mix(0.92, 1.04, v), 0.6 * farBand * (1.0 - st.w));
+      c = mix(fieldC, c, smoothstep(0.0, 0.7, fade));
       vColor = c * (1.0 - 0.1 * uWet);
       vec3 toP = normalize(vec3(xz.x, gy + y, xz.y) - cameraPosition);
       vTrans = uSunCol * tip * pow(max(0.0, dot(toP, uSunDir)), 4.0) * v * 0.45;
@@ -335,8 +404,10 @@ vShape = vec3(0.0);
       vec4 aux = texture(uGA, uv);
       vec3 root = pow(col.rgb, vec3(2.2));
       float region = floor(col.a * 255.0 + 0.5);
+      float heath = smoothstep(0.3, 0.7, texture(uGS, uv).y);
       float grow = smoothstep(0.0, 1.0, fade);
       float R = (0.42 + 0.5 * gRand(h)) * (0.65 + 0.7 * cov.a) * grow;
+      R = mix(R, (0.16 + 0.14 * gRand(h)) * grow, heath);
       float ph = gRand(h) * 6.2831853;
       float fi = position.z;
       float fr = fract(sin((fi + 1.0) * 17.31 + ph) * 43758.5453);
@@ -348,7 +419,8 @@ vShape = vec3(0.0);
       float gust = windGust(p);
       float sway = uWind * (0.1 + 0.35 * gust) + 0.03 * sin(uTime * 1.7 + ph + fi);
       float rise = len * (1.45 * v - 1.05 * v * v) * (0.85 + 0.3 * fr);
-      float halfW = len * 0.2 * pow(sin(3.1415927 * min(v * 1.08, 1.0)), 0.6) * max(1.0, d * 0.05);
+      rise = mix(rise, len * (1.6 * v - 0.75 * v * v) * (0.9 + 0.3 * fr), heath);
+      float halfW = len * mix(0.2, 0.34, heath) * pow(sin(3.1415927 * min(v * 1.08, 1.0)), 0.6) * max(1.0, d / uZoom * 0.05);
       vec2 xz = p + dir * len * v * 0.95 + across * position.x * 2.0 * halfW + uWindDir * sway * len * v * v;
       // Fronds over a ground bird bow down to the ground there.
       if (d < ${GAP_RANGE_GLSL} && uGapN > 0) rise = min(rise * gapShrink(xz), sightCap(xz, gy - 0.04));
@@ -358,7 +430,12 @@ vShape = vec3(0.0);
       vec3 rust = pow(vec3(0.62, 0.36, 0.15), vec3(2.2));
       float brown = max(uGrassTint.a * 0.6 * step(0.5, uGrassTint.r / max(uGrassTint.g, 1e-3)), region == 4.0 ? 0.85 : 0.0);
       vec3 c = mix(green, rust, brown) * (0.86 + 0.28 * fr);
+      // Heather: dusky purple-brown shrublets, flowering pink-purple at the tips.
+      vec3 heather = mix(vec3(0.09, 0.06, 0.05), vec3(0.15, 0.09, 0.09), fr);
+      vec3 bloom = mix(vec3(0.27, 0.12, 0.22), vec3(0.36, 0.17, 0.3), fr);
+      c = mix(c, heather, heath);
       vColor = mix(c * 0.55, c * 1.15, v);
+      vColor = mix(vColor, bloom, heath * smoothstep(0.55, 0.9, v) * smoothstep(0.1, 0.6, uAmount.z) * step(0.35, fr));
       vShape = vec3(2.0, position.x, v);
       vec3 toP = normalize(vec3(xz.x, gy + rise, xz.y) - cameraPosition);
       vTrans = uSunCol * c * pow(max(0.0, dot(toP, uSunDir)), 3.0) * 0.4;
@@ -374,7 +451,7 @@ const PETALS = [
   [0xf2d23a, 0xe38ab6, 0xf1ead2, 0xb583d8], // marsh: yellow flag, ragged robin, meadowsweet, loosestrife
   [0xb072c8, 0xd68ad0, 0x7e95e6, 0xf0d24a], // highland: heather, bell heather, harebell, tormentil
   [0xf09ac0, 0xf6f3ea, 0xf2c43a, 0x9fb0ea], // coast: thrift, sea campion, bird's-foot trefoil, sea aster
-  [0xf2c23a, 0xa27ad8, 0xf3eee2, 0xe8873a], // amberwood: goldenrod, aster, yarrow, hawkweed
+  [0xf2c23a, 0xa27ad8, 0xe0a43c, 0xe8873a], // amberwood: goldenrod, aster, tansy, hawkweed
   [0xf6f4ee, 0xf2d35a, 0xc09ae0, 0xeef0f6], // frostveil: mountain avens, globeflower, saxifrage
   [0x6c7fe0, 0xf3f1ea, 0xf2e6a0, 0x8a78d8], // woodland: bluebell, wood anemone, primrose, bugle
 ];
@@ -460,7 +537,9 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
   const texC = new THREE.DataTexture(front.color, GROUND_RES, GROUND_RES, THREE.RGBAFormat, THREE.UnsignedByteType);
   const texV = new THREE.DataTexture(front.cover, GROUND_RES, GROUND_RES, THREE.RGBAFormat, THREE.UnsignedByteType);
   const texA = new THREE.DataTexture(front.aux, GROUND_RES, GROUND_RES, THREE.RGBAFormat, THREE.UnsignedByteType);
-  for (const t of [texH, texC, texV, texA]) {
+  const texS = new THREE.DataTexture(front.style, GROUND_RES, GROUND_RES, THREE.RGBAFormat, THREE.UnsignedByteType);
+  const blurTmp = new Uint8Array(front.style.length);
+  for (const t of [texH, texC, texV, texA, texS]) {
     t.magFilter = t.minFilter = t === texH ? THREE.NearestFilter : THREE.LinearFilter;
     t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     t.generateMipmaps = false;
@@ -469,7 +548,8 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
   const canopy = createCanopyCache(canopyAt);
 
   const shared = {
-    uGH: { value: texH }, uGC: { value: texC }, uGV: { value: texV }, uGA: { value: texA },
+    uGH: { value: texH }, uGC: { value: texC }, uGV: { value: texV }, uGA: { value: texA }, uGS: { value: texS },
+    uZoom: { value: 1 },
     uGOrigin: { value: new THREE.Vector2(-1e9, -1e9) },
     uTime: uniforms.uTime || { value: 0 },
     uWind: uniforms.uWind || { value: 0.3 },
@@ -495,6 +575,10 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
   let layers = [];
   let shadows = false;
 
+  /** Ring extent multiplier while optics are raised (1 or ZOOM_RINGS): finer plants reach further. */
+  let zf = 1;
+  const zoomIndex = () => (zf >= ZOOM_RINGS[1] ? 2 : zf > 1 ? 1 : 0);
+
   function build(qualityName) {
     for (const l of layers) {
       for (const r of l.rings) {
@@ -506,35 +590,38 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     layers = [];
     const gq = groundQualityOf(qualityName);
     for (const spec of LAYERS) {
-      const cfg = gq[spec.name];
-      if (!cfg) continue;
-      const p = cfg.n / cfg.g;
-      const cells = new Uint8Array(p * p * 2);
-      for (let j = 0, q = 0; j < p; j++) for (let i = 0; i < p; i++, q += 2) { cells[q] = i; cells[q + 1] = j; }
-      const cellAttr = new THREE.InstancedBufferAttribute(cells, 2);
-      const layer = { spec, cfg, rings: [], layout: [], patches: [], hole: [0, 0, 0, 0] };
-      for (let k = 0; k < cfg.rings; k++) {
-        const g = spec.geometry(cfg, k);
+      const cfg0 = gq[spec.name];
+      if (!cfg0) continue;
+      const cells = (p) => {
+        const a = new Uint8Array(p * p * 2);
+        for (let j = 0, q = 0; j < p; j++) for (let i = 0; i < p; i++, q += 2) { a[q] = i; a[q + 1] = j; }
+        return new THREE.InstancedBufferAttribute(a, 2);
+      };
+      // Two layouts: the normal one, and (binoculars, camera) one whose rings are
+      // ZOOM_RINGS times as wide with the same spacing - each patch then holds more
+      // plants, but a narrow view sees only a few patches of each ring.
+      // (grass only goes to 4x: flowers and ferns are sparse enough at 2x)
+      const cfgs = [cfg0, ...ZOOM_RINGS.map((m) => ({ ...cfg0, n: cfg0.n * (spec.name === 'grass' ? m : Math.min(m, 2)) }))];
+      const attrs = cfgs.map((c) => cells(c.n / c.g));
+      const layer = { spec, cfg: cfgs[zoomIndex()], cfgs, attrs, rings: [], layout: [], patches: [], hole: [0, 0, 0, 0] };
+      for (let k = 0; k < cfg0.rings; k++) {
+        const g = spec.geometry(cfg0, k);
         const geometry = new THREE.InstancedBufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(g.position, 3));
         geometry.setIndex(new THREE.BufferAttribute(g.index, 1));
-        geometry.setAttribute('aCell', cellAttr);
-        geometry.instanceCount = p * p;
-        const size = p * cfg.base * (1 << k);
-        geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(size / 2, 0, size / 2), size * 0.95 + 3);
         const uniforms = {
           ...shared,
-          uSpacing: { value: cfg.base * (1 << k) },
-          uBase: { value: cfg.base },
+          uSpacing: { value: cfg0.base * (1 << k) },
+          uBase: { value: cfg0.base },
           uRing: { value: k },
-          uMaxLevel: { value: cfg.rings - 1 },
-          uH0: { value: cfg.n / 2 * cfg.base },
-          uBoost: { value: cfg.boost || 1 },
+          uMaxLevel: { value: cfg0.rings - 1 },
+          uH0: { value: 0 },
+          uBoost: { value: cfg0.boost || 1 },
           uInner: { value: new THREE.Vector4(0, 0, 0, 0) },
         };
         const material = patchMaterial(spec.main, spec.head, uniforms, 'wc-ground-' + spec.name);
         const meshes = [];
-        for (let q = 0; q < cfg.g * cfg.g; q++) {
+        for (let q = 0; q < cfg0.g * cfg0.g; q++) {
           const mesh = new THREE.Mesh(geometry, material);
           mesh.name = `ground:${spec.name}:${k}`;
           mesh.matrixAutoUpdate = false;
@@ -546,8 +633,35 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
         }
         layer.rings.push({ geometry, material, meshes, uniforms });
       }
+      applyLayout(layer);
       layers.push(layer);
     }
+  }
+
+  /** Points a layer's rings at its current layout (normal or zoomed). */
+  function applyLayout(layer) {
+    const ci = zoomIndex();
+    const cfg = layer.cfgs[ci];
+    layer.cfg = cfg;
+    const p = cfg.n / cfg.g;
+    layer.rings.forEach((r, k) => {
+      r.geometry.setAttribute('aCell', layer.attrs[ci]);
+      r.geometry.instanceCount = p * p;
+      const size = p * cfg.base * (1 << k);
+      r.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(size / 2, 0, size / 2), size * 0.95 + 3);
+      r.uniforms.uH0.value = cfg.n / 2 * cfg.base;
+    });
+  }
+
+  /** Optical zoom (1 = naked eye): blades size for their apparent distance, and from
+   *  ZOOM_AT up the rings widen so the fine grass reaches into the magnified view. */
+  function setZoom(z) {
+    const zoom = Number.isFinite(z) && z > 1 ? z : 1;
+    shared.uZoom.value = zoom;
+    const want = zoom >= ZOOM_AT[1] ? ZOOM_RINGS[1] : zoom >= ZOOM_AT[0] ? ZOOM_RINGS[0] : 1;
+    if (want === zf) return;
+    zf = want;
+    for (const l of layers) applyLayout(l);
   }
   build(quality);
 
@@ -575,7 +689,9 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     front.color.set(back.color);
     front.cover.set(back.cover);
     front.aux.set(back.aux);
-    texH.needsUpdate = texC.needsUpdate = texV.needsUpdate = texA.needsUpdate = true;
+    blurStyle(back.style, GROUND_RES, 5, blurTmp);
+    front.style.set(back.style);
+    texH.needsUpdate = texC.needsUpdate = texV.needsUpdate = texA.needsUpdate = texS.needsUpdate = true;
     shared.uGOrigin.value.set(job.ox, job.oz);
     shownX = job.ox; shownZ = job.oz;
     lastVersion = job.version;
@@ -624,6 +740,10 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     root,
     /** Rebuilds the layers for another quality preset. */
     setQuality(name) { build(name); },
+    /** Optical magnification (ctx.tools.zoom, or base fov / camera fov). */
+    setZoom,
+    /** Diagnostics: the ring extent multiplier in use (1, or 2 while zoomed in). */
+    get zoomRings() { return zf; },
     /** Whether ground cover receives the sun's shadow map. */
     setShadows(on) {
       shadows = !!on;
@@ -702,7 +822,7 @@ export function createGroundCover(parent, { store, canopyAt, quality, uniforms =
     },
     dispose() {
       for (const l of layers) for (const r of l.rings) { r.material.dispose(); r.geometry.dispose(); }
-      for (const t of [texH, texC, texV, texA]) t.dispose();
+      for (const t of [texH, texC, texV, texA, texS]) t.dispose();
       parent.remove(root);
     },
   };

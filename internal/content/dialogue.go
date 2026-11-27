@@ -396,8 +396,11 @@ func (c *dctx) offerNode(id string) nodeDef {
 		return c.hubNode([]string{c.sp.voice.busy, why})
 	}
 	rw := cloneReward(q.Rewards)
+	// The NPC says only their own pitch line: the quest's Summary and Story are
+	// written as narration ("Finn wants…", "Mara has heard…") and are shown on the
+	// quest card beside the speech, never put in the giver's mouth.
 	return nodeDef{
-		lines:   []string{c.sp.voice.offer, q.Story, q.Summary},
+		lines:   []string{c.sp.voice.offer},
 		quest:   q.ID,
 		rewards: &rw,
 		choices: []proto.DialogChoice{

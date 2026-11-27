@@ -113,8 +113,15 @@ export function availableText(def, npcs) {
 export function unlockLine(u, regions, quests) {
   const [kind, rest] = String(u).split(':');
   if (kind === 'region') return `Opens ${regions?.find((r) => r.key === rest)?.name || capital(rest)}`;
-  if (kind === 'quest') return `Unlocks ${quests?.[rest]?.name ? 'the quest ' + quests[rest].name : 'a new quest'}`;
-  if (kind === 'feature') return `Unlocks ${capital(rest)}`;
+  if (kind === 'quest') {
+    const q = quests?.[rest];
+    // A hidden quest stays a surprise until it is revealed.
+    return q?.name && !q.hidden ? `Unlocks the quest ${q.name}` : 'Opens a new line of enquiry';
+  }
+  if (kind === 'feature') {
+    if (String(rest).startsWith('trail_')) return 'Reveals a hidden trail on your map';
+    return `Unlocks ${capital(rest)}`;
+  }
   return capital(u);
 }
 

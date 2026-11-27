@@ -3,6 +3,7 @@ package field
 import (
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/Rik-Stokmans/wildcall/internal/core"
 	"github.com/Rik-Stokmans/wildcall/internal/proto"
@@ -480,6 +481,9 @@ func withArticle(noun string) string {
 	if noun == "" {
 		return noun
 	}
+	if soundsLikeYou(noun) {
+		return "a " + noun
+	}
 	switch noun[0] {
 	case 'a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U':
 		return "an " + noun
@@ -533,3 +537,13 @@ func indexOf(list []string, s string) int {
 	}
 	return -1
 }
+
+// soundsLikeYou reports a word that starts with a vowel letter but a "you" sound
+// ("European", "Eurasian", "unique"), which takes "a", not "an".
+func soundsLikeYou(word string) bool {
+	w := strings.ToLower(word)
+	return strings.HasPrefix(w, "eu") || strings.HasPrefix(w, "uni") || strings.HasPrefix(w, "use") || strings.HasPrefix(w, "usu")
+}
+
+// SoundsLikeYou is soundsLikeYou for other packages that build "a"/"an" phrases.
+func SoundsLikeYou(word string) bool { return soundsLikeYou(word) }

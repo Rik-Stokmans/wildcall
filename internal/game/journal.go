@@ -113,6 +113,7 @@ func (s *Session) ensureMystery(sp *core.Species, level int, pos core.Vec3) *pro
 		s.changed()
 	}
 	m.Pos = pos
+	s.noteQuarry(sp.ID, m.ID)
 	return m
 }
 
@@ -493,17 +494,24 @@ func (s *Session) giveItems(items []string, announce bool) []string {
 		if !ok {
 			continue
 		}
-		if _, err := progress.AddItem(s.p, id, 1); err != nil {
+		stored, err := progress.AddItem(s.p, id, 1)
+		if err != nil {
 			continue
 		}
 		got = append(got, id)
 		if def.Kind == progress.KindEquipment && s.p.Equipped[def.Slot] == "" {
 			_ = progress.Equip(s.p, id, true)
+			stored = 0
 		}
 		if announce {
-			if unique(def) {
+			switch {
+			case unique(def):
 				s.send(proto.SRareItem, proto.RareItemMsg{Item: id})
-			} else {
+			case stored > 0:
+				// Say where it went: a full pack sends it home, and a quest item the
+				// player expects to carry must not vanish silently.
+				s.toast("item", def.Name, "Your pack is full, so it went to the cabin storage.", 0, def.Icon)
+			default:
 				s.toast("item", def.Name, "Added to your pack.", 0, def.Icon)
 			}
 		}

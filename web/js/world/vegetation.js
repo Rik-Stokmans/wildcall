@@ -224,8 +224,9 @@ export function createVegetationKit() {
       for (let k = 0; k < VEG_KIND_COUNT; k++) {
         const n = counts[k];
         if (!n || forest.draws(k)) continue;
-        // Rocks on snowy ground (Frostveil) wear snow caps instead of moss.
-        const geo = geometryFor(k, Math.min(detailForLod(k, chunk.lod), quality.vegDetail ?? 2), k === VEG.ROCK && snowyChunk(chunk));
+        // Rocks, logs and stumps on snowy ground (Frostveil) wear snow instead of moss.
+        const snowy = (k === VEG.ROCK || k === VEG.LOG || k === VEG.STUMP) && snowyChunk(chunk);
+        const geo = geometryFor(k, Math.min(detailForLod(k, chunk.lod), quality.vegDetail ?? 2), snowy);
         const matrices = new Float32Array(n * 16);
         const colors = new Float32Array(n * 3);
         const written = fillInstances(veg, k, ox, oz, quality.decor, geo.userData.model, matrices, colors, bounds);

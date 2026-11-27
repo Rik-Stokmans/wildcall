@@ -8,7 +8,7 @@
 // skymath.js for the maths).
 import * as THREE from 'three';
 import {
-  EnvInterp, skyColors, sunPosition, moonPosition, moonPhase, fogRange, viewDistance,
+  EnvInterp, skyColors, sunPosition, moonPosition, moonPhase, fogRange, viewDistance, nearDistance,
   regionAtmosphere, mixAtmosphere, particleAmounts, atmosphereParams, mistLevel,
   snapShadowCenter, shadowConfig, mix3, clamp, smoothstep, rgb, REGION,
 } from './skymath.js';
@@ -67,6 +67,7 @@ export default {
     const moonDir = new THREE.Vector3(0, -1, 0);
     const lightDir = new THREE.Vector3(0, 1, 0);
     const fogColor = new THREE.Color(0xbfd0d8);
+    const zenithColor = new THREE.Color(0x6f9fc8);
     let daylightNow = 0.5;
     let goldenNow = 0;
     let quality = state.settings?.quality || 'medium';
@@ -178,8 +179,11 @@ export default {
       get golden() { return goldenNow; },
       /** Current fog / horizon colour (linear THREE.Color). Live object: copy it. */
       get fogColor() { return fogColor; },
-      /** Interpolated env (time, day, season, weather, wind, rain, mist, cloud, light, wet). */
-      get env() { return env.cur; },
+      /** Current sky colour overhead (linear THREE.Color). Live object: copy it. */
+      get zenithColor() { return zenithColor; },
+      /** Interpolated env (time, day, season, weather, wind, rain, mist, cloud, light, wet),
+       *  with any override applied (so the world's wet ground follows a forced rain). */
+      get env() { return override ? forced : env.cur; },
       /** Fraction of tree canopy above the player (0..1), as last sampled. */
       get canopy() { return canopy; },
       /** Whether the sun shadow map is on (quality medium/high). */
@@ -222,6 +226,7 @@ export default {
       // Dome.
       const u = dome.uniforms;
       setSRGB(u.uZenith.value, sky.zenith);
+      setSRGB(zenithColor, sky.zenith);
       setSRGB(u.uHorizon.value, sky.horizon);
       setSRGB(u.uFog.value, sky.fog);
       setSRGB(u.uGround.value, sky.ground);
@@ -244,7 +249,11 @@ export default {
 
       // Fog — terrain melts into the horizon colour at the view edge.
       const vd = Math.min(viewDistance(quality), camera.far * 0.9);
-      const f = fogRange(vd, { mist: e.mist, rain: e.rain, cloud: e.cloud, regionFog: atmo.fog });
+      const fogOpts = { mist: e.mist, rain: e.rain, cloud: e.cloud, regionFog: atmo.fog };
+      const f = fogRange(vd, fogOpts);
+      // The aerial perspective keeps the density it has over the detailed ring; the far
+      // terrain beyond it just sinks deeper into the haze.
+      const fNear = fogRange(Math.min(nearDistance(quality), vd), fogOpts);
       fog.near = f.near; fog.far = f.far;
       setSRGB(fogColor, sky.fog);
       fog.color.copy(fogColor);
@@ -332,6 +341,7 @@ export default {
       setSRGB(atmosphere.curtainColor, ap.curtainColor);
       atmosphere.fogNear = f.near;
       atmosphere.fogFar = f.far;
+      atmosphere.aerialFar = fNear.far;
       atmosphere.sunVisible = u.uSunVis.value * smoothstep(-3 * DEG, 2 * DEG, sun.elevation);
       setSRGB(atmosphere.sunColor, sky.sun);
       atmosphere.daylight = day;
@@ -341,6 +351,8 @@ export default {
       atmosphere.wet = Math.max(e.rain, e.wet || 0);
       atmosphere.mistEnv = e.mist;
       atmosphere.cold = atmo.cold;
+      atmosphere.cloudShadow = atmo.cloudShadow ?? 0.2;
+      atmosphere.cloudSpeed = atmo.cloudSpeed ?? 1;
       atmosphere.warm = clamp(atmo.tintAmt * (atmo.sunTint[0] - atmo.sunTint[2]) * 6);
       atmosphere.region = atmoTarget.id;
       atmosphere.time = e.time;

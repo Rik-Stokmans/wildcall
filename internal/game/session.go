@@ -291,6 +291,10 @@ func (s *Session) newAdventure(name, seedText string) {
 	clock := env.New(sd, s.cfg.DayLen)
 	s.install(sd, txt, p, clock, nil, save.Seq{})
 	spawn, yaw := s.world.Spawn()
+	// Wake facing Mara, who waits by the cabin to begin the tutorial (spec §27).
+	if mara, ok := s.world.POI("npc_mara"); ok && mara.Pos.DistXZ(spawn) > 1 {
+		yaw = core.HeadingTo(spawn, mara.Pos)
+	}
 	s.p.Pos, s.p.Yaw = spawn, yaw
 	s.feet = spawn
 	s.explore(spawn) // the player stands here: the map around the cabin is known

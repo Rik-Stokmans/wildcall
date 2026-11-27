@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   poseInterval, buildPose, buildPhoto, pickInteractable, regionAllowed, gateStep, GATE_SLACK,
   createSightingTracker, trackSighting, liveMystery, SIGHTING_TTL, filmLeft, outOfFilm,
-  carries, cinematicPose, easeYaw,
+  carries, recResultText, outOfFilmText, cinematicPose, chooseCinematicPath, cinematicObstacles, easeYaw,
 } from './field.js';
 
 // JSON tags of internal/proto.Pose and proto.Photo, in declaration order.
@@ -124,4 +124,46 @@ test('cinematic drift is slow, continuous and stays near the centre', () => {
   }
   const k = easeYaw(6.2, 0.1, 0.5);
   assert.ok(k > 6.2 || k < 0.1);
+});
+
+test('title camera path avoids tree crowns', () => {
+  const c = { x: 0, z: 0 };
+  // A ring of trees right on the default 26 m loop.
+  const veg = [];
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; veg.push({ kind: 0, x: Math.sin(a) * 26, z: Math.cos(a) * 18.2, scale: 1 }); }
+  veg.push({ kind: 4, x: 3, z: 3, scale: 1 }); // a shrub is not an obstacle
+  const obs = cinematicObstacles(veg);
+  assert.equal(obs.length, 6);
+  const path = chooseCinematicPath(c, obs);
+  for (let t = 0; t < 300; t += 0.5) {
+    const p = cinematicPose(t, c, path);
+    for (const o of obs) assert.ok(Math.hypot(p.x - o.x, p.z - o.z) > o.r, `clips a tree at t=${t}`);
+  }
+  // A forest everywhere: falls back to a clear arc and still never clips.
+  const dense = [];
+  for (let x = -60; x <= 60; x += 12) for (let z = -60; z <= 60; z += 12) if (Math.hypot(x, z) > 14 && !(x > 0 && z > 0)) dense.push({ kind: 2, x, z, scale: 1 });
+  const obs2 = cinematicObstacles(dense);
+  const p2 = chooseCinematicPath(c, obs2);
+  assert.ok(p2.span > 0, 'uses an arc');
+  let prev = null;
+  for (let t = 0; t < 300; t += 0.25) {
+    const p = cinematicPose(t, c, p2);
+    for (const o of obs2) assert.ok(Math.hypot(p.x - o.x, p.z - o.z) > o.r - 0.5, `arc clips a tree at t=${t}`);
+    if (prev) assert.ok(Math.hypot(p.x - prev.x, p.z - prev.z) < 0.5, 'no jumps');
+    prev = p;
+  }
+});
+
+test('recording result names whose voice is on the tape, never a hidden species', () => {
+  const profile = { journal: { mysteries: [{ id: 'm3', label: 'Unknown bird C' }] } };
+  const byId = { great_tit: { name: 'Great Tit' } };
+  assert.equal(recResultText({ rec: { mystery: 'm3', stars: 1 }, notes: ['Faint but usable'] }, profile, byId), 'Recorded: Unknown bird C ★☆☆☆☆ · Faint but usable');
+  assert.equal(recResultText({ rec: { species: 'great_tit', stars: 3 }, notes: [] }, profile, byId), 'Recorded: Great Tit ★★★☆☆');
+  assert.equal(recResultText({ rec: null, notes: ['Only the hush of the place itself'] }, profile, byId), 'Only the hush of the place itself');
+  assert.equal(recResultText({}, profile, byId), 'Nothing clear on the recording');
+});
+
+test('out of film says what to do next', () => {
+  assert.match(outOfFilmText({ inventory: [{ item: 'film_roll', qty: 1 }] }), /spare roll/);
+  assert.match(outOfFilmText({ inventory: [] }), /cabin/);
 });

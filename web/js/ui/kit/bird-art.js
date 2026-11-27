@@ -491,7 +491,8 @@ export function drawBirdArt(g, W, H, species, opts = {}) {
     g.fillText('?', tx + geo.body.cx * s, ty + geo.body.cy * s);
     g.restore();
   }
-  if (rv.active && rv.size && !sil && species?.traits?.size) {
+  // The size note is unreadable on thumbnails and lands on the perch: big sketches only.
+  if (rv.active && rv.size && !sil && species?.traits?.size && Math.min(W, H) >= 120) {
     g.save();
     g.font = handFont(Math.max(10, Math.min(W, H) * 0.075));
     g.textAlign = 'right'; g.textBaseline = 'alphabetic';

@@ -163,7 +163,7 @@ export const GROUND_QUALITY = Object.freeze({
   // chance a lattice point holds a plant, for a coarser lattice at the same density.)
   low: Object.freeze({
     grass: Object.freeze({ base: 0.25, n: 64, rings: 3, g: 4, blades: 2, segs: 2 }),     // ~29 m, 12k tufts
-    flowers: Object.freeze({ base: 0.5, n: 48, rings: 2, g: 4 }),
+    flowers: Object.freeze({ base: 0.5, n: 40, rings: 2, g: 4 }),
     ferns: Object.freeze({ base: 1.0, n: 32, rings: 1, g: 4, segs: 3 }),
   }),
   medium: Object.freeze({

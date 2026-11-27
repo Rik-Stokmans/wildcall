@@ -26,10 +26,10 @@ export function renderSkills(ctx, st) {
       el('header', { class: 'menu-disc-head' },
         el('span', { class: 'menu-disc-icon' }, icon(d.icon || d.id, 22)),
         el('div', { class: 'menu-disc-titles' },
-          el('div', { class: 'menu-disc-name' }, d.name),
-          el('div', { class: 'menu-disc-title' }, d.title)),
-        el('div', { class: 'menu-disc-points', title: `${counts.learned} of ${counts.total} skills learned` },
-          el('b', invested), el('span', 'pts'))),
+          el('div', { class: 'menu-disc-name', title: d.name }, d.name),
+          el('div', { class: 'menu-disc-title' }, d.title,
+            el('span', { class: 'menu-disc-points', title: `${counts.learned} of ${counts.total} skills learned` },
+              ` · ${invested} pt${invested === 1 ? '' : 's'}`)))),
       el('div', { class: 'menu-disc-tiers' }, layout.map((t) => {
         const req = t.req;
         const met = invested >= req.points && (p.rank || 1) >= req.rank;

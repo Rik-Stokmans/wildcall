@@ -19,10 +19,13 @@ export function skirtDrop(cell) { return cell + 1; }
  * @param {import('./chunkCodec.js').ChunkData} chunk
  * @param {(x:number, z:number) => number} [canopyAt]  tree cover at a world point, 0..1
  *        (baked per vertex for the terrain shader's shade; 0 everywhere without it)
+ * @param {(x:number, z:number) => number} [regionAt]  region id at a world point (255 =
+ *        unknown) for the soft region weights across chunk borders; the chunk's own grid
+ *        is used where this is absent
  * @returns {{position:Float32Array, normal:Int8Array, color:Float32Array, canopy:Float32Array,
- *   index:Uint16Array, vertexCount:number, minY:number, maxY:number}}
+ *   regA:Float32Array, regB:Float32Array, index:Uint16Array, vertexCount:number, minY:number, maxY:number}}
  */
-export function buildTerrainArrays(chunk, canopyAt) {
+export function buildTerrainArrays(chunk, canopyAt, regionAt) {
   const { n, cell, heights, normals, colors } = chunk;
   const grid = n * n;
   const vertexCount = grid + 4 * n;
@@ -30,7 +33,10 @@ export function buildTerrainArrays(chunk, canopyAt) {
   const normal = new Int8Array(vertexCount * 3);
   const color = new Float32Array(vertexCount * 3);
   const canopy = new Float32Array(vertexCount);
+  const regA = new Float32Array(vertexCount * 3);
+  const regB = new Float32Array(vertexCount * 2);
   const x0 = chunk.cx * CHUNK_SIZE, z0 = chunk.cz * CHUNK_SIZE;
+  regionWeights(chunk, regionAt, regA, regB);
 
   for (let iz = 0; iz < n; iz++) {
     for (let ix = 0; ix < n; ix++) {
@@ -60,6 +66,8 @@ export function buildTerrainArrays(chunk, canopyAt) {
     normal[d] = normal[s]; normal[d + 1] = normal[s + 1]; normal[d + 2] = normal[s + 2];
     color[d] = color[s]; color[d + 1] = color[s + 1]; color[d + 2] = color[s + 2];
     canopy[dst] = canopy[src];
+    regA[dst * 3] = regA[src * 3]; regA[dst * 3 + 1] = regA[src * 3 + 1]; regA[dst * 3 + 2] = regA[src * 3 + 2];
+    regB[dst * 2] = regB[src * 2]; regB[dst * 2 + 1] = regB[src * 2 + 1];
   };
   for (let k = 0; k < n; k++) {
     copy(north + k, k);
@@ -100,7 +108,57 @@ export function buildTerrainArrays(chunk, canopyAt) {
     index[p++] = t1; index[p++] = s1; index[p++] = s0;
   }
 
-  return { position, normal, color, canopy, index, vertexCount, minY: chunk.minY - drop, maxY: chunk.maxY };
+  return { position, normal, color, canopy, regA, regB, index, vertexCount, minY: chunk.minY - drop, maxY: chunk.maxY };
+}
+
+// Soft region weights: the terrain shader paints each region type's own ground detail
+// (marsh mud and pools, highland strata and scree, coastal sand and tide line, amber
+// leaf carpet, snow and ice), blended where region types meet. The chunk carries a hard
+// region id per vertex; a small blur over neighbouring samples (across chunk borders
+// through `regionAt`, so neighbours agree) turns it into weights that fade over ~20 m.
+const BLUR = (() => {
+  const o = [[0, 0, 2]];
+  for (const [r, w] of [[5, 1], [12, 0.75]]) {
+    for (let k = 0; k < 8; k++) {
+      const a = (k + (r > 6 ? 0.5 : 0)) / 8 * Math.PI * 2;
+      o.push([Math.cos(a) * r, Math.sin(a) * r, w]);
+    }
+  }
+  return o;
+})();
+
+/**
+ * Fills per-vertex region weights of a chunk's grid: regA = (marsh, highland, coast),
+ * regB = (amber, frost); Greenhollow is what is left. Pure.
+ */
+export function regionWeights(chunk, regionAt, regA, regB) {
+  const { n, cell, region } = chunk;
+  const x0 = chunk.cx * CHUNK_SIZE, z0 = chunk.cz * CHUNK_SIZE;
+  const acc = [0, 0, 0, 0, 0, 0];
+  for (let iz = 0; iz < n; iz++) {
+    for (let ix = 0; ix < n; ix++) {
+      acc.fill(0);
+      let tot = 0;
+      for (const [ox, oz, w] of BLUR) {
+        const lx = ix * cell + ox, lz = iz * cell + oz;
+        let r;
+        if (lx >= 0 && lz >= 0 && lx <= CHUNK_SIZE && lz <= CHUNK_SIZE) {
+          r = region[Math.round(lz / cell) * n + Math.round(lx / cell)];
+          if (r === 255) r = 3; // open sea floor: coastal ground
+        } else if (regionAt) {
+          r = regionAt(x0 + lx, z0 + lz);
+        } else {
+          r = region[Math.min(n - 1, Math.max(0, Math.round(lz / cell))) * n + Math.min(n - 1, Math.max(0, Math.round(lx / cell)))];
+        }
+        if (!(r >= 0 && r < 6)) continue;
+        acc[r] += w; tot += w;
+      }
+      const i = iz * n + ix;
+      const k = tot > 0 ? 1 / tot : 0;
+      regA[i * 3] = acc[1] * k; regA[i * 3 + 1] = acc[2] * k; regA[i * 3 + 2] = acc[3] * k;
+      regB[i * 2] = acc[4] * k; regB[i * 2 + 1] = acc[5] * k;
+    }
+  }
 }
 
 /**

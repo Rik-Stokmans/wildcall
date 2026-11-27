@@ -7,6 +7,12 @@
 /** In "sparse" mode at most one line starts per this many seconds (priority 3 exempt). */
 export const SPARSE_GAP = 90;
 
+/**
+ * Kinds whose newest line makes any older queued line of the same kind stale: an
+ * identification that has since succeeded must not be followed by "that doesn't fit".
+ */
+export const SUPERSEDING_KINDS = new Set(['identify']);
+
 /** Whether the frequency setting lets this line in at all. */
 export function admit(line, frequency) {
   if (!line || !line.text) return false;
@@ -62,6 +68,7 @@ export function createQueue({ maxLen = 5 } = {}) {
       if (!admit(line, frequency)) return false;
       prune(now);
       if (items.some((it) => it.text === line.text || (line.id && it.id === line.id))) return false;
+      if (SUPERSEDING_KINDS.has(line.kind)) items = items.filter((it) => it.kind !== line.kind);
       const ttl = Number.isFinite(line.ttl) && line.ttl > 0 ? line.ttl : 10;
       items.push({
         id: line.id || 0,

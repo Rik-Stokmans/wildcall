@@ -577,6 +577,7 @@
 }
 .jr-map-markers.labels .jr-mk-label, .jr-mk:hover .jr-mk-label, .jr-mk-home .jr-mk-label, .jr-mk-quest .jr-mk-label { display: block; }
 .jr-mk:hover { z-index: 5; }
+.jr-map-markers .jr-mk-quiet:not(:hover) .jr-mk-label { display: none; }
 .jr-player { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; pointer-events: none; z-index: 4; }
 .jr-player svg { position: absolute; left: -13px; top: -13px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .45)); }
 .jr-edge { position: absolute; left: 0; top: 0; width: 0; height: 0; padding: 0; border: 0; background: none; z-index: 6; }

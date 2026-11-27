@@ -185,7 +185,7 @@ func tutBino(*dctx) []string {
 func tutJournal(c *dctx) []string {
 	l := []string{
 		"Everything lands in your journal. Press J. A voice you cannot put a name to still gets a page, labelled as an unknown bird, with whatever evidence you gathered, and you can come back and name it whenever you like.",
-		"L opens your quests and M the map. The map fills in as you walk, and it never marks a bird. That is not a limitation. That is the game.",
+		"L opens your quests and M the map. The map fills in as you walk, and it never marks a bird. That is not a limitation. That is the whole art of it.",
 	}
 	if !started(c.status(TutorialQuest)) {
 		l = append(l, "There is something I would like you to look into, if you have a mind to.")

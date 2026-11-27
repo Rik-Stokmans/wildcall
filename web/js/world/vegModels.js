@@ -356,7 +356,10 @@ function grassTuft() {
   return b.build();
 }
 
-function log() {
+// Frostveil: the cushions on logs and stumps are snow, not moss.
+const snowCushion = (x, y, z, up) => mix(ROCK_SNOW_SHADE, ROCK_SNOW, clamp01(up * 0.7 + 0.3));
+
+function log(snowy = false) {
   const b = new MeshBuilder();
   b.season = 0;
   b.tint = 0.4;
@@ -366,14 +369,15 @@ function log() {
   // Thick moss along the top, a few cushions spilling down the side.
   b.season = 1;
   b.tint = 0.6;
-  const moss = (x, y, z, up) => scale(mix(MOSS, MOSS_LIGHT, clamp01(up * 0.6 + 0.3)), 0.9 + up * 0.1);
+  const moss = snowy ? snowCushion : (x, y, z, up) => scale(mix(MOSS, MOSS_LIGHT, clamp01(up * 0.6 + 0.3)), 0.9 + up * 0.1);
+  if (snowy) { b.season = 0; b.tint = 0; }
   b.blob([-0.55, 0.42, 0.02], [0.6, 0.1, 0.2], 1, moss, { lump: 0.18, seed: 1901 });
   b.blob([0.35, 0.39, -0.04], [0.32, 0.08, 0.16], 1, moss, { lump: 0.2, seed: 1902 });
   b.blob([-1.0, 0.3, 0.2], [0.2, 0.1, 0.14], 0, moss, { lump: 0.2, seed: 1903 });
   return b.build();
 }
 
-function stump() {
+function stump(snowy = false) {
   const b = new MeshBuilder();
   b.season = 0;
   b.tint = 0.4;
@@ -388,7 +392,8 @@ function stump() {
   b.disc([0.01, 0.628, 0], 0.22, 9, scale(CUT_WOOD, 1.05), scale(CUT_WOOD, 0.88), { turn: 0.3 });
   b.season = 1;
   b.tint = 0.6;
-  const moss = (x, y, z, up) => scale(mix(MOSS, MOSS_LIGHT, clamp01(up * 0.6 + 0.3)), 0.9 + up * 0.1);
+  const moss = snowy ? snowCushion : (x, y, z, up) => scale(mix(MOSS, MOSS_LIGHT, clamp01(up * 0.6 + 0.3)), 0.9 + up * 0.1);
+  if (snowy) { b.season = 0; b.tint = 0; b.blob([0.01, 0.66, 0], [0.33, 0.06, 0.3], 1, moss, { lump: 0.15, seed: 2002 }); }
   b.blob([0.26, 0.08, 0.2], [0.26, 0.12, 0.22], 1, moss, { lump: 0.15, seed: 2001 });
   b.blob([-0.18, 0.62, -0.1], [0.14, 0.05, 0.12], 0, moss, { lump: 0.2, seed: 2003 });
   return b.build();
@@ -526,8 +531,8 @@ BUILDERS[VEG.REEDS] = reeds;
 BUILDERS[VEG.ROCK] = rock;
 BUILDERS[VEG.FLOWERS] = flowers;
 BUILDERS[VEG.GRASS_TUFT] = grassTuft;
-BUILDERS[VEG.LOG] = log;
-BUILDERS[VEG.STUMP] = stump;
+BUILDERS[VEG.LOG] = () => log();
+BUILDERS[VEG.STUMP] = () => stump();
 BUILDERS[VEG.FERN] = fern;
 BUILDERS[VEG.DRIFTWOOD] = driftwood;
 BUILDERS[VEG.AMBER_OAK] = (d) => oak(d, AMBER_OAK_LEAF);
@@ -543,6 +548,7 @@ export function detailForLod(kind, lod) {
 }
 
 const cache = new Map();
+const SNOWY_KINDS = new Set([VEG.ROCK, VEG.LOG, VEG.STUMP]);
 
 /**
  * Builds (and caches) the model of a vegetation kind.
@@ -555,10 +561,13 @@ export function buildVegModel(kind, detail, snowy = false) {
   const build = BUILDERS[kind];
   if (!build) throw new Error(`vegetation: unknown kind ${kind}`);
   const d = Math.max(2 - VEG_INFO[kind].maxLod, Math.min(2, detail | 0));
-  // Only rocks have a snowy (Frostveil) variant.
-  const snow = snowy && kind === VEG.ROCK;
+  // Rocks, logs and stumps have a snowy (Frostveil) variant.
+  const snow = snowy && SNOWY_KINDS.has(kind);
   const key = kind * 4 + d + (snow ? 1000 : 0);
   let model = cache.get(key);
-  if (!model) cache.set(key, (model = snow ? rock(d, true) : build(d)));
+  if (!model) {
+    model = !snow ? build(d) : kind === VEG.ROCK ? rock(d, true) : kind === VEG.LOG ? log(true) : stump(true);
+    cache.set(key, model);
+  }
   return model;
 }

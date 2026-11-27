@@ -32,7 +32,7 @@ export function renderRank(ctx) {
       section('What it opens up',
         el('ul', { class: 'menu-list' },
           next.skillPoints ? el('li', `${next.skillPoints} bonus skill points`) : null,
-          (next.unlocks || []).map((t) => el('li', t)))));
+          L.rankUnlockLines(next).map((t) => el('li', t)))));
   } else {
     right = el('div', { class: 'menu-card menu-next-rank' },
       el('h2', { class: 'menu-detail-title' }, 'The highest rank'),

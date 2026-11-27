@@ -235,6 +235,8 @@ export function createIdentify(ctx) {
     clearTimeout(submitTimer);
     S.submitting = false;
     S.result = r;
+    // A guess that did not fit is crossed off: do not leave it picked and submittable.
+    if (r.outcome === 'wrong' && S.selected === r.guess) S.selected = '';
     sound(ctx, r.outcome === 'certain' ? 'discover' : r.outcome === 'probable' ? 'reward' : 'page');
     render();
   });

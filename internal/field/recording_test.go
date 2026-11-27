@@ -183,3 +183,22 @@ func TestCallLogStartsMidSong(t *testing.T) {
 		t.Errorf("finished bouts should be forgotten")
 	}
 }
+
+// The take keeps the voice the player pointed the microphone at, even when a louder,
+// longer song off to the side would score better (the tutorial's "record its song").
+func TestRecordingKeepsTheVoiceAimedAt(t *testing.T) {
+	c, _ := newCtx()
+	target := birdAt(1, spWren, north(15, 1), core.ActPerched, 0.2)
+	side := birdAt(2, spRobin, core.V(origin.X+22, origin.Y+2, origin.Z+8), core.ActPerched, 0.2)
+	p := lookAt(standing(), target.Pos)
+	r := NewRecording()
+	r.OnCall(callFrom(side, 30), side.Flags, 0)    // sings the whole time
+	r.OnCall(callFrom(target, 3), target.Flags, 0) // one short bout
+	for t := float32(0); t < 30; t += 0.25 {
+		r.Tick(c, 0.25, p, []core.BirdState{target, side})
+	}
+	o := r.Stop(c, p)
+	if !o.OK || o.Bird != target.ID {
+		t.Fatalf("recorded bird %d (ok %v), want the aimed-at bird %d; notes %v", o.Bird, o.OK, target.ID, o.Notes)
+	}
+}

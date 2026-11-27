@@ -221,6 +221,94 @@ export class Collision {
     return hit;
   }
 
+  /** Calls fn(x, z, solidR, crownR) for every collider whose cell lies within `reach` of (x, z). */
+  _near(x, z, reach, fn) {
+    if (!(this.grids.size > 0)) return;
+    const gx0 = Math.floor((x - reach) / CELL), gx1 = Math.floor((x + reach) / CELL);
+    const gz0 = Math.floor((z - reach) / CELL), gz1 = Math.floor((z + reach) / CELL);
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const ccx = Math.floor(gx / CELLS), ccz = Math.floor(gz / CELLS);
+        const grid = this.grids.get(chunkKey(ccx, ccz));
+        if (!grid) continue;
+        const c = (gz - ccz * CELLS) * CELLS + (gx - ccx * CELLS);
+        const data = grid.data;
+        for (let s = grid.start[c], e = grid.start[c + 1]; s < e; s++) {
+          const o = s * STRIDE;
+          fn(data[o], data[o + 1], data[o + 2], data[o + 3]);
+        }
+      }
+    }
+  }
+
+  /**
+   * Distance (m) from (x, z) to the edge of the nearest solid — tree trunk, rock,
+   * registered blocker — or Infinity if there is none within `maxDist`. Cheap: only
+   * the 8 m cells around the point are visited.
+   */
+  nearestSolid(x, z, maxDist = 30) {
+    let best = Infinity;
+    this._near(x, z, maxDist + this.maxSolid, (px, pz, r) => {
+      if (r <= 0) return;
+      const d = Math.hypot(x - px, z - pz) - r;
+      if (d < best) best = d;
+    });
+    if (this.blockers.size > 0) {
+      const hx0 = Math.floor((x - maxDist) / HASH_CELL), hx1 = Math.floor((x + maxDist) / HASH_CELL);
+      const hz0 = Math.floor((z - maxDist) / HASH_CELL), hz1 = Math.floor((z + maxDist) / HASH_CELL);
+      for (let gz = hz0; gz <= hz1; gz++) {
+        for (let gx = hx0; gx <= hx1; gx++) {
+          const list = this.blockers.cell(gx, gz);
+          if (!list) continue;
+          for (const b of list) { const d = Math.hypot(x - b.x, z - b.z) - b.r; if (d < best) best = d; }
+        }
+      }
+    }
+    return Math.max(0, best) <= maxDist ? Math.max(0, best) : Infinity;
+  }
+
+  /**
+   * First contact of a circle of `radius` swept in a straight line from a to b (XZ)
+   * against trunks and rocks, and — when `clearanceAt(t)` (height of the path above
+   * the ground at fraction t) is given — against tree crowns at that height.
+   * @returns {number} the fraction t (0..1) of the first contact, or -1 if the way is clear
+   */
+  sweep(ax, az, bx, bz, radius = 0.5, clearanceAt = null) {
+    const dx = bx - ax, dz = bz - az;
+    const len2 = dx * dx + dz * dz;
+    const len = Math.sqrt(len2);
+    let first = 2;
+    // Visit cells along the segment in steps of one cell.
+    const steps = Math.max(1, Math.ceil(len / CELL));
+    const seen = new Set();
+    const reach = radius + Math.max(this.maxSolid, this.maxCrown);
+    for (let k = 0; k <= steps; k++) {
+      const cx = ax + dx * (k / steps), cz = az + dz * (k / steps);
+      this._near(cx, cz, reach, (px, pz, r, cr) => {
+        const key = px * 7919 + pz;
+        if (seen.has(key)) return;
+        seen.add(key);
+        // closest approach of the segment to (px, pz)
+        let t = len2 > 0 ? ((px - ax) * dx + (pz - az) * dz) / len2 : 0;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const qx = ax + dx * t - px, qz = az + dz * t - pz;
+        const d = Math.sqrt(qx * qx + qz * qz);
+        let hit = r > 0 && d < r + radius;
+        if (!hit && clearanceAt && cr > 0 && d < cr * 0.85 + radius) {
+          // Crowns fill from a little above head height to ~2.6 crown radii up.
+          const y = clearanceAt(t);
+          hit = y > 2.2 && y < cr * 2.6 + 1.5;
+        }
+        if (hit) {
+          // back off to where the circle first touches (approximately)
+          const back = len > 0 ? Math.sqrt(Math.max(0, (r + radius) ** 2 - d * d)) / len : 0;
+          first = Math.min(first, Math.max(0, t - back));
+        }
+      });
+    }
+    return first <= 1 ? first : -1;
+  }
+
   /**
    * Tree cover above a point: 0 = open sky, 1 = dense canopy. Overlapping crowns
    * combine like independent screens (1 − Π(1 − cᵢ)).

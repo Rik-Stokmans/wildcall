@@ -193,6 +193,8 @@ test('next unlocks', () => {
   assert.deepEqual(u.level, ['Level 3: +1 skill point']);
   assert.deepEqual(u.rank, ['+2 skill points', 'Murmur Marsh']);
   assert.equal(u.rankTitle, 'Observer');
+  // The rank data's own "2 bonus skill points" line is not repeated.
+  assert.deepEqual(L.rankUnlockLines({ skillPoints: 2, unlocks: ['Murmur Marsh', '2 bonus skill points'] }), ['Murmur Marsh']);
   assert.equal(L.nextUnlocks({ level: 40, rank: 3 }, ranks).rank.length, 0);
   assert.equal(L.nextRank(ranks, { rank: 3 }), null);
 });

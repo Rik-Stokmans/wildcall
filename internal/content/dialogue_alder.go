@@ -45,7 +45,14 @@ func alderHub(c *dctx) []string {
 	case f.documented == 0:
 		l = append(l, "Welcome back. You have names in your journal but no evidence beneath them. A photograph or a recording turns a sighting into a record.")
 	default:
-		l = append(l, fmt.Sprintf("Welcome back. %s identified, %d of them documented. That is a respectable table of data.", capitalFirst(speciesWord(f.species)), f.documented))
+		docs := fmt.Sprintf("%d of them documented", f.documented)
+		switch {
+		case f.documented >= f.species && f.species == 1:
+			docs = "and documented"
+		case f.documented >= f.species:
+			docs = "every one of them documented"
+		}
+		l = append(l, fmt.Sprintf("Welcome back. %s identified, %s. That is a respectable table of data.", capitalFirst(speciesWord(f.species)), docs))
 	}
 	if c.status("quiet_creek") == StatusActive {
 		l = append(l, "June has sent you about the creek, I gather. A healthy stream announces itself through its small residents: insect-eaters that need clean, quick water. If you have found them, I am reassured. If you have not, I should very much like to know why.")
@@ -62,7 +69,7 @@ func alderHub(c *dctx) []string {
 func alderConfidence(*dctx) []string {
 	return []string{
 		"Every time you watch a bird for a moment, it gives up a piece of evidence: size, then shape; then its main colour and how it flies; then secondary colours and the bill; and, on a good look, a distinct marking. What it is doing and where you find it count too.",
-		"Press T and the game weighs your evidence against every species that could be in that place and season, and gives you a table of percentages. A feature that matches nudges a species up; one that does not pushes it down hard, but not to zero, because eyes lie, especially in poor light.",
+		"Press T and weigh your evidence against every species that could be in that place and season: your field notes give you a table of percentages. A feature that matches nudges a species up; one that does not pushes it down hard, but not to zero, because eyes lie, especially in poor light.",
 		"At seventy percent or more, your identification is certain. Lower and it is merely probable, which is still progress, and it is confirmed later when your evidence improves or you obtain a photograph or recording of two stars or better. Two pieces of evidence are the least I will take. A wrong answer costs you nothing, and names one thing that does not fit.",
 	}
 }
@@ -90,7 +97,7 @@ func alderRare(*dctx) []string {
 
 func alderSimilar(*dctx) []string {
 	return []string{
-		"Every journal page has a \"compare similar\" view for exactly that reason. Do not rely on colour alone, which changes with the light. Size relative to a bird you know, the shape of the bill, the way the tail is held and how it moves are better evidence, and they are the ones that the game collects first.",
+		"Every journal page has a \"compare similar\" view for exactly that reason. Do not rely on colour alone, which changes with the light. Size relative to a bird you know, the shape of the bill, the way the tail is held and how it moves are better evidence, and they are the ones a good look gives you first.",
 		"Habitat helps, and so does season. A wrong guess costs nothing, so make one and let the evidence correct you.",
 	}
 }

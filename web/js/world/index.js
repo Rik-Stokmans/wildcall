@@ -21,8 +21,11 @@ import { WorldPipeline } from './pipeline.js';
 import { vegList } from './chunkCodec.js';
 import { createVegetationKit } from './vegetation.js';
 import { createChunkRenderer } from './chunkRenderer.js';
+import { defaultTerrainUniforms } from './terrainMaterial.js';
+import { TREE_RIM } from './trees/treeMaterials.js';
 import { createWater } from './water.js';
 import { createGroundCover } from './groundCover.js';
+import { createFarTerrain } from './farTerrain.js';
 import { collectFrameStats, formatStats } from './debugStats.js';
 import { collectGaps, mowField } from './groundField.js';
 import { isAirborneAct } from '../birds/constants.js';
@@ -54,18 +57,13 @@ export default {
     vegKit.setDecorRange(quality.decorFade[0], quality.decorFade[1]);
     vegKit.forest.setShadowLight(() => (ctx.sky?.shadows ? ctx.sky.light : null));
     // Uniforms the terrain shader and the ground cover share (season tint, time, wind).
-    const groundUniforms = {
-      uGrassTint: { value: new THREE.Vector4(0, 0, 0, 0) },
-      uTime: { value: 0 },
-      uWind: { value: 0.3 },
-      uWet: { value: 0 },
-      uWindDir: { value: new THREE.Vector2(0.8, 0.6) },
-    };
+    // (Sun and sky are shared too: the terrain mirrors the sky in pools, wet sand and ice.)
+    const groundUniforms = defaultTerrainUniforms();
     let pipeline = null;
     const canopyAt = (x, z) => (pipeline ? pipeline.collision.canopyAt(x, z) : 0);
-    const renderer = createChunkRenderer(root, vegKit, () => quality, { canopyAt, uniforms: groundUniforms });
+    const regionAt = (x, z) => (pipeline ? pipeline.store.regionAt(x, z) : 255);
+    const renderer = createChunkRenderer(root, vegKit, () => quality, { canopyAt, regionAt, uniforms: groundUniforms });
     const water = createWater(scene);
-    water.setRadius(quality.radius);
 
     let readyEmitted = false;
     let started = false;
@@ -86,6 +84,13 @@ export default {
     });
     const store = pipeline.store;
     const collision = pipeline.collision;
+    // Low-detail terrain beyond the ring, so long views end in haze, not at an edge.
+    const far = createFarTerrain(root, renderer.terrainMaterial, {
+      request: (cx, cz) => net.send('chunkReq', { cx, cz, lod: 2 }),
+      store,
+    });
+    far.setQuality(state.settings?.quality || 'medium', quality.radius);
+    water.setRadius(Math.max(quality.radius, far.radius));
     const ground = createGroundCover(root, { store, canopyAt, quality: state.settings?.quality, uniforms: groundUniforms });
     ground.setShadows(quality.shadows);
     // The grass parts around ground birds (the server knows nothing of client grass:
@@ -163,16 +168,20 @@ export default {
     }
 
     bus.on('welcome', (w) => {
-      if (started) { pipeline.reset(); ground.reset(); }
+      if (started) { pipeline.reset(); ground.reset(); far.reset(); }
       start(w);
     });
     // A new adventure on the same connection (newGame) brings a new seed: new world.
     bus.on('net:welcome', (w) => {
       if (!started) return; // the first welcome is handled via 'welcome'
       const s = w?.seed ?? w?.world?.seed ?? null;
-      if (s !== seed) { pipeline.reset(); ground.reset(); start(w); }
+      if (s !== seed) { pipeline.reset(); ground.reset(); far.reset(); start(w); }
     });
-    bus.on('net:chunk', (buf) => { if (started) pipeline.receive(buf); });
+    bus.on('net:chunk', (buf) => {
+      if (!started) return;
+      far.receive(buf);
+      pipeline.receive(buf);
+    });
     bus.on('net:close', () => pipeline.connectionLost());
     bus.on('settings', ({ key, value }) => {
       if (key !== 'quality') return;
@@ -180,7 +189,8 @@ export default {
       if (next === quality) return;
       quality = next;
       pipeline.configure(quality);
-      water.setRadius(quality.radius);
+      far.setQuality(value, quality.radius);
+      water.setRadius(Math.max(quality.radius, far.radius));
       ground.setQuality(value);
       vegKit.forest.setQuality(value);
       vegKit.setDecorRange(quality.decorFade[0], quality.decorFade[1]);
@@ -224,6 +234,47 @@ export default {
       /** Registers a patch of ground with its own footstep surface ({x, z, r, surface}). */
       addSurfacePatch: (p) => collision.addSurfacePatch(p),
       canopyAt: (x, z) => collision.canopyAt(x, z),
+
+      /**
+       * Distance (m) from (x, z) to the nearest tree trunk, rock or building blocker
+       * edge; Infinity if none within `maxDist` (default 30). Cheap (a few 8 m cells).
+       */
+      nearestTreeDistance: (x, z, maxDist = 30) => collision.nearestSolid(x, z, maxDist),
+
+      /**
+       * Whether a camera (a sphere of `radius`) can move in a straight line from `from`
+       * to `to` ({x, y, z}, world metres) without passing through a trunk, rock, tree
+       * crown or the ground. Returns {clear, t, x, y, z, hit}: t is the fraction of the
+       * way to the first contact (1 when clear), (x, y, z) the last free point and hit
+       * 'trunk' | 'crown' | 'ground' | null. Unloaded ground counts as clear.
+       */
+      clearPath(from, to, radius = 0.6) {
+        const res = { clear: true, t: 1, x: to.x, y: to.y, z: to.z, hit: null };
+        if (!from || !to) return res;
+        const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+        const len = Math.hypot(dx, dz, dy);
+        const above = (t) => {
+          const x = from.x + dx * t, z = from.z + dz * t;
+          return store.isLoaded(x, z) ? from.y + dy * t - store.heightAt(x, z) : 1e3;
+        };
+        let tHit = 2;
+        // Ground: sample every metre.
+        const n = Math.max(1, Math.ceil(len));
+        for (let i = 1; i <= n; i++) {
+          if (above(i / n) < radius) { tHit = (i - 1) / n; res.hit = 'ground'; break; }
+        }
+        const ts = collision.sweep(from.x, from.z, to.x, to.z, radius, above);
+        if (ts >= 0 && ts < tHit) {
+          tHit = ts;
+          const x = from.x + dx * ts, z = from.z + dz * ts;
+          res.hit = collision.nearestSolid(x, z, radius + 0.5) <= radius + 0.5 ? 'trunk' : 'crown';
+        }
+        if (tHit <= 1) {
+          res.clear = false; res.t = tHit;
+          res.x = from.x + dx * tHit; res.y = from.y + dy * tHit; res.z = from.z + dz * tHit;
+        }
+        return res;
+      },
 
       /**
        * The lod-0 vegetation of a loaded chunk in wire order, as plain objects
@@ -274,6 +325,7 @@ export default {
           radius: quality.radius,
           gaps: ground.gaps,
           forest: vegKit.forest.stats,
+          far: far.stats,
         };
       },
     };
@@ -286,6 +338,21 @@ export default {
       loopRunning = true;
       step(dt, quality.buildMs);
     };
+    const SKY_FALLBACK = new THREE.Color(0.72, 0.8, 0.86);
+    function updateSkyUniforms(lk) {
+      const u = groundUniforms;
+      if (lk.sunDir) u.uSunDir.value.copy(lk.sunDir);
+      const up = lk.sunDir ? Math.max(0, Math.min(1, lk.sunDir.y * 4 + 0.15)) : 1;
+      const k = Math.min(1, Math.max(0, (lk.sunDir?.y ?? 0.5) * 3));
+      u.uSunCol.value.setRGB(1.0, 0.72 + 0.24 * k, 0.48 + 0.4 * k).multiplyScalar(lk.light * up);
+      u.uSkyCol.value.copy(lk.sky || SKY_FALLBACK);
+      if (lk.skyHigh) u.uSkyHigh.value.copy(lk.skyHigh);
+      else u.uSkyHigh.value.copy(u.uSkyCol.value).multiplyScalar(0.6);
+      u.uLight.value = lk.light;
+      // Moonlight catches the edges of the crowns: a stronger rim at night.
+      const night = 1 - Math.min(1, Math.max(0, lk.light / 0.3));
+      TREE_RIM.value = 0.12 + 0.75 * night;
+    }
     function step(dt, buildMs) {
       vegKit.update(ctx.time, state.env?.wind ?? 0.3, state.env?.season ?? 0, dt);
       if (!started) return;
@@ -306,6 +373,7 @@ export default {
       // Streaming runs on its own clock: ctx.time does not advance before the loop starts.
       pipeline.tick(feet.x, feet.z, vel.x, vel.z, now() / 1000);
       pipeline.work(buildMs, now);
+      if (readyEmitted) far.update(dt, feet.x, feet.z, pipeline.streamer.inflight.size > 0 || pipeline.backlog > 2, now() / 1000);
       if (!readyEmitted && pipeline.readyNow()) {
         readyEmitted = true;
         bus.emit('world:ready');
@@ -318,11 +386,15 @@ export default {
       look.skyHigh = ctx.sky?.zenithColor || null;
       look.wind = state.env?.wind ?? 0.3;
       water.update(dt, ctx.time, feet.x, feet.z, store, look);
+      updateSkyUniforms(look);
       groundEnv.wind = state.env?.wind ?? 0.3;
       groundEnv.rain = ctx.sky?.env?.rain ?? state.env?.rain ?? 0;
       groundEnv.season = state.env?.season ?? 0;
       groundEnv.sunDir = look.sunDir;
       groundEnv.light = look.light;
+      const toolZoom = ctx.tools?.zoom;
+      const fovZoom = ctx.camera?.fov ? (state.settings?.fov || 70) / ctx.camera.fov : 1;
+      ground.setZoom(Math.max(Number.isFinite(toolZoom) ? toolZoom : 1, fovZoom));
       ground.update(dt, ctx.time, ctx.camera?.position || feet, groundEnv);
       vegKit.updateDecor(ctx.camera?.position || feet);
     }

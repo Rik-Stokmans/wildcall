@@ -131,14 +131,12 @@
 .menu-discs { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: start; scrollbar-width: thin; padding-bottom: 6px; }
 .menu-disc { background: var(--paper-light); border-radius: var(--r-md); border: 1px solid rgba(85, 69, 55, .14); border-top: 4px solid var(--disc); overflow: hidden; }
 .menu-disc-head { display: flex; align-items: center; gap: 7px; padding: 9px 9px 7px; }
-.menu-disc-icon { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--disc); color: #fff; }
+.menu-disc-icon { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--disc); color: #fff; }
 .menu-disc-icon.big { width: 52px; height: 52px; }
 .menu-disc-titles { flex: 1; min-width: 0; line-height: 1.2; }
-.menu-disc-name { font: 700 14px/1.2 var(--font-journal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-disc-name { font: 700 13.5px/1.2 var(--font-journal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-disc-title { font-size: 12px; color: var(--ink-soft); font-style: italic; }
-.menu-disc-points { text-align: center; line-height: 1; }
-.menu-disc-points b { display: block; font: 700 18px/1 var(--font-journal); color: var(--disc); }
-.menu-disc-points span { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.menu-disc-points { font-style: normal; font-weight: 700; color: var(--disc); white-space: nowrap; }
 .menu-disc-tiers { position: relative; padding: 0 7px 8px; }
 .menu-disc-tiers::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 8px; width: 2px; margin-left: -1px; background: rgba(85, 69, 55, .14); }
 .menu-tier { position: relative; }
@@ -157,7 +155,9 @@
 .menu-node:hover { transform: translateY(-1px); box-shadow: var(--shadow-soft); border-color: var(--disc); }
 .menu-node:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .menu-node-icon { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: rgba(85, 69, 55, .1); color: var(--bark-soft); }
-.menu-node-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+.menu-node-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; hyphens: auto; }
+.menu-node .menu-pips { flex: none; gap: 3px; }
+.menu-node .menu-pips i { width: 7px; height: 7px; }
 .menu-node.available .menu-node-icon { background: color-mix(in srgb, var(--disc) 22%, transparent); color: var(--disc); }
 .menu-node.available { border-style: dashed; border-color: var(--disc); }
 .menu-node.buyable { box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 35%, transparent); }

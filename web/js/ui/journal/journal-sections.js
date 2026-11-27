@@ -150,7 +150,7 @@ export function renderLocations(env) {
         el('span', { class: 'jr-row-main' }, el('b', it.loc.name), el('small', `${poiKindLabel(it.loc.kind)} · ${formatDay(it.loc.day)}`)),
         el('span', { class: 'jr-row-end small' }, it.text, it.loc.hidden ? chip('Hidden place', { tone: 'amber' }) : null)))))) 
         : emptyNote('You have not found any named places yet. Wander off the trail.', 'compass'),
-      more > 0 ? el('div', { class: 'jr-more' }, icon('compass', 18), el('span', `? ${more === 1 ? 'one more' : 'more'} to find nearby`)) : null));
+      more > 0 ? el('div', { class: 'jr-more' }, icon('compass', 18), el('span', more === 1 ? 'One more place waits to be found nearby' : 'More places wait to be found nearby')) : null));
 
   const sel = locations[st.locs.sel];
   let right;
@@ -171,7 +171,7 @@ export function renderLocations(env) {
         kv('Places found', String(stats.total)),
         kv('Region types visited', String(stats.regions)),
         kv('Farthest from home', stats.total ? formatDistance(stats.farthest) : 'none yet')),
-      more > 0 ? el('div', { class: 'jr-more big' }, icon('compass', 26), el('div', el('b', `? ${more === 1 ? 'one more place' : 'more places'} to find nearby`), el('p', 'Some of them are well off the trail.'))) : el('p', { class: 'jr-muted' }, 'You have found every place around the cabin. There is a whole world beyond it.'),
+      more > 0 ? el('div', { class: 'jr-more big' }, icon('compass', 26), el('div', el('b', more === 1 ? 'One more place waits to be found nearby' : 'More places wait to be found nearby'), el('p', 'Some of them are well off the trail.'))) : el('p', { class: 'jr-muted' }, 'You have found every place around the cabin. There is a whole world beyond it.'),
       el('div', { class: 'jr-actions' }, button('Open the map', { variant: 'secondary', icon: 'map', onClick: () => { uiSound(ctx, 'click'); ctx.ui.open('map', {}); } })));
   }
   return { left, right };

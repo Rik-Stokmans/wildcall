@@ -293,7 +293,11 @@
 .base-mod.bad { background: rgba(168, 85, 63, .15); color: var(--danger); }
 .base-mod-val { font-weight: 700; }
 
-.base-proscons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.base-proscons { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+/* The equipment station's panel is too narrow for two columns of gear side by side:
+   the current gear and its swaps first, the upgrades below. */
+.base-equipment .base-two { grid-template-columns: minmax(0, 1fr); }
+.base-upgrade { flex-wrap: wrap; }
 .base-pros, .base-cons { padding: 9px 12px; border-radius: var(--r-md); font-size: 13.5px; }
 .base-pros { background: rgba(124, 154, 112, .2); border-left: 4px solid var(--moss); }
 .base-cons { background: rgba(168, 85, 63, .12); border-left: 4px solid var(--danger); }
@@ -424,3 +428,8 @@
 @media (prefers-reduced-motion: reduce) {
   .base-screen, .base-frame, .base-film-note { animation: none; }
 }
+
+/* Kitchen station (c-field hook): a short invitation to the cook screen. */
+.base-kitchen { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 6px 4px; }
+.base-kitchen .base-station-title { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-journal); font-size: 20px; color: var(--ink); }
+.base-kitchen p { margin: 0; max-width: 46ch; line-height: 1.45; }

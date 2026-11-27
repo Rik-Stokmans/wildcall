@@ -92,6 +92,11 @@ export function createOverlay(root) {
   rec.appendChild(spectro);
   const recHint = div('tool-rec-hint', rec);
 
+  // A message line for any tool (the camera's own line is hidden with its viewfinder,
+  // so recorder and binocular messages used to vanish).
+  const toolMsg = div('tool-cam-msg tool-msg', root);
+  let toolMsgTimer = 0;
+
   // --- focused listening --------------------------------------------------
   const listen = div('tool-listen', root);
   div('tool-listen-ring', listen);
@@ -124,6 +129,13 @@ export function createOverlay(root) {
       else if (!noFilm && !msgTimer) camMsg.textContent = '';
     },
     message(text, seconds = 1.6) {
+      if (!cam.classList.contains('tool-on')) {
+        toolMsg.textContent = text;
+        toolMsg.classList.add('tool-cam-msg-on');
+        clearTimeout(toolMsgTimer);
+        toolMsgTimer = setTimeout(() => { toolMsgTimer = 0; toolMsg.classList.remove('tool-cam-msg-on'); }, seconds * 1000);
+        return;
+      }
       camMsg.textContent = text;
       camMsg.classList.add('tool-cam-msg-on');
       clearTimeout(msgTimer);

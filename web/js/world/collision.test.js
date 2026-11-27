@@ -74,3 +74,24 @@ test('canopyAt is high under a crown, falls off at the rim and is 0 in the open'
   assert.equal(c.canopyAt(5, 5), 0);
   assert.ok(under <= 1);
 });
+
+test('nearestSolid measures to the nearest trunk edge (cinematic camera helper)', () => {
+  const c = new Collision();
+  c.setChunk(0, 0, vegOf([{ kind: VEG.OAK, x: 10, z: 10, scale: 1 }, { kind: VEG.SHRUB, x: 3, z: 3 }]));
+  const d = c.nearestSolid(14, 10, 30);
+  assert.ok(Math.abs(d - (4 - solidRadius(VEG.OAK, 1))) < 1e-5, `d ${d}`);
+  assert.equal(c.nearestSolid(60, 60, 10), Infinity); // nothing within reach (shrubs are not solid)
+  assert.equal(c.nearestSolid(10.1, 10, 5), 0);       // inside the trunk
+});
+
+test('sweep finds the first trunk on a straight path, and crowns only at crown height', () => {
+  const c = new Collision();
+  c.setChunk(0, 0, vegOf([{ kind: VEG.OAK, x: 20, z: 10, scale: 1 }]));
+  const t = c.sweep(0, 10, 40, 10, 0.5);
+  assert.ok(t > 0.4 && t < 0.5, `t ${t}`);
+  assert.equal(c.sweep(0, 30, 40, 30, 0.5), -1);      // passes well clear
+  // Two metres beside the trunk: clear at walking height, blocked up in the crown.
+  assert.equal(c.sweep(0, 12, 40, 12, 0.5, () => 1.5), -1);
+  assert.ok(c.sweep(0, 12, 40, 12, 0.5, () => 7) > 0.3);
+  assert.equal(c.sweep(0, 12, 40, 12, 0.5, () => 40), -1); // high above the trees
+});

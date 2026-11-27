@@ -27,10 +27,13 @@ func (s *Session) Tick(dt float32) {
 	s.now += float64(dt)
 	s.tick++
 
-	// Clock → ecosystem.
-	s.clock.Advance(dt)
+	// Clock → ecosystem. The game clock waits on the title screen: it starts with
+	// the first pose of this connection (the client sends none from the main menu).
+	if s.havePose {
+		s.clock.Advance(dt)
+		s.p.Totals.Seconds += dt
+	}
 	envNow := s.clock.Env()
-	s.p.Totals.Seconds += dt
 	if s.pose.Speed < 0.35 || s.pose.Sit {
 		s.still += dt
 	} else {
@@ -164,10 +167,15 @@ func (s *Session) onEvent(ctx *field.Context, ev core.EcoEvent, eye core.Vec3) {
 				X: ev.Pos.X, Y: ev.Pos.Y, Z: ev.Pos.Z, Occ: h.Occ, Seed: ev.Seed,
 			})
 		}
-		if ok {
+		// Before the first pose (the title screen) the birds sing behind the menu,
+		// but nobody is listening yet: no mysteries, clues or quest progress.
+		if ok && s.havePose {
 			s.onHeard(ctx, h, bird)
 		}
 	case core.EvMove, core.EvFlush:
+		if !s.havePose {
+			return
+		}
 		if cue, ok := field.MoveCue(ctx, ev, s.pose, s.rng); ok {
 			s.send(proto.SCue, cue)
 		}
@@ -358,6 +366,9 @@ func (s *Session) autoObservation(sp *core.Species, b core.BirdState, behavior s
 func withArticleLower(name string) string {
 	if name == "" {
 		return "a bird"
+	}
+	if field.SoundsLikeYou(name) {
+		return "a " + name
 	}
 	switch name[0] {
 	case 'A', 'E', 'I', 'O', 'U':

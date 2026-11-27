@@ -24,8 +24,8 @@ export const SHADOW_KEEP = 70;
 // `cut`: far trees dither out over `fade` metres before this distance (low only: deep
 // in its fog, where they are mostly sky colour anyway).
 export const TREE_BANDS = Object.freeze({
-  low: Object.freeze({ near: 24, mid: 60, fade: 8, cut: 215 }),
-  medium: Object.freeze({ near: 38, mid: 110, fade: 10, cut: 1e5 }),
+  low: Object.freeze({ near: 24, mid: 60, fade: 8, cut: 190 }),
+  medium: Object.freeze({ near: 38, mid: 110, fade: 10, cut: 425 }),
   high: Object.freeze({ near: 56, mid: 160, fade: 12, cut: 1e5 }),
 });
 export const SHRUB_BANDS = Object.freeze({
@@ -123,4 +123,28 @@ export function treeTint(kind, variant, x, z, out, o) {
 export function zoomStep(z) {
   if (!(z < 0.85)) return 1;
   return z >= 0.6 ? 0.7 : z >= 0.42 ? 0.5 : z >= 0.3 ? 0.35 : 0.25;
+}
+
+/**
+ * Per-region-type colour of a tree or shrub's foliage (linear multiplier, applied on
+ * top of treeTint): the same models read differently in each landscape — darker,
+ * bluer pines on the mountains, salt-greyed crowns on the coast, frost-browned bushes
+ * in Frostveil, olive sallows in the marsh, dark juniper-like scrub on the heath.
+ * @param {number} kind  core.VegKind
+ * @param {number} region  core.RegionID at the instance (255 = unknown)
+ * @param {Float32Array|number[]} out  tint to scale in place at offset o
+ */
+export function regionTint(kind, region, out, o) {
+  const shrub = kind === VEG.SHRUB;
+  const pine = kind === VEG.PINE;
+  let m = null;
+  switch (region) {
+    case 1: m = shrub ? [1.25, 0.95, 0.65] : kind === VEG.BIRCH ? [1.1, 1.0, 0.75] : null; break;  // marsh
+    case 2: m = shrub ? [0.78, 0.86, 0.8] : pine ? [0.82, 0.92, 1.04] : null; break;               // highland
+    case 3: m = shrub ? [1.02, 1.0, 0.82] : (pine || kind === VEG.OAK) ? [0.9, 0.97, 1.0] : null; break; // coast
+    case 5: m = shrub ? [2.1, 0.8, 0.72] : null; break;                                              // frost: bronzed
+    default: break;
+  }
+  if (!m) return;
+  out[o] *= m[0]; out[o + 1] *= m[1]; out[o + 2] *= m[2];
 }

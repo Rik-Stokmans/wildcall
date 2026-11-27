@@ -163,11 +163,11 @@ test('restPlan: hours, next-day flag and forecast reach', () => {
   const env = { time: 20, forecast: [{ hour: 21, weather: 1 }, { hour: 0, weather: 2 }, { hour: 3, weather: 2 }, { hour: 6, weather: 0 }] };
   const dawn = L.REST_OPTIONS[0];
   let plan = L.restPlan(env, { forecast: 12 }, dawn);
-  assert.equal(plan.hours, 9);
+  assert.equal(plan.hours, 9.5);
   assert.equal(plan.nextDay, true);
-  assert.equal(plan.forecast, 2); // slot 3..6 covers 05:00
+  assert.equal(plan.forecast, 2); // slot 3..6 covers 05:30
   assert.equal(plan.forecastState, 'ok');
-  assert.equal(plan.wakeClock, '05:00');
+  assert.equal(plan.wakeClock, '05:30');
 
   plan = L.restPlan(env, { forecast: 6 }, dawn); // 9 h away, beyond a 6 h forecast
   assert.equal(plan.forecast, null);
@@ -184,22 +184,22 @@ test('restPlan: hours, next-day flag and forecast reach', () => {
 
 test('rest options are the five pinned times', () => {
   assert.deepEqual(L.REST_OPTIONS.map((o) => [o.label, o.hour]),
-    [['Dawn', 5], ['Morning', 8], ['Midday', 12], ['Evening', 18.5], ['Night', 22]]);
+    [['Dawn', 5.5], ['Morning', 8], ['Midday', 12], ['Evening', 18.5], ['Night', 22]]);
   assert.match(L.REST_OPTIONS[0].blurb, /chorus is at its loudest/);
 });
 
-test('pin slot limits: 6, or 12 with the photo wall', () => {
+test('pin slot limits: 4 (as the server allows), or 12 with the photo wall', () => {
   const p = baseProfile();
   p.journal.photos = Array.from({ length: 14 }, (_, i) => ({ id: 'p' + i }));
-  p.journal.pinned = ['p0', 'p1', 'p2', 'p3', 'p4'];
+  p.journal.pinned = ['p0', 'p1', 'p2'];
   let info = L.pinInfo(p);
-  assert.deepEqual([info.slots, info.count, info.free, info.canPin], [6, 5, 1, true]);
-  p.journal.pinned.push('p5');
+  assert.deepEqual([info.slots, info.count, info.free, info.canPin], [4, 3, 1, true]);
+  p.journal.pinned.push('p3');
   info = L.pinInfo(p);
   assert.equal(info.canPin, false);
   p.cabin = ['photo_wall'];
   info = L.pinInfo(p);
-  assert.deepEqual([info.slots, info.free, info.canPin], [12, 6, true]);
+  assert.deepEqual([info.slots, info.free, info.canPin], [12, 8, true]);
   // pins that no longer match a photo are ignored
   p.journal.pinned = ['ghost', 'p1'];
   assert.equal(L.pinInfo(p).count, 1);
@@ -372,6 +372,8 @@ test('shop helpers', () => {
   assert.deepEqual(stock.map((s) => s.id), ['film_roll', 'explorer_binoculars']);
   assert.equal(L.shopTabOf(items.film_roll), 'supplies');
   assert.equal(L.shopTabOf(items.explorer_binoculars), 'gear');
+  assert.equal(L.shopTabOf({ kind: 'ingredient' }), 'supplies');
+  assert.equal(L.shopTabOf({ kind: 'food' }), 'supplies');
   assert.match(L.finnLine(items.explorer_binoculars, 'gear'), /Glass/);
   assert.equal(L.finnLine(null, 'upgrades'), L.FINN_LINES.upgrades);
 });

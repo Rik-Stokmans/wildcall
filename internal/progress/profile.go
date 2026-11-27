@@ -49,6 +49,9 @@ func Normalize(p *proto.Profile) {
 	if p.Skills == nil {
 		p.Skills = map[string]int{}
 	}
+	if p.Ledger == nil {
+		p.Ledger = []proto.LedgerEntry{}
+	}
 	if p.Rep == nil {
 		p.Rep = map[string]int{}
 	}

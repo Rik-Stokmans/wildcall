@@ -81,8 +81,11 @@ export function createShopScreen(ctx) {
       el('div', { class: 'base-buy-price' }, priceTag(chk.price, (state.profile.credits || 0) >= chk.price),
         discounted ? el('s', { class: 'base-muted' }, L.formatCredits(item.price)) : null,
         discounted ? el('span', { class: 'base-chip done' }, `${Math.round(Math.min(0.5, state.stats.discount || 0) * 100)}% off`) : null),
-      button(chk.owned ? 'Owned' : 'Buy', { variant: 'primary', icon: 'credits', disabled: !chk.canBuy,
-        onClick: () => api.send('buy', { item: item.id }, 'coin') }),
+      chk.owned && item.kind === 'equipment' && state.profile.equipped?.[item.slot] !== item.id
+        // Bought but not in use yet: let the player put it on right here.
+        ? button('Equip', { variant: 'primary', icon: 'check', onClick: () => api.send('equip', { item: item.id }, 'equip') })
+        : button(chk.owned ? (state.profile.equipped?.[item.slot] === item.id ? 'Equipped' : 'Owned') : 'Buy', { variant: 'primary', icon: 'credits', disabled: !chk.canBuy,
+          onClick: () => api.send('buy', { item: item.id }, 'coin') }),
       chk.issues.length && !chk.owned ? el('div', { class: 'base-reqs' }, chk.issues.map((i) => issueRow(i.text))) : null);
     fill(detail, el('div', { class: 'base-shop-scroll' },
       itemTitle(item),

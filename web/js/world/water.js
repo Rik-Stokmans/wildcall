@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { CHUNK_SIZE } from './constants.js';
 import { SHORE_RES, SHORE_TEXEL, SHORE_RANGE, shoreOrigin, fillShoreRows, collectWaterRocks } from './shore.js';
+import { blurStyle } from './groundField.js';
 
 const ROWS_PER_FRAME = 16;
 const REFRESH_SECONDS = 0.6;
@@ -33,6 +34,7 @@ void main() {
 
 const FRAG = /* glsl */`
 uniform sampler2D uShore;
+uniform sampler2D uStyle;   // marsh, sea, frost weights per texel
 uniform vec2 uShoreOrigin;
 uniform float uTime;
 uniform float uLight;
@@ -57,6 +59,13 @@ float groundHeight(vec2 p) {
   vec2 uv = (p - uShoreOrigin) / (RES * TEXEL) + 0.5 / RES;
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -RANGE;
   return texture2D(uShore, uv).r * 2.0 * RANGE - RANGE;
+}
+
+// Water style around p: x marsh, y sea, z frost (open water beyond the window is sea).
+vec3 styleAt(vec2 p) {
+  vec2 uv = (p - uShoreOrigin) / (RES * TEXEL) + 0.5 / RES;
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec3(0.0, 1.0, 0.0);
+  return texture2D(uStyle, uv).rgb;
 }
 
 float wHash(vec2 p) {
@@ -103,12 +112,21 @@ void main() {
   along = al > 1e-4 ? along / al : vec2(0.0);
   along *= dot(along, vec2(0.6, 0.8)) < 0.0 ? -1.0 : 1.0;
   float channel = smoothstep(0.08, 0.5, al) * (1.0 - smoothstep(1.2, 3.5, depth));
+  vec3 sty = styleAt(p);
+  float wM = sty.x, wS = sty.y, wF = sty.z;
+  channel *= 1.0 - 0.8 * wM;              // marsh channels barely move
   float t = uTime;
   float ph0 = fract(t * 0.12), ph1 = fract(t * 0.12 + 0.5);
   float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
   vec2 flowOff = along * channel * 2.2;
   vec2 g = ripples(p - flowOff * ph0, t, fine) * w0 + ripples(p - flowOff * ph1 + 7.3, t, fine) * (1.0 - w0);
   float amp = (0.09 + 0.36 * uWind) * (0.55 + 0.45 * smoothstep(0.0, 0.6, depth));
+  amp *= mix(1.0, 0.3, wM) * mix(1.0, 1.2, wS) * mix(1.0, 0.5, wF);
+  // The sea's swell: long crests rolling in towards the shore (up the bed's slope).
+  vec2 shoreDir = al > 1e-4 ? normalize(gr) : uWindDir;
+  vec2 swellDir = normalize(mix(uWindDir, shoreDir, smoothstep(6.0, 1.0, depth) * 0.85));
+  float sph = dot(p, swellDir) * 0.32 - t * 1.1 + wNoise(p * 0.02) * 4.0;
+  g += wS * swellDir * cos(sph) * (0.5 + 0.5 * uWind) * 0.45 * (0.4 + 0.6 * fine);
   vec3 n = normalize(vec3(-g.x * amp, 1.0, -g.y * amp));
 
   float lit = 0.18 + 0.82 * uLight;
@@ -117,23 +135,31 @@ void main() {
   // pond seen from its bank stayed mostly see-through to the grey-brown bed and read
   // pale blue-grey; now it reads as clear at the very edge, rich teal a step in.)
   float path = depth / max(V.y, 0.07);
-  float murk = 1.0 - exp(-path * 0.6);
-  vec3 body = mix(uShallow, uDeep, smoothstep(0.1, 1.9, depth)) * lit;
+  // Sea: clearer water, turquoise over the sand shelving to deep blue; marsh: dark
+  // peaty water; Frostveil: cold, dark and clear.
+  float murk = 1.0 - exp(-path * mix(mix(0.6, 0.38, wS), 1.7, wM));
+  vec3 shallow = mix(mix(uShallow, vec3(0.06, 0.3, 0.29), wS), vec3(0.07, 0.075, 0.03), wM);
+  vec3 deepC = mix(mix(uDeep, vec3(0.012, 0.075, 0.17), wS * smoothstep(1.5, 9.0, depth)), vec3(0.015, 0.02, 0.012), wM);
+  shallow = mix(shallow, vec3(0.05, 0.13, 0.16), wF);
+  deepC = mix(deepC, vec3(0.01, 0.04, 0.07), wF);
+  vec3 body = mix(shallow, deepC, smoothstep(0.1, mix(1.9, 8.0, wS), depth)) * lit;
   float alpha = mix(0.05, 0.95, murk);
 
   // Reflection: the far bank (dark, green-blue) just above the horizon, then the sky.
   float ndv = clamp(dot(n, V), 0.0, 1.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
-  fres = min(fres, 0.6) * (0.45 + 0.55 * smoothstep(0.0, 0.45, depth));
+  fres = min(fres, mix(0.6, 0.88, wM)) * (0.45 + 0.55 * smoothstep(0.0, 0.45, mix(depth, 1.0, wM)));
   vec3 R = reflect(-V, n);
   // (Most water is seen from a bank, framed by trees and hills: the low reflection is
   // their dark, cool green rather than the pale horizon haze.)
   // Shallow water (ponds, streams) lies in hollows ringed by trees and banks, which
   // fill much more of its reflected view than at a lake or the sea: from a high bank a
   // pond mirrors the surrounding green, not the pale sky.
-  float enclosed = 1.0 - smoothstep(1.5, 6.0, depth);
-  vec3 bank = mix(uSky, vec3(0.03, 0.08, 0.055), 0.72 + 0.12 * enclosed);
-  float bankTop = mix(0.34, 0.62, enclosed);
+  // (The marsh is open country under a big sky: its pools mirror the sky, not banks.)
+  // (In the marsh the low band is the reedbed's olive edge, then a big sky.)
+  float enclosed = (1.0 - smoothstep(1.5, 6.0, depth)) * (1.0 - 0.6 * wM) * (1.0 - wS);
+  vec3 bank = mix(uSky, mix(vec3(0.03, 0.08, 0.055), vec3(0.07, 0.075, 0.03), wM), 0.72 + 0.12 * enclosed);
+  float bankTop = mix(0.34, 0.62, enclosed) * (1.0 - 0.45 * wM);
   vec3 sky = mix(bank, mix(uSky, uSkyHigh, smoothstep(0.2, 0.6, R.y)), smoothstep(bankTop * 0.2, bankTop, R.y));
   sky *= 0.25 + 0.75 * uLight;
   vec3 col = mix(body, sky, fres);
@@ -163,11 +189,19 @@ void main() {
     float d = distance(p, r.xy) - r.z;
     ring = max(ring, r.w * (1.0 - smoothstep(0.0, 0.2 + 0.35 * breakup, d)));
   }
-  float froth = max(shore, ring);
-  float foam = froth * smoothstep(0.52, 0.85, breakup) * (0.55 + 0.45 * uWind);
-  foam *= 1.0 - smoothstep(50.0, 140.0, dist) * 0.7;
-  col = mix(col, uFoam * lit, foam * 0.55);
-  alpha = max(alpha, foam * 0.55);
+  // Surf: foam bands rolling in over the shallows with the swell's rhythm, breaking at
+  // the shore into a wash of white.
+  float surfZone = wS * smoothstep(0.02, 0.12, depth) * (1.0 - smoothstep(0.6, 2.4, depth));
+  float sp = depth * 1.6 + t * 0.42 + wNoise(p * 0.045) * 1.5;
+  float crest = pow(1.0 - fract(sp), 5.0);
+  float surf = surfZone * crest * smoothstep(0.3, 0.7, breakup + 0.2 * crest);
+  float wash = wS * (1.0 - smoothstep(0.03, 0.22 + 0.2 * lap, depth)) * smoothstep(0.35, 0.65, breakup);
+  shore *= 1.0 - 0.85 * wM;
+  float froth = max(max(shore, ring), max(surf * 1.3, wash));
+  float foam = froth * smoothstep(0.52, 0.85, breakup + 0.35 * wS) * (0.55 + 0.45 * uWind);
+  foam *= 1.0 - smoothstep(50.0, 140.0, dist) * 0.7 * (1.0 - wS * 0.6);
+  col = mix(col, uFoam * lit, foam * mix(0.55, 0.85, wS));
+  alpha = max(alpha, foam * mix(0.55, 0.9, wS));
 
   gl_FragColor = vec4(col, alpha);
   #include <tonemapping_fragment>
@@ -186,6 +220,14 @@ void main() {
 export function createWater(scene) {
   const front = new Uint8Array(SHORE_RES * SHORE_RES); // everything starts "deep"
   const back = new Uint8Array(SHORE_RES * SHORE_RES);
+  const styleFront = new Uint8Array(SHORE_RES * SHORE_RES * 4);
+  const styleBack = new Uint8Array(SHORE_RES * SHORE_RES * 4);
+  const styleTmp = new Uint8Array(SHORE_RES * SHORE_RES * 4);
+  for (let i = 1; i < styleFront.length; i += 4) styleFront[i] = 255; // all sea until known
+  const styleTex = new THREE.DataTexture(styleFront, SHORE_RES, SHORE_RES, THREE.RGBAFormat, THREE.UnsignedByteType);
+  styleTex.magFilter = styleTex.minFilter = THREE.LinearFilter;
+  styleTex.wrapS = styleTex.wrapT = THREE.ClampToEdgeWrapping;
+  styleTex.needsUpdate = true;
   const tex = new THREE.DataTexture(front, SHORE_RES, SHORE_RES, THREE.RedFormat, THREE.UnsignedByteType);
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearFilter;
@@ -196,6 +238,7 @@ export function createWater(scene) {
   const rockVecs = Array.from({ length: ROCKS }, () => new THREE.Vector4());
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uShore: { value: null },
+    uStyle: { value: null },
     uShoreOrigin: { value: new THREE.Vector2(-1e9, -1e9) },
     uTime: { value: 0 },
     uLight: { value: 1 },
@@ -212,6 +255,7 @@ export function createWater(scene) {
   }]);
   // merge() clones values; these must be the live objects.
   uniforms.uShore.value = tex;
+  uniforms.uStyle.value = styleTex;
   uniforms.uRocks.value = rockVecs;
 
   const material = new THREE.ShaderMaterial({
@@ -277,11 +321,14 @@ export function createWater(scene) {
       }
       if (job) {
         const end = Math.min(SHORE_RES, job.row + ROWS_PER_FRAME);
-        fillShoreRows(store, job.ox, job.oz, back, job.row, end);
+        fillShoreRows(store, job.ox, job.oz, back, job.row, end, styleBack);
         job.row = end;
         if (end === SHORE_RES) {
           front.set(back);
           tex.needsUpdate = true;
+          blurStyle(styleBack, SHORE_RES, 6, styleTmp);
+          styleFront.set(styleBack);
+          styleTex.needsUpdate = true;
           uniforms.uShoreOrigin.value.set(job.ox, job.oz);
           shownOrigin = [job.ox, job.oz];
           lastVersion = job.version;
@@ -295,6 +342,7 @@ export function createWater(scene) {
       geometry.dispose();
       material.dispose();
       tex.dispose();
+      styleTex.dispose();
     },
   };
 }

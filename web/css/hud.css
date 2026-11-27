@@ -237,6 +237,9 @@
 .hud-quest-obj { display: flex; align-items: flex-start; gap: 8px; margin-top: 5px; font-size: 12px; line-height: 1.3; opacity: .92; }
 .hud-quest-obj i { flex: none; width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; border: 1.5px solid var(--moss-soft); }
 .hud-quest-obj.done i { background: var(--moss-soft); }
+.hud-quest-quarry { margin: 4px 0 0 15px; font-size: 11px; opacity: .75; font-style: italic; }
+.hud-quest-quarry b { font-weight: 600; font-style: normal; }
+.hud-card-quest { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 11px; color: var(--amber-deep, #9a6a2a); opacity: .9; }
 
 /* ---- hints (bottom left) ---- */
 .hud-hint {

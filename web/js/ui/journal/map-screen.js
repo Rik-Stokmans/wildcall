@@ -7,7 +7,7 @@ import { el, fill, icon, button } from '../kit.js';
 import { createFog, tilesToFetch, tileUrl, TILE_SIZE, CELL_SIZE } from './fog.js';
 import { worldToScreen, viewRect, panBy, zoomAt, wheelFactor, scaleBar, edgeArrow, MIN_SCALE, MAX_SCALE } from './mapmath.js';
 import { regionLabels } from './regions.js';
-import { buildMarkers, visibleTrails, trailSegments } from './map-data.js';
+import { buildMarkers, visibleTrails, trailSegments, quietLabels } from './map-data.js';
 import { createTileCache } from './tile-cache.js';
 import { formatDistance, clamp } from './format.js';
 import { screenRoot, sheet, uiSound } from './widgets.js';
@@ -352,14 +352,18 @@ export function createMapScreen(ctx, memory, mapWorld) {
   function placeMarkers() {
     const { w, h } = size;
     markerLayer.classList.toggle('labels', view.scale >= 0.12);
+    const shown = [];
     for (const m of markers) {
       const node = markerEls.get(m.key);
       if (!node) continue;
       const s = worldToScreen(view, w, h, m.x, m.z);
       const out = s.x < -40 || s.y < -40 || s.x > w + 40 || s.y > h + 40;
       node.style.display = out ? 'none' : '';
-      if (!out) node.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`;
+      if (!out) { node.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`; shown.push({ key: m.key, type: m.type, x: s.x, y: s.y, label: m.label }); }
     }
+    // Overlapping labels: keep the most important, the rest show on hover.
+    const quiet = quietLabels(shown);
+    for (const [k, node] of markerEls) node.classList.toggle('jr-mk-quiet', quiet.has(k));
     const sb = scaleBar(view.scale);
     scaleEl.firstChild.style.width = sb.px.toFixed(0) + 'px';
     scaleEl.lastChild.textContent = sb.label;

@@ -4,7 +4,7 @@
 import { createController } from './controller.js';
 import { createTools } from './tools.js';
 import { createNotePrompt } from './note.js';
-import { createSightingTracker, trackSighting, liveMystery, carries } from './field.js';
+import { carries } from './field.js';
 
 let controller = null;
 let tools = null;
@@ -20,9 +20,9 @@ export default {
     ctx.tools = tools;
     createNotePrompt(ctx, controller);
 
-    // --- identify (T): the bird under observation, if it is still a mystery --------
-    const sighting = createSightingTracker();
-    bus.on('net:sighting', (s) => trackSighting(sighting, s, ctx.time));
+    // Identify (T) is handled by the encounter module (ctx.encounter.openIdentify):
+    // a second handler here used to open the screen and the encounter's toggle then
+    // closed it again in the same key press, so T never worked.
     let hintAt = -Infinity;
     const softHint = (title, text) => {
       // One gentle line at most every few seconds; never a nag.
@@ -30,15 +30,6 @@ export default {
       hintAt = ctx.time;
       bus.emit('toast', { kind: 'info', title, text, xp: 0, icon: '' });
     };
-    bus.on('action:identify', () => {
-      if (state.mode !== 'play' || controller.s.busy) return;
-      const mystery = liveMystery(sighting, ctx.time);
-      if (mystery && ctx.ui?.has?.('identify')) {
-        ctx.ui.open('identify', { mystery });
-      } else if (!mystery) {
-        softHint('Nothing to identify yet', 'Watch an unfamiliar bird for a moment, then press T.');
-      }
-    });
 
     // --- seed mix (G) --------------------------------------------------------------
     bus.on('action:seed', () => {

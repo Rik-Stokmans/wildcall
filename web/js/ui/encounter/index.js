@@ -63,13 +63,24 @@ export default {
 
     /* ---- identification entry point --------------------------------------- */
     let lastSighting = null;
-    bus.on('net:sighting', (s) => { lastSighting = s && s.bird ? s : null; });
+    // The last unnamed bird actually watched, so that T still works when it has just
+    // hopped behind a leaf (the sighting drops to bird 0 for a moment).
+    let lastMystery = null;
+    const RECENT_MYSTERY_S = 20;
+    bus.on('net:sighting', (s) => {
+      lastSighting = s && s.bird ? s : null;
+      if (s && s.bird && s.mystery) lastMystery = { s, at: performance.now() };
+    });
 
     function openIdentify(target, extra = {}) {
       let mystery = target;
       let sighting = extra.sighting || null;
       if (!mystery) {
         sighting = sighting || lastSighting;
+        const recent = lastMystery && performance.now() - lastMystery.at < RECENT_MYSTERY_S * 1000 ? lastMystery.s : null;
+        if ((!sighting || !sighting.bird) && recent && state.profile?.journal?.mysteries?.some((m) => m.id === recent.mystery)) {
+          return ui.open('identify', { mystery: recent.mystery, sighting: null });
+        }
         if (!sighting || !sighting.bird) {
           bus.emit('toast', { kind: 'info', title: 'Nothing in view', text: 'Raise your binoculars on a bird and watch it for a moment first.' });
           return false;

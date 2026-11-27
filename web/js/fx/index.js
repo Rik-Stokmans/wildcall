@@ -95,7 +95,7 @@ export default {
         u.uSunDir.value.copy(a.sunDir);
       }
       u.uAerialAmt.value = a.aerialAmt;
-      u.uAerialK.value = 1.15 / Math.max(50, a.fogFar || 400);
+      u.uAerialK.value = 1.15 / Math.max(50, a.aerialFar || a.fogFar || 400);
       u.uAerialH.value = a.aerialHeight || 200;
       u.uMistAmt.value = a.mistAmt;
       u.uMistH.value = a.mistHeight || 6;
@@ -106,10 +106,11 @@ export default {
       u.uWet.value = clamp(a.wet || 0);
       const cover = clamp(env.cloud ?? 0);
       u.uCloudCover.value = 0.1 + cover * 0.75;
-      u.uCloudShadow.value = 0.2 * clamp(a.sunVisible ?? 0) * clamp(a.daylight * 2) * (1 - clamp(a.rain || 0));
+      u.uCloudShadow.value = (a.cloudShadow ?? 0.2) * clamp(a.sunVisible ?? 0) * clamp(a.daylight * 2) * (1 - clamp(a.rain || 0));
       const wind = env.wind ?? 0.3;
-      cloudOffset.x += dt * (2.5 + wind * 14) * 0.8 / 520;
-      cloudOffset.y -= dt * (2.5 + wind * 14) * 0.6 / 520;
+      const speed = (2.5 + wind * 14) * (a.cloudSpeed ?? 1);
+      cloudOffset.x += dt * speed * 0.8 / 520;
+      cloudOffset.y -= dt * speed * 0.6 / 520;
       u.uCloudOffset.value.copy(cloudOffset);
       u.uTime.value = ctx.time % 1000;
 

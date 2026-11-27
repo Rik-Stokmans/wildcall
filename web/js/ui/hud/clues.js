@@ -43,6 +43,7 @@ export function clueCard(clue, resolve = {}) {
   add('perch', cap(clue.perch));
   return {
     title, subtitle,
+    quest: clue.mystery && !speciesName ? (resolve.quest?.(clue.mystery) || '') : '',
     dir: clue.dir || '',
     new: !!clue.new && !speciesName,
     unusual: !!clue.unusual,

@@ -1,5 +1,6 @@
 // Pure logic for the rewards, rare item, region and rank-up screens. No DOM.
 import { factionName } from './logic.js';
+import { unlockLine } from '../journal/quest-logic.js';
 
 /** Ease-out count-up: the integer shown `elapsed` ms into a `dur` ms animation. */
 export function countUp(elapsed, dur, target) {
@@ -40,7 +41,9 @@ export function rewardSummary(msg, items = {}) {
  * Compact reward lines for a quest offer / turn-in card (proto.Reward).
  * Returns [{ icon, text }] using the kit's icon vocabulary.
  */
-export function rewardLines(reward, items = {}) {
+const capitalFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+
+export function rewardLines(reward, items = {}, defs = {}) {
   if (!reward) return [];
   const out = [];
   if (reward.xp) out.push({ icon: 'xp', text: `${reward.xp} XP` });
@@ -51,10 +54,13 @@ export function rewardLines(reward, items = {}) {
   }
   for (const id of reward.items || []) out.push({ icon: items[id]?.icon || 'backpack', text: items[id]?.name || String(id).replace(/_/g, ' ') });
   for (const u of reward.unlock || []) {
-    const [kind, key] = String(u).split(':');
-    out.push({ icon: kind === 'region' ? 'map' : 'lock', text: `Unlocks ${kind} ${String(key || '').replace(/_/g, ' ')}`.trim() });
+    const kind = String(u).split(':')[0];
+    out.push({ icon: kind === 'region' ? 'map' : 'lock', text: unlockLine(u, defs.regions, defs.quests) });
   }
-  if (reward.badge) out.push({ icon: 'badge', text: `Badge: ${String(reward.badge).replace(/^badge_/, '').replace(/_/g, ' ')}` });
+  if (reward.badge) {
+    const name = defs.collectibles?.[reward.badge]?.name;
+    out.push({ icon: 'badge', text: name ? `Badge: ${name}` : `Badge: ${capitalFirst(String(reward.badge).replace(/^badge_/, '').replace(/_/g, ' '))}` });
+  }
   return out;
 }
 

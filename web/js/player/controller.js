@@ -11,7 +11,7 @@ import {
   waterPushBack, refuseWaterStep, JUMP_SPEED, GRAVITY, STILL_SPEED, EYE_HEIGHT, STEP_UP,
 } from './movement.js';
 import {
-  buildPose, poseInterval, pickInteractable, gateStep, cinematicPose, easeYaw, REGION_WATER,
+  buildPose, poseInterval, pickInteractable, gateStep, cinematicPose, chooseCinematicPath, cinematicObstacles, easeYaw, REGION_WATER,
 } from './field.js';
 
 const RADIUS = 0.35;           // body radius for collision (m)
@@ -56,7 +56,7 @@ export function createController(ctx, getTools) {
   };
   const sprint = createSprintState();
   const gate = { safe: null, inside: false };
-  const cine = { t: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, init: false };
+  const cine = { t: 0, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, init: false, path: null, planned: false };
   let poseT = 0, interactT = 0, regionT = 0;
   let target = null;        // current interactable {id,label,verb}
   let lastRegion = null;
@@ -118,6 +118,7 @@ export function createController(ctx, getTools) {
     const pos = sp?.pos || w?.profile?.pos || w?.world?.home || { x: 0, y: 0, z: 0 };
     teleport(pos.x, pos.y, pos.z, num(sp?.yaw, num(w?.profile?.yaw, 0)));
     cine.init = false;
+    cine.path = null; cine.planned = false; cine.t = 0;
   });
   bus.on('net:teleport', (t) => {
     if (!t?.pos) return;
@@ -367,6 +368,9 @@ export function createController(ctx, getTools) {
 
   function sendPose(dt, tools) {
     if (!state.welcome || !s.spawned) return;
+    // On the title screen the player is not in the world yet: no pose, so the server
+    // neither hears birds for them (no mysteries before play) nor runs their clock.
+    if (state.mode === 'mainmenu') return;
     poseT += dt;
     if (poseT < poseInterval(state.mode)) return;
     poseT = 0;
@@ -379,10 +383,33 @@ export function createController(ctx, getTools) {
     }));
   }
 
+  /** Trees around the centre from the loaded vegetation, or null while chunks are missing. */
+  function cineObstacles(center, reach) {
+    const w = world();
+    const size = w?.chunkSize;
+    if (!size || !w.vegOf) return [];
+    const out = [];
+    for (let cx = Math.floor((center.x - reach) / size); cx <= Math.floor((center.x + reach) / size); cx++) {
+      for (let cz = Math.floor((center.z - reach) / size); cz <= Math.floor((center.z + reach) / size); cz++) {
+        const veg = w.vegOf(cx, cz);
+        if (!veg) return null;
+        cinematicObstacles(veg, out);
+      }
+    }
+    return out;
+  }
+
   function cinematic(dt) {
     const center = state.pois?.cabin?.pos || state.welcome?.world?.home || feet;
+    // Plan the path once the vegetation around the cabin is known (re-planning only
+    // while the menu is still fading in, so the camera never jumps in view).
+    if (!cine.path || (!cine.planned && cine.t < 2)) {
+      const obs = cineObstacles(center, 52);
+      cine.planned = !!obs;
+      cine.path = chooseCinematicPath(center, obs || []);
+    }
     cine.t += dt;
-    const p = cinematicPose(cine.t, center);
+    const p = cinematicPose(cine.t, center, cine.path);
     const ground = Math.max(heightAt(p.x, p.z), 0);
     const y = ground + p.lift + 1;
     if (!cine.init) {

@@ -80,3 +80,22 @@ export function trailSegments(trail, isExplored, step = 1) {
   }
   return segs.filter((s) => s.length >= 2);
 }
+
+const LABEL_PRIORITY = { home: 0, quest: 1, place: 2, npc: 3 };
+
+/**
+ * Which marker labels to hide so that none overlap: greedy by priority (home, quest
+ * markers, places, then people), labels drawn to the right of their icon.
+ * items: [{key, type, x, y, label}] in screen px. Returns a Set of keys to quieten.
+ */
+export function quietLabels(items, { charW = 6.6, pad = 26, h = 18 } = {}) {
+  const sorted = [...items].sort((a, b) => (LABEL_PRIORITY[a.type] ?? 9) - (LABEL_PRIORITY[b.type] ?? 9));
+  const boxes = [], quiet = new Set();
+  for (const it of sorted) {
+    const w = pad + String(it.label || '').length * charW;
+    const box = { x0: it.x - 12, x1: it.x + w, y0: it.y - h / 2, y1: it.y + h / 2 };
+    if (boxes.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) { quiet.add(it.key); continue; }
+    boxes.push(box);
+  }
+  return quiet;
+}

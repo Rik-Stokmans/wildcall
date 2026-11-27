@@ -263,7 +263,7 @@ func (s *Session) discover() {
 	}
 	s.trailBuf = s.world.TrailsNear(pos.X, pos.Z, sense, s.trailBuf[:0])
 	for _, t := range s.trailBuf {
-		if !t.Hidden || containsStr(s.p.Trails, t.ID) {
+		if !t.Hidden || containsStr(s.p.Trails, t.ID) || s.trailIsAReward(t.ID) {
 			continue
 		}
 		for _, pt := range t.Points {

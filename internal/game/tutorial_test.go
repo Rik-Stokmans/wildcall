@@ -220,6 +220,14 @@ func playTutorialToIdentify(t *testing.T, h *harness) (birdID uint32, m *proto.M
 		t.Fatalf("no heard-level mystery for the wren: %+v", m)
 	}
 	t.Logf("heard: mystery %s evidence %v", m.ID, m.Evidence)
+	// The quest now points at the singer's mystery (by its label only), so the HUD
+	// can tell the player which of the unknown voices Mara meant.
+	if !s.p.Flags[quarryFlag("unseen_singer", m.ID)] {
+		t.Fatalf("no quarry flag for %s: %v", m.ID, s.p.Flags)
+	}
+	if v := s.clientView(); !v.Flags[quarryFlag("unseen_singer", m.ID)] {
+		t.Fatalf("the client view lost the quarry flag")
+	}
 
 	// Observe through binoculars until we have a few pieces of evidence.
 	for i := 0; i < 2400 && (h.questProgress("unseen_singer", "investigate") == 0 || len(m.Evidence) < 4); i++ {
@@ -492,5 +500,26 @@ func TestNarratorNeverNamesTheUnidentifiedWren(t *testing.T) {
 				t.Errorf("narrator names unidentified species %s: %q", sp.ID, n.Text)
 			}
 		}
+	}
+}
+
+// A new adventure wakes the player facing Mara, so the tutorial is the first thing
+// they see.
+func TestNewAdventureFacesMara(t *testing.T) {
+	h := newHarness(t, false)
+	var w proto.Welcome
+	for _, m := range h.all {
+		if m.T == proto.SWelcome {
+			w = decodeAs[proto.Welcome](t, m.D)
+		}
+	}
+	mara, ok := h.s.world.POI("npc_mara")
+	if !ok {
+		t.Skip("no Mara in this world")
+	}
+	want := core.HeadingTo(w.Spawn.Pos, mara.Pos)
+	diff := math.Abs(math.Remainder(float64(w.Spawn.Yaw-want), 2*math.Pi))
+	if diff > 0.05 {
+		t.Fatalf("spawn yaw %.2f, Mara is at heading %.2f", w.Spawn.Yaw, want)
 	}
 }

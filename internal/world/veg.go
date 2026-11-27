@@ -144,6 +144,16 @@ func (w *World) buildVeg(cx, cz int) *vegSet {
 				continue
 			}
 			k, lo, hi := treeKind(core.RegionID(v.reg), core.Habitat(v.hab), v, pick)
+			switch core.RegionID(v.reg) {
+			case core.RegionWindpeak:
+				// Stunted pines towards the treeline.
+				f := 1 - 0.4*smoothstep(45, 95, h)
+				lo, hi = lo*f, hi*f
+			case core.RegionWhisperingCoast:
+				// Salt-pruned, low trees close to the sea.
+				f := 1 - 0.3*smoothstep(90, 25, float64(v.seaDist))
+				lo, hi = lo*f, hi*f
+			}
 			add(k, x, h, z, lerp(lo, hi, sc))
 		}
 	}
@@ -316,13 +326,14 @@ func treeKind(reg core.RegionID, hab core.Habitat, v *gvert, u float64) (core.Ve
 		}
 		return core.VegOak, 0.6, 0.9
 	case core.RegionMurmurMarsh:
+		// Wet carr: grey drowned snags among a few birches, the odd stunted oak.
 		switch {
-		case u < 0.3:
-			return core.VegSnag, 0.6, 0.95
-		case u < 0.8:
+		case u < 0.45:
+			return core.VegSnag, 0.6, 1.0
+		case u < 0.9:
 			return core.VegBirch, 0.6, 0.9
 		}
-		return core.VegOak, 0.6, 0.85
+		return core.VegOak, 0.6, 0.8
 	}
 	// Greenhollow Woods.
 	if hab == core.HabConifer || v.conifer > 0.45 {
@@ -368,6 +379,11 @@ func groundOptions(v *gvert, h float64, o []option) []option {
 		o = append(o, option{core.VegFern, 0.1}, option{core.VegShrub, 0.08}, option{core.VegMushroom, 0.05},
 			option{core.VegLog, 0.05}, option{core.VegStump, 0.04}, option{core.VegRock, 0.05})
 	case core.HabShrub:
+		if reg == core.RegionMurmurMarsh {
+			// Marsh hummocks: scattered sallow bushes in the reeds.
+			o = append(o, option{core.VegShrub, 0.26}, option{core.VegReeds, 0.1}, option{core.VegGrassTuft, 0.1})
+			break
+		}
 		fern := 0.25 + 0.4*float64(v.fern)
 		o = append(o, option{core.VegShrub, 0.5 - 0.2*float64(v.fern)}, option{core.VegFern, fern}, option{core.VegMushroom, 0.03})
 	case core.HabMeadow:
@@ -382,7 +398,13 @@ func groundOptions(v *gvert, h float64, o []option) []option {
 		}
 		o = append(o, option{core.VegGrassTuft, 0.22}, option{core.VegShrub, 0.1}, option{core.VegFlowers, 0.05}, option{core.VegRock, 0.04})
 	case core.HabMarsh:
-		o = append(o, option{core.VegGrassTuft, 0.16}, option{core.VegShrub, 0.05})
+		// Reed clumps with cattails across the flats (the client's ground cover grows
+		// the reedbed around them), fewer bushes.
+		reeds := 0.0
+		if h < 1.3 {
+			reeds = 0.14
+		}
+		o = append(o, option{core.VegReeds, reeds}, option{core.VegGrassTuft, 0.12}, option{core.VegShrub, 0.025})
 	case core.HabAlpine:
 		o = append(o, option{core.VegRock, 0.18 + 0.2*float64(v.rock)}, option{core.VegGrassTuft, 0.15}, option{core.VegShrub, 0.03}, option{core.VegFlowers, 0.02})
 	case core.HabCliff:

@@ -169,12 +169,14 @@ function sampleKeys(keys, eDeg, field, out) {
 // Region atmosphere: a haze colour mixed into the horizon/fog, a tint on the sun,
 // how much it applies, a fog distance multiplier and precipitation character.
 const ATMO = {
-  [REGION.GREENHOLLOW]: { haze: 0xcfe0c8, hazeAmt: 0.06, sunTint: 0xfff6e6, tintAmt: 0, fog: 1, snow: 0, leaves: 1, cold: 0, fireflies: 1 },
-  [REGION.MARSH]: { haze: 0xc9d6c4, hazeAmt: 0.16, sunTint: 0xfff2dc, tintAmt: 0.05, fog: 0.85, snow: 0, leaves: 0.25, cold: 0, fireflies: 1 },
-  [REGION.WINDPEAK]: { haze: 0xc4d2e2, hazeAmt: 0.08, sunTint: 0xf4f6ff, tintAmt: 0.08, fog: 1.12, snow: 0, leaves: 0.2, cold: 0.25, fireflies: 0.15 },
-  [REGION.COAST]: { haze: 0xd6e2e6, hazeAmt: 0.14, sunTint: 0xfff8f0, tintAmt: 0.04, fog: 0.95, snow: 0, leaves: 0.15, cold: 0.1, fireflies: 0.3 },
-  [REGION.AMBERWOOD]: { haze: 0xe9b47a, hazeAmt: 0.28, sunTint: 0xffc98a, tintAmt: 0.22, fog: 0.88, snow: 0, leaves: 1.6, cold: 0, fireflies: 0.8 },
-  [REGION.FROSTVEIL]: { haze: 0xd2e2f2, hazeAmt: 0.3, sunTint: 0xdce8ff, tintAmt: 0.3, fog: 0.8, snow: 1, leaves: 0, cold: 1, fireflies: 0 },
+  // lowMist: a standing veil of mist in low ground (the marsh's breath); cloudShadow:
+  // how dark the drifting cloud shadows are; cloudSpeed: how fast they race.
+  [REGION.GREENHOLLOW]: { haze: 0xcfe0c8, hazeAmt: 0.06, sunTint: 0xfff6e6, tintAmt: 0, fog: 1, snow: 0, leaves: 1, cold: 0, fireflies: 1, lowMist: 0, cloudShadow: 0.2, cloudSpeed: 1 },
+  [REGION.MARSH]: { haze: 0xcdd6bc, hazeAmt: 0.14, sunTint: 0xfff2dc, tintAmt: 0.05, fog: 1, snow: 0, leaves: 0.25, cold: 0, fireflies: 1, lowMist: 0.14, cloudShadow: 0.24, cloudSpeed: 1 },
+  [REGION.WINDPEAK]: { haze: 0xbfcfe4, hazeAmt: 0.1, sunTint: 0xf4f6ff, tintAmt: 0.08, fog: 1.2, snow: 0, leaves: 0.2, cold: 0.25, fireflies: 0.15, lowMist: 0, cloudShadow: 0.36, cloudSpeed: 2.2 },
+  [REGION.COAST]: { haze: 0xdde8ec, hazeAmt: 0.2, sunTint: 0xfff8f0, tintAmt: 0.04, fog: 0.95, snow: 0, leaves: 0.15, cold: 0.1, fireflies: 0.3, lowMist: 0.03, cloudShadow: 0.24, cloudSpeed: 1.6 },
+  [REGION.AMBERWOOD]: { haze: 0xe9b47a, hazeAmt: 0.28, sunTint: 0xffc98a, tintAmt: 0.22, fog: 0.88, snow: 0, leaves: 1.6, cold: 0, fireflies: 0.8, lowMist: 0.04, cloudShadow: 0.18, cloudSpeed: 0.8 },
+  [REGION.FROSTVEIL]: { haze: 0xd6e4f4, hazeAmt: 0.2, sunTint: 0xdce8ff, tintAmt: 0.24, fog: 0.95, snow: 1, leaves: 0, cold: 1, fireflies: 0, lowMist: 0.02, cloudShadow: 0.2, cloudSpeed: 1.2 },
 };
 const ATMO_RGB = {};
 for (const [k, a] of Object.entries(ATMO)) {
@@ -195,7 +197,7 @@ export function mixAtmosphere(a, b, t, out) {
   const o = out || { haze: [0, 0, 0], sunTint: [0, 0, 0] };
   mix3(a.haze, b.haze, t, o.haze);
   mix3(a.sunTint, b.sunTint, t, o.sunTint);
-  for (const k of ['hazeAmt', 'tintAmt', 'fog', 'snow', 'leaves', 'cold', 'fireflies']) o[k] = lerp(a[k], b[k], t);
+  for (const k of ['hazeAmt', 'tintAmt', 'fog', 'snow', 'leaves', 'cold', 'fireflies', 'lowMist', 'cloudShadow', 'cloudSpeed']) o[k] = lerp(a[k] ?? 0, b[k] ?? 0, t);
   return o;
 }
 
@@ -414,7 +416,7 @@ export function atmosphereParams({ sky, mist = 0, rain = 0, wet = 0, cloud = 0, 
   const dayMist = mix3(twilight, MIST_DAY, smoothstep(0.55, 0.9, sky.daylight) * (1 - sky.golden), [0, 0, 0]);
   const mistCol = mix3(sky.fog, dayMist, smoothstep(0.04, 0.3, sky.daylight) * 0.85, [0, 0, 0]);
   const wetMist = clamp(wet) * 0.12 * (1 - clamp(rain));
-  const mistAmt = clamp(Math.max(clamp(mist), wetMist) + a.hazeAmt * 0.15 + 0.08 * clamp(rain));
+  const mistAmt = clamp(Math.max(clamp(mist), wetMist) + a.hazeAmt * 0.15 + (a.lowMist || 0) + 0.08 * clamp(rain));
   const mistHeight = 5 + 9 * clamp(mist) + 4 * clamp(rain);
   // In-scattering: warm glow in the haze around the sun, strongest when it is low.
   const inscatter = mix3(sky.glow, sky.sun, 0.4, [0, 0, 0]);
@@ -491,8 +493,14 @@ export function shadowConfig(quality) {
 // ---------------------------------------------------------------------------
 // Fog
 
-/** View distance in metres by quality (chunk ring radius × 64 m, see js/world). */
+/** View distance in metres by quality: the far terrain ring (js/world/farField.js) × 64 m. */
 export function viewDistance(quality) {
+  const radius = quality === 'high' ? 16 : quality === 'low' ? 8 : 12;
+  return (radius - 0.6) * 64;
+}
+
+/** Distance (m) of the detailed streaming ring by quality (chunk radius × 64 m). */
+export function nearDistance(quality) {
   const radius = quality === 'high' ? 10 : quality === 'low' ? 5 : 7;
   return (radius - 0.6) * 64;
 }

@@ -45,7 +45,10 @@ test('ground cover: nothing on trails, rock, sand, snow, cliffs, steep ground or
   assert.deepEqual(bare(cover(HABITAT.MEADOW, EARTH_RGB)), [0, 0]);                // trodden trail
   assert.deepEqual(bare(cover(HABITAT.ALPINE, ROCK_RGB)), [0, 0]);                 // bare rock
   assert.deepEqual(bare(cover(HABITAT.BEACH, SAND_RGB)), [0, 0]);                  // sand
-  assert.deepEqual(cover(HABITAT.SNOW, SNOW_RGB, { region: REGION.FROSTVEIL }), [0, 0, 0, 0]);
+  // Snowfields: only sparse hoar-frosted tufts poking through (gathered into clumps by
+  // the shader), no flowers, no ferns.
+  const snow = cover(HABITAT.SNOW, SNOW_RGB, { region: REGION.FROSTVEIL });
+  assert.ok(snow[0] <= 80 && snow[2] === 0 && snow[3] === 0);
   assert.equal(cover(HABITAT.CLIFF, ROCK_RGB)[0], 0);
   assert.equal(cover(HABITAT.MEADOW, MEADOW_RGB, { ny: 0.6 })[0], 0);              // a steep bank
   const wet = cover(HABITAT.RIVER, MEADOW_RGB, { h: -0.4 });                      // under water

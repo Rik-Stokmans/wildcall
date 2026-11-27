@@ -336,6 +336,10 @@
 .enc-quest-name { font-family: var(--font-journal); font-size: 18px; font-weight: 700; color: var(--ink); }
 .enc-quest-cat { font-size: 12px; color: var(--ink-soft); letter-spacing: .06em; text-transform: uppercase; }
 .enc-quest-summary { margin: 0; font-family: var(--font-journal); font-size: 15px; }
+.enc-quest-story { margin: 0; font-family: var(--font-journal); font-size: 14px; font-style: italic; color: var(--ink-soft); line-height: 1.45; }
+/* The speech and the choices always stay in view; a long quest card scrolls between them. */
+.enc-dialog-right > .enc-speech, .enc-dialog-right > .enc-choices { flex: none; }
+.enc-dialog-right > .enc-quest-card { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
 .enc-objectives { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
 .enc-objectives li { display: flex; align-items: center; gap: 8px; }
 .enc-objectives li svg { color: var(--moss); flex: none; }

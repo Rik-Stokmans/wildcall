@@ -8,7 +8,7 @@ import {
   isRaised, burstInterval, blendFov, opticStats, breathFactor, zoomRange,
 } from './optics.js';
 import {
-  buildPhoto, outOfFilm, filmLeft, focusTarget, recorderHint, TOOLS, FOCUS_FAR,
+  buildPhoto, outOfFilm, outOfFilmText, filmLeft, focusTarget, recorderHint, recResultText, TOOLS, FOCUS_FAR,
 } from './field.js';
 import { lookDir } from './look.js';
 import { createOverlay } from './overlay.js';
@@ -131,7 +131,7 @@ export function createTools(ctx, player) {
   function shoot() {
     const film = state.profile?.film;
     if (outOfFilm(film, t.pendingShots)) {
-      overlay.message('Out of film', 1.8);
+      overlay.message(outOfFilmText(state.profile), 3);
       ctx.audio?.uiSound?.('error');
       t.nextShot = ctx.time + 0.8;
       return;
@@ -153,7 +153,7 @@ export function createTools(ctx, player) {
 
   bus.on('net:photoResult', (r) => {
     t.pendingShots = Math.max(0, t.pendingShots - 1);
-    if (r?.noFilm) overlay.message('Out of film', 1.8);
+    if (r?.noFilm) overlay.message(outOfFilmText(state.profile), 3);
     else if (r?.notes?.length && t.active === 'camera') overlay.message(r.notes[0], 2.2);
   });
   bus.on('profile', () => { t.pendingShots = 0; clampZooms(); });
@@ -200,7 +200,11 @@ export function createTools(ctx, player) {
       t.recording = false; t.recState = null; emitTool();
     }
   }
-  bus.on('net:recResult', () => { t.recording = false; t.recState = null; emitTool(); });
+  bus.on('net:recResult', (r) => {
+    t.recording = false; t.recState = null; emitTool();
+    // The profile with a brand-new mystery label follows the result: read it a beat later.
+    setTimeout(() => overlay.message(recResultText(r, state.profile, state.speciesById), 4), 150);
+  });
 
   // ---------------------------------------------------------------------------------
   // Modes: tools drop while a screen is open

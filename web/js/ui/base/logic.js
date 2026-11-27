@@ -53,8 +53,8 @@ export const STATIONS = [
 ];
 export const STATION_IDS = STATIONS.map((s) => s.id);
 
-export const WALL_SLOTS_BASE = 6;
-export const WALL_SLOTS_UPGRADED = 12;
+export const WALL_SLOTS_BASE = 4; // progress.PinSlotsBase
+export const WALL_SLOTS_UPGRADED = 12; // progress.PinSlotsUpgraded
 
 /** The "Studied" discovery level and the study meter's full value. */
 export const LEVEL_DOCUMENTED = 5;
@@ -62,7 +62,7 @@ export const LEVEL_STUDIED = 6;
 export const STUDY_FULL = 100;
 
 export const REST_OPTIONS = [
-  { id: 'dawn', label: 'Dawn', hour: 5, icon: 'dawn',
+  { id: 'dawn', label: 'Dawn', hour: 5.5, icon: 'dawn', // 05:00 is still near dark; the chorus is at full voice by half past
     blurb: 'Dawn: the chorus is at its loudest. The best hour for unfamiliar voices.' },
   { id: 'morning', label: 'Morning', hour: 8, icon: 'sunny',
     blurb: 'Morning: birds are feeding and on the move, and the light is kind to photographs.' },
@@ -610,9 +610,10 @@ export function journalSummary(profile, species, ranks) {
 
 /* ------------------------------------------------------------------ shop */
 
-/** Shop tabs. Gear = equipment, gadgets, keepsakes; Supplies = consumables. */
+/** Shop tabs. Gear = equipment, gadgets, keepsakes; Supplies = consumables, pantry and food. */
 export function shopTabOf(item) {
-  return item?.kind === 'supply' ? 'supplies' : 'gear';
+  const k = item?.kind;
+  return k === 'supply' || k === 'ingredient' || k === 'food' ? 'supplies' : 'gear';
 }
 
 export function shopStock(shopIds, items) {
@@ -631,6 +632,7 @@ export const FINN_LINES = {
   gadget: "Gadgets rattle around in the pack, so keep only the ones that earn their space.",
   keepsake: "Some things aren't for sale. The ones that are, I'm afraid, are mostly sentimental.",
   supplies: "Film and seed. Nothing fancy, but you'll miss them the moment they're gone.",
+  pantry: "Oats, flour and honey. The wood does the rest, if you know where to look.",
   upgrades: "Good gear can be made better. I'll leave the tinkering to the workshop, mind.",
   default: "Take your time. Gear is a long conversation, not a transaction.",
 };
@@ -640,5 +642,6 @@ export function finnLine(item, tab) {
   if (!item) return FINN_LINES.default;
   if (item.kind === 'equipment') return FINN_LINES[item.slot] || FINN_LINES.default;
   if (item.kind === 'supply') return FINN_LINES.supplies;
+  if (item.kind === 'ingredient' || item.kind === 'food') return FINN_LINES.pantry;
   return FINN_LINES[item.kind] || FINN_LINES.default;
 }

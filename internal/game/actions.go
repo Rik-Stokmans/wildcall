@@ -275,9 +275,12 @@ func (s *Session) rest(until float32) error {
 }
 
 func clockText(h float32) string {
-	hh := int(h)
-	mm := int((h - float32(hh)) * 60)
-	return twoDigits(hh) + ":" + twoDigits(mm)
+	// Round to the nearest minute (05:00 must not read 04:59 from float error).
+	m := int(h*60+0.5) % (24 * 60)
+	if m < 0 {
+		m += 24 * 60
+	}
+	return twoDigits(m/60) + ":" + twoDigits(m%60)
 }
 
 func twoDigits(n int) string {

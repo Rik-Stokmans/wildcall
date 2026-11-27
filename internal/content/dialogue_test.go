@@ -438,3 +438,21 @@ func TestDialogueActionsReferenceKnownThings(t *testing.T) {
 		}
 	}
 }
+
+// Quest stories and summaries are narration ("Finn wants…", "Mara has heard…"): they
+// belong on the quest card, never in the giver's own speech.
+func TestQuestOffersDoNotPutNarrationInTheGiversMouth(t *testing.T) {
+	for name, p := range profileVariants() {
+		for _, npc := range npcIDs {
+			for _, n := range allNodes(t, npc, p) {
+				for _, l := range n.Lines {
+					for _, q := range Quests() {
+						if (q.Story != "" && l == q.Story) || (q.Summary != "" && l == q.Summary) {
+							t.Errorf("%s / %s: %s speaks the narration of %q: %q", name, npc, npc, q.ID, l)
+						}
+					}
+				}
+			}
+		}
+	}
+}

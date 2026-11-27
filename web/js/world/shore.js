@@ -1,7 +1,7 @@
 // The ground-height texture the water shader reads to find the shallows: a small grid
 // of bytes around the player, rebuilt a few rows per frame; and the rocks that break the
 // surface nearby (for foam rings). Pure: no three.js, no DOM.
-import { CHUNK_SIZE, SEA_LEVEL, VEG } from './constants.js';
+import { CHUNK_SIZE, SEA_LEVEL, VEG, REGION } from './constants.js';
 //
 // A byte encodes ground height in [-SHORE_RANGE, +SHORE_RANGE] metres; unloaded ground
 // is written as deep water so no foam appears where the shore is not known yet.
@@ -34,12 +34,27 @@ export function shoreOrigin(px, pz) {
  * @param {{sampleHeight(x:number, z:number):number}} store
  * @param {number} ox @param {number} oz  world position of texel (0, 0)
  * @param {Uint8Array} out  SHORE_RES² bytes, row-major (row = z)
+ * @param {Uint8Array} [style]  SHORE_RES² × 4 bytes: water style per texel (marsh, sea,
+ *        frost, 0) from the region type; soften with groundField.blurStyle
  */
-export function fillShoreRows(store, ox, oz, out, row0, row1) {
+export function fillShoreRows(store, ox, oz, out, row0, row1, style = null) {
   for (let r = row0; r < row1; r++) {
     const z = oz + r * SHORE_TEXEL;
     const o = r * SHORE_RES;
-    for (let c = 0; c < SHORE_RES; c++) out[o + c] = encodeShore(store.sampleHeight(ox + c * SHORE_TEXEL, z));
+    for (let c = 0; c < SHORE_RES; c++) {
+      const x = ox + c * SHORE_TEXEL;
+      out[o + c] = encodeShore(store.sampleHeight(x, z));
+      if (style) {
+        const q = (o + c) * 4;
+        const reg = store.regionAt ? store.regionAt(x, z) : 0;
+        const known = !store.isLoaded || store.isLoaded(x, z);
+        style[q] = reg === REGION.MURMUR_MARSH ? 255 : 0;
+        // Open water away from any shore, and unknown water, counts as sea.
+        style[q + 1] = reg === REGION.WHISPERING_COAST || reg === REGION.NONE || !known ? 255 : 0;
+        style[q + 2] = reg === REGION.FROSTVEIL ? 255 : 0;
+        style[q + 3] = 0;
+      }
+    }
   }
 }
 

@@ -72,3 +72,12 @@ test('requeue keeps the original expiry', () => {
   assert.equal(q.peek(10.1), null);
   assert.equal(q.requeue(it, 11), false);
 });
+
+test('a newer identification line replaces a queued older one', () => {
+  const q = createQueue();
+  q.push({ id: 1, text: 'Hm. That does not fit.', kind: 'identify', priority: 3, ttl: 20 }, 0);
+  q.push({ id: 2, text: 'A wren. Of course.', kind: 'identify', priority: 3, ttl: 20 }, 1);
+  q.push({ id: 3, text: 'Lovely morning.', kind: 'ambient', priority: 0, ttl: 20 }, 1);
+  const texts = q.list().map((it) => it.text);
+  assert.deepEqual(texts, ['A wren. Of course.', 'Lovely morning.']);
+});

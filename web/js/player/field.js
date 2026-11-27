@@ -168,6 +168,13 @@ export function filmLeft(film, pending = 0) {
   return Math.max(0, cap - used - pending);
 }
 
+/** What to do about an empty camera: load a spare roll, or go home to develop this one. */
+export function outOfFilmText(profile) {
+  return carries(profile, 'film_roll')
+    ? 'Out of film. Load a spare roll from your pack (I).'
+    : 'Out of film. The cabin develops the roll and loads a fresh one.';
+}
+
 export function outOfFilm(film, pending = 0) {
   if (!film || !(film.cap > 0)) return false; // unknown film state: let the server decide
   return filmLeft(film, pending) <= 0;
@@ -189,15 +196,83 @@ export function carries(profile, item) {
 export function cinematicPose(t, center, opts = {}) {
   const radius = opts.radius ?? 26;
   const period = opts.period ?? 150; // seconds per loop: barely perceptible motion
-  const a = (t / period) * Math.PI * 2;
-  const x = center.x + Math.sin(a) * radius;
-  const z = center.z + Math.cos(a) * radius * 0.7;
+  const sx = opts.sx ?? 1, sz = opts.sz ?? 0.7;
+  // A full loop, or (when trees crowd the loop) a slow swing to and fro along the
+  // clear arc [a0, a0 + span].
+  const ph = (t / period) * Math.PI * 2;
+  const a = opts.span ? opts.a0 + opts.span * (0.5 - 0.5 * Math.cos(ph)) : ph + (opts.a0 || 0);
+  const x = center.x + Math.sin(a) * radius * sx;
+  const z = center.z + Math.cos(a) * radius * sz;
   const lift = 3.2 + Math.sin(a * 2 + 0.4) * 1.1;
   // Look past the centre, drifting off to the treeline and back.
   const toCenter = headingTo({ x, z }, center);
   const yaw = wrapYaw(toCenter + Math.sin(a * 1.5) * 0.55);
   const pitch = 0.04 + Math.sin(a * 0.9 + 1.1) * 0.05;
   return { x, z, lift, yaw, pitch };
+}
+
+/** VegKinds drawn as branching trees (core.VegKind.IsTree) and their nominal crown radius (m). */
+export const CINE_TREE_CROWN = Object.freeze({ 0: 5.5, 1: 3.5, 2: 4, 3: 3, 13: 5.5, 14: 3.5, 15: 4, 24: 6 });
+
+/** Obstacles for the title camera from a vegetation list ({kind, x, z, scale}). */
+export function cinematicObstacles(veg, out = []) {
+  for (const v of veg || []) {
+    const r = CINE_TREE_CROWN[v.kind];
+    if (r) out.push({ x: v.x, z: v.z, r: r * (v.scale || 1) + 1.2 });
+  }
+  return out;
+}
+
+function clearanceAt(x, z, obstacles) {
+  let c = Infinity;
+  for (const o of obstacles) {
+    const d = Math.hypot(x - o.x, z - o.z) - o.r;
+    if (d < c) c = d;
+  }
+  return c;
+}
+
+/**
+ * Choose a camera path around the centre that does not fly through tree crowns.
+ * Tries loops of several sizes and shapes first; when every loop clips a tree it
+ * falls back to the longest clear arc (the camera then swings slowly along it).
+ * Returns options for cinematicPose. Deterministic.
+ */
+export function chooseCinematicPath(center, obstacles, opts = {}) {
+  const N = 72, minClear = opts.minClear ?? 1;
+  const shapes = [[1, 0.7], [0.7, 1], [1, 1]];
+  const radii = [26, 22, 30, 18, 34, 38, 16, 42];
+  const sample = (R, sx, sz) => {
+    const c = new Array(N);
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      c[i] = clearanceAt(center.x + Math.sin(a) * R * sx, center.z + Math.cos(a) * R * sz, obstacles);
+    }
+    return c;
+  };
+  let bestArc = null;
+  for (const R of radii) {
+    for (const [sx, sz] of shapes) {
+      const c = sample(R, sx, sz);
+      if (Math.min(...c) >= minClear) return { radius: R, sx, sz };
+      // Longest run of clear samples (wrapping around).
+      let run = 0, best = 0, bestEnd = -1;
+      for (let i = 0; i < N * 2; i++) {
+        run = c[i % N] >= minClear ? run + 1 : 0;
+        if (run > best && run <= N) { best = run; bestEnd = i; }
+      }
+      if (best >= 2 && (!bestArc || best > bestArc.n)) {
+        bestArc = { n: best, radius: R, sx, sz, a0: ((bestEnd - best + 1) / N) * Math.PI * 2, span: ((best - 1) / N) * Math.PI * 2 };
+      }
+    }
+  }
+  if (bestArc && bestArc.n >= N / 8) {
+    const { radius, sx, sz, a0, span } = bestArc;
+    return { radius, sx, sz, a0, span, period: 110 };
+  }
+  // Nowhere clear: hold a near-still view from the least crowded point of the loop.
+  if (bestArc) return { radius: bestArc.radius, sx: bestArc.sx, sz: bestArc.sz, a0: bestArc.a0, span: Math.max(bestArc.span, 0.01), period: 240 };
+  return {};
 }
 
 /** Yaw that eases toward a target without wrap-around jumps. */
@@ -280,4 +355,24 @@ export function recorderHint(recording, rec, recFocus = 0, key = 'Click') {
 export function formatTimer(seconds) {
   const t = Math.max(0, Math.floor(Number(seconds) || 0));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
+// Recording result
+
+/**
+ * One line for the viewfinder after a recording: whose voice was captured (species
+ * name once identified, else the mystery label) and its stars, or why nothing was.
+ * @param r proto.RecResult  @param profile  @param speciesById
+ */
+export function recResultText(r, profile, speciesById = {}) {
+  const rec = r?.rec;
+  const note = r?.notes?.[0] || '';
+  if (!rec) return note || 'Nothing clear on the recording';
+  let who = '';
+  if (rec.species) who = speciesById?.[rec.species]?.name || '';
+  else if (rec.mystery) who = profile?.journal?.mysteries?.find((m) => m.id === rec.mystery)?.label || '';
+  const stars = Math.max(0, Math.min(5, rec.stars | 0));
+  const line = `Recorded: ${who || 'an unknown bird'} ${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}`;
+  return note ? `${line} · ${note}` : line;
 }

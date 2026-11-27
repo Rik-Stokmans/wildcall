@@ -22,17 +22,20 @@ var (
 	cAmberRust = rgb{164, 86, 46}   // rust drifts
 	cAmberGold = rgb{206, 164, 80}  // golden clearings
 	cAmberPine = rgb{136, 100, 62}  // brown needle floor
-	cMarsh     = rgb{118, 126, 66}  // olive reed flats
-	cMarshMud  = rgb{100, 86, 58}   // wet mud
-	cMarshDry  = rgb{120, 146, 72}  // hummock grass
-	cAlpine    = rgb{134, 144, 98}  // high grass
+	cMarsh     = rgb{146, 136, 70}  // ochre-olive reed flats
+	cMarshTeal = rgb{100, 124, 88}  // damp sedge, a cool teal-green
+	cMarshMud  = rgb{84, 70, 48}    // wet mud
+	cMarshDry  = rgb{122, 136, 70}  // hummock grass
+	cAlpine    = rgb{128, 138, 90}  // high, wind-cropped grass
 	cRock      = rgb{132, 124, 112} // grey-brown rock
 	cRockDark  = rgb{106, 100, 92}
+	cRockHigh  = rgb{128, 124, 136} // Windpeak: grey-violet stone
+	cRockHighD = rgb{98, 94, 110}
 	cPeakSnow  = rgb{234, 238, 244}
-	cCoast     = rgb{146, 166, 94}  // salt-wind grass
+	cCoast     = rgb{132, 154, 102} // salt-wind grass, blue-green
 	cSand      = rgb{228, 210, 160} // beach sand
 	cDune      = rgb{214, 198, 144}
-	cCliff     = rgb{150, 140, 124}
+	cCliff     = rgb{176, 168, 150} // pale banded sea cliff
 	cSnow      = rgb{238, 242, 248}
 	cSnowBlue  = rgb{188, 206, 232} // snow in shadow / on slopes
 	cSnowPine  = rgb{206, 218, 232}
@@ -42,7 +45,7 @@ var (
 	cDamp      = rgb{96, 84, 54}   // damp earth up the bank
 	cEarthBank = rgb{110, 102, 62} // mossy loam on steep earth banks
 	cWetEarth  = rgb{70, 54, 36}   // dark, rich wet loam right at the water line
-	cWetSand   = rgb{164, 136, 92} // wet sand at the sea's edge
+	cWetSand   = rgb{176, 156, 116} // wet sand at the sea's edge
 	cBed       = rgb{112, 94, 64}  // stream / pond bed: warm brown gravel
 	cBedDeep   = rgb{66, 72, 54}   // deeper bed: dark, a little weedy
 	cSeaBed    = rgb{178, 166, 126}
@@ -66,11 +69,14 @@ func (g *gen) regionColor(reg core.RegionID, x, z, h, slope float64, s *sample) 
 		c = c.mix(cAmberPine, smoothstep(0.4, 0.75, s.conifer))
 		return c.mix(cAmberGold, smoothstep(0.32, 0.62, s.clear))
 	case core.RegionMurmurMarsh:
-		c := cMarsh.mix(cMarshMud, 1-smoothstep(0.05, 0.5, h))
+		// Ochre reed flats and teal-green sedge in broad drifts, mud at the water.
+		c := cMarsh.mix(cMarshTeal, smoothstep(-0.25, 0.35, g.n[lColor].Eval(x/57+23, z/57-11))*0.6)
+		c = c.mix(cMarshMud, 1-smoothstep(0.05, 0.5, h))
 		return c.mix(cMarshDry, smoothstep(1.0, 1.8, h))
 	case core.RegionWindpeak:
+		rock := cRockHigh.mix(cRockHighD, 0.5+0.5*g.n[lGrain].Eval(x/23, z/23))
 		c := cAlpine.mix(cPineFloor, smoothstep(0.05, 0.3, s.conifer)*(1-smoothstep(60, 85, h)))
-		c = c.mix(cRock, math.Max(smoothstep(70, 150, h)*0.75, s.rock*0.85))
+		c = c.mix(rock, math.Max(smoothstep(70, 150, h)*0.75, s.rock*0.85))
 		return c.mix(cPeakSnow, smoothstep(178, 215, h+12*g.n[lGrain].Eval(x/40, z/40))*(1-smoothstep(0.9, 1.3, slope)))
 	case core.RegionWhisperingCoast:
 		c := cCoast.mix(cDune, smoothstep(140, 60, s.seaDist)*(1-s.cliffy)*0.6)
@@ -112,6 +118,9 @@ func (g *gen) vertexColor(x, z, h, slope float64, hab core.Habitat, s *sample, r
 	if s.cliffy > 0.3 && s.seaDist < 60 {
 		rockC = cCliff
 	}
+	if hi := s.w[core.RegionWindpeak]; hi > 0 {
+		rockC = rockC.mix(cRockHigh.mix(cRockHighD, 0.5+0.5*g.n[lGrain].Eval(x/17, z/17)), hi)
+	}
 	if frost > 0.5 {
 		rockC = rockC.mix(cSnowBlue, 0.35)
 	}
@@ -137,7 +146,7 @@ func (g *gen) vertexColor(x, z, h, slope float64, hab core.Habitat, s *sample, r
 		sandy *= 1 - smoothstep(0.3, 0.6, slope) // steep banks stay earthen
 		damp := (1 - smoothstep(0.2, 1.1, h)) * (1 - frost)
 		wet := (1 - smoothstep(-0.05, 0.4, h)) * (1 - frost)
-		c = c.mix(cDamp.mix(cWetSand, sandy), damp*0.55)
+		c = c.mix(cDamp.mix(cWetSand, sandy), damp*0.55*(1-0.6*sandy))
 		c = c.mix(cWetEarth.mix(cWetSand, sandy), wet*0.85)
 		if h < 0 {
 			bed := cBed.mix(cBedDeep, smoothstep(-0.3, -1.6, h)).mix(cSeaBed, sandy)

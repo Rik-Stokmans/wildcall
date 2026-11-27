@@ -32,7 +32,36 @@ export function trackedQuest(profile, questDefs, max = 3) {
     }));
     const open = rows.filter((r) => !r.done);
     const shown = def.ordered ? open.slice(0, 1) : open.slice(0, max);
-    return { id, name: def.name, objectives: shown, remaining: open.length, total: rows.length };
+    return { id, name: def.name, objectives: shown, remaining: open.length, total: rows.length, quarry: quarryLabel(profile, id) };
   }
   return null;
+}
+
+/**
+ * Mystery ids an active quest is about: the server sets the flag
+ * "quarry:<quest id>:<mystery id>" when it notices the quest's target species as a
+ * mystery. Only mysteries still unnamed count (an identified bird has its own name).
+ */
+export function quarryMysteries(profile, questId) {
+  const pre = 'quarry:' + questId + ':';
+  const live = new Set((profile?.journal?.mysteries || []).map((m) => m.id));
+  return Object.keys(profile?.flags || {}).filter((k) => profile.flags[k] && k.startsWith(pre))
+    .map((k) => k.slice(pre.length)).filter((id) => live.has(id));
+}
+
+/** The label of the mystery a quest is about ("Unknown bird E"), or ''. */
+export function quarryLabel(profile, questId) {
+  const id = quarryMysteries(profile, questId)[0];
+  if (!id) return '';
+  return (profile.journal.mysteries.find((m) => m.id === id)?.label) || '';
+}
+
+/** Name of the active quest whose quarry is this mystery, or ''. */
+export function questForMystery(profile, questDefs, mysteryId) {
+  if (!mysteryId) return '';
+  for (const [id, qs] of Object.entries(profile?.quests || {})) {
+    if (!qs || qs.status !== 'active') continue;
+    if (quarryMysteries(profile, id).includes(mysteryId)) return questDefs?.[id]?.name || '';
+  }
+  return '';
 }

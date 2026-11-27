@@ -124,6 +124,11 @@ export function createQuestScreen(ctx) {
         const tab = state && ({ active: 'active', complete: 'active', available: 'available', turned_in: 'completed' })[state.status];
         if (tab) { st.tab = tab; st.sel = data.quest; }
       }
+      // Nothing under way: show what is on offer rather than an empty page.
+      if (!data.tab && !data.quest && st.tab === 'active') {
+        const tabs = questTabs(Object.values(ctx.state.quests), ctx.state.profile?.quests || {});
+        if (!tabs.active.length && tabs.available.length) { st.tab = 'available'; st.sel = null; }
+      }
       uiSound(ctx, 'open');
       render();
     },

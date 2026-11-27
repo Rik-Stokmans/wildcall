@@ -81,7 +81,7 @@ export function renderPhotos(api) {
   return el('div', { class: 'base-station base-photos' },
     el('div', { class: 'base-photo-head' },
       el('div', { class: 'base-card-title' }, `${pin.count} / ${pin.slots} frames in use`),
-      el('div', { class: 'base-muted' }, pin.slots === L.WALL_SLOTS_BASE ? 'The photography wall upgrade adds six more frames.' : 'Every frame on the extended wall is available.')),
+      el('div', { class: 'base-muted' }, pin.slots === L.WALL_SLOTS_BASE ? `The photography wall upgrade adds ${L.WALL_SLOTS_UPGRADED - L.WALL_SLOTS_BASE} more frames.` : 'Every frame on the extended wall is available.')),
     el('div', { class: 'base-photo-layout' },
       el('div', { class: 'base-station-scroll' }, grid),
       detail));

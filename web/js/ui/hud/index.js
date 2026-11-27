@@ -10,7 +10,7 @@ import { el, fill, icon, label, formatClock, WEATHER_NAMES, WEATHER_ICONS } from
 import { RAD2DEG, tickTable, stripOffset, headingDegrees, arrowDegrees, spreadWidth, landmarkPips, cuePlacement } from './compass.js';
 import { ClueStore, clueCard } from './clues.js';
 import { ToastStack, toastSound } from './toasts.js';
-import { trackedQuest } from './quest.js';
+import { trackedQuest, questForMystery } from './quest.js';
 import { HintTracker, HINTS } from './hints.js';
 import { sightingView } from './sighting.js';
 import { hudLevel, toastsVisible } from './visibility.js';
@@ -188,8 +188,8 @@ export default {
     const cards = new Map(); // clue id -> {n, arrow, sig}
     function cardFor(entry, isNew) {
       const c = entry.clue;
-      const view = clueCard(c, { species: speciesName, mystery: mysteryLabel });
-      const sig = JSON.stringify([view.title, view.subtitle, view.dir, view.facts, view.confidence, view.unusual, view.new]);
+      const view = clueCard(c, { species: speciesName, mystery: mysteryLabel, quest: (m) => questForMystery(state.profile, state.quests, m) });
+      const sig = JSON.stringify([view.title, view.subtitle, view.quest, view.dir, view.facts, view.confidence, view.unusual, view.new]);
       let rec = cards.get(c.id);
       if (!rec) {
         rec = { n: el('div', { class: 'hud-card' }), arrow: el('span', { class: 'hud-arrow', html: ARROW_SVG }), sig: '' };
@@ -209,6 +209,7 @@ export default {
               view.subtitle ? el('span', view.subtitle) : null),
             view.dir ? el('em', { class: 'hud-card-dir' }, view.dir) : null),
           view.facts.length ? el('div', { class: 'hud-card-facts' }, view.facts.map((f) => el('span', { class: 'hud-fact hud-fact-' + f.key }, f.text))) : null,
+          view.quest ? el('div', { class: 'hud-card-quest' }, icon('quest', 11), el('span', view.quest)) : null,
           view.unusual ? el('div', { class: 'hud-card-unusual' }, 'Something unusual…') : null,
           view.confidence ? el('div', { class: 'hud-card-conf' }, view.confidence) : null,
           rec.showTip ? el('div', { class: 'hud-card-tip' }, 'Hold F to listen closely') : null);
@@ -331,6 +332,7 @@ export default {
       fill(questEl,
         el('div', { class: 'hud-quest-name' }, icon('quest', 13), el('span', q.name)),
         q.objectives.map((o) => el('div', { class: 'hud-quest-obj' }, el('i'), el('span', o.text))),
+        q.quarry && q.objectives.length ? el('div', { class: 'hud-quest-quarry' }, 'In your journal as ', el('b', q.quarry)) : null,
         !q.objectives.length ? el('div', { class: 'hud-quest-obj done' }, el('i'), el('span', 'All objectives done')) : null);
       toastPad();
     }

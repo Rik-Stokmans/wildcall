@@ -182,6 +182,7 @@ uniform float uWrap;
 uniform float uTrans;
 uniform float uAmbient;
 uniform float uSkyFill;
+uniform float uRim;
 #undef RE_Direct
 #define RE_Direct RE_Direct_Leaf
 void RE_Direct_Leaf(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in LambertMaterial material, inout ReflectedLight reflectedLight) {
@@ -192,6 +193,8 @@ void RE_Direct_Leaf(const in IncidentLight directLight, const in vec3 geometryPo
   float back = pow(saturate(dot(-geometryViewDir, directLight.direction)), 3.0);
   float edge = 1.0 - saturate(dot(geometryNormal, geometryViewDir));
   irradiance += directLight.color * back * (0.25 + 0.75 * edge) * uTrans * vec3(1.0, 1.05, 0.7);
+  // A soft rim where the light grazes the crowns' edges (moonlit silhouettes at night).
+  irradiance += directLight.color * pow(edge, 2.5) * saturate(ndl + 0.6) * uRim;
   reflectedLight.directDiffuse += irradiance * BRDF_Lambert(material.diffuseColor);
 }
 `;
@@ -234,6 +237,9 @@ function patchVertex(shader, main) {
  *   uSeasonA, uSeasonB, uSeasonRef, uSeasonAmt, plus per kind uBend, uFlutter, uFreq
  * @returns {{material: THREE.Material, depth: THREE.Material}}
  */
+/** Rim light on leaf masses, shared by every tree (set per frame by the world: stronger at night). */
+export const TREE_RIM = { value: 0.12 };
+
 export function createTreeMaterial({ cards, map, uniforms }) {
   const defines = cards ? { TREE_CARDS: '' } : {};
   const all = {
@@ -242,6 +248,7 @@ export function createTreeMaterial({ cards, map, uniforms }) {
     uTrans: { value: cards ? 0.55 : 0 },
     uAmbient: { value: cards ? 1.15 : 1.6 },
     uSkyFill: { value: cards ? 0.55 : 0.22 },
+    uRim: cards ? TREE_RIM : { value: 0 },
   };
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,

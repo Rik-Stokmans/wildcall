@@ -221,3 +221,24 @@ test('forecastSlots honours the stat and wraps midnight', () => {
   assert.equal(forecastSlots(f, 23, 3)[0].hour, 0);
   assert.equal(forecastSlots(f, 14.5, 1).length, 1);
 });
+
+test('quest quarry: the tracker and clue cards name the mystery a quest is about', async () => {
+  const { trackedQuest, quarryLabel, questForMystery } = await import('./quest.js');
+  const { clueCard } = await import('./clues.js');
+  const defs = { unseen_singer: { id: 'unseen_singer', name: 'The Unseen Singer', ordered: true, objectives: [{ id: 'investigate', text: 'Investigate the sound', count: 1 }] } };
+  const profile = {
+    quests: { unseen_singer: { status: 'active', tracked: true, progress: {} } },
+    flags: { 'quarry:unseen_singer:m3': true },
+    journal: { mysteries: [{ id: 'm1', label: 'Unknown bird A' }, { id: 'm3', label: 'Unknown bird C' }] },
+  };
+  assert.equal(quarryLabel(profile, 'unseen_singer'), 'Unknown bird C');
+  assert.equal(trackedQuest(profile, defs).quarry, 'Unknown bird C');
+  assert.equal(questForMystery(profile, defs, 'm3'), 'The Unseen Singer');
+  assert.equal(questForMystery(profile, defs, 'm1'), '');
+  const card = clueCard({ id: 1, mystery: 'm3' }, { mystery: () => 'Unknown bird C', quest: (m) => questForMystery(profile, defs, m) });
+  assert.equal(card.quest, 'The Unseen Singer');
+  // Once named, the mystery is gone and nothing points at it any more.
+  const named = { ...profile, journal: { mysteries: [] } };
+  assert.equal(quarryLabel(named, 'unseen_singer'), '');
+  assert.equal(questForMystery(named, defs, 'm3'), '');
+});

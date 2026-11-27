@@ -240,9 +240,25 @@ func (s *Session) stopRecording() {
 	}
 	s.questEvent(content.Recorded(sp.ID, meta.Stars, s.at(pos)))
 	if res.XP > 0 {
-		s.toast("xp", "Recording", starsText(meta.Stars), res.XP, "recorder")
+		// Say whose voice is on the tape: the recorder keeps the clearest singer, which
+		// is not always the bird the player was pointing at.
+		s.toast("xp", "Recording", s.subjectLabel(sp.ID)+" "+starsText(meta.Stars), res.XP, "recorder")
 	}
 	s.changed()
 	s.send(proto.SRec, res)
 	s.narrate(narrator.Event{Kind: narrator.Recorded, Stars: meta.Stars, Quality: meta.Quality, Known: known})
+}
+
+// subjectLabel names a species for the player: its name once identified, else its
+// mystery label ("Unknown bird C"), never the hidden species.
+func (s *Session) subjectLabel(spID string) string {
+	if s.identified(spID) {
+		if sp := s.spByID(spID); sp != nil {
+			return sp.Name
+		}
+	}
+	if m := s.mysteryOf(spID); m != nil {
+		return m.Label
+	}
+	return "An unknown bird"
 }

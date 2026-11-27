@@ -79,8 +79,14 @@ type recVoice struct {
 	dist     float32 // ∫ distance dt
 	noise    float32 // ∫ noise dt
 	aim      float32 // ∫ aim dt
+	off      float32 // ∫ angle off the microphone axis dt (rad)
 	handling float32 // ∫ handling noise dt
 }
+
+// recAimedAngle: a voice the player kept within this angle of the microphone axis is
+// the one they meant to record, and wins over a louder or longer voice off to the
+// side (the take keeps one voice; "point it at the singer" must work).
+const recAimedAngle = 30 * 3.14159265 / 180
 
 // NewRecording starts an empty recording window.
 func NewRecording() *Recording { return &Recording{} }
@@ -150,7 +156,8 @@ func (r *Recording) Tick(c *Context, dt float32, p proto.Pose, birds []core.Bird
 		if d > reach*recMaxReach {
 			continue
 		}
-		aim := micAim(st, angleBetween(axis, v.pos.Sub(mic)))
+		offAxis := angleBetween(axis, v.pos.Sub(mic))
+		aim := micAim(st, offAxis)
 		floor := clamp(recAimFloor-recAimFocus*clamp01(st.RecFocus), recAimMin, 1)
 		ratio := d / reach
 		signal := 1 / (1 + recDistFall*ratio*ratio) * (floor + (1-floor)*aim) *
@@ -170,6 +177,7 @@ func (r *Recording) Tick(c *Context, dt float32, p proto.Pose, birds []core.Bird
 		v.dist += d * span
 		v.noise += noise * span
 		v.aim += aim * span
+		v.off += offAxis * span
 		v.handling += handling * span
 	}
 	r.state = state
@@ -241,7 +249,7 @@ func (r *Recording) Stop(c *Context, p proto.Pose) RecOutcome {
 
 	var best *recVoice
 	var bestQ, bestPhrases float32
-	bestCapped := false
+	bestCapped, bestAimed := false, false
 	fragments, faint := false, false
 	for _, v := range r.voices {
 		sp := c.SpeciesAt(v.species)
@@ -263,8 +271,9 @@ func (r *Recording) Stop(c *Context, p proto.Pose) RecOutcome {
 		if limit := recCapBase + recCapRange*clamp01(st.RecQuality); q > limit {
 			q, capped = limit, true
 		}
-		if best == nil || q > bestQ {
-			best, bestQ, bestCapped = v, q, capped
+		aimed := v.off/v.captured <= recAimedAngle
+		if best == nil || (aimed && !bestAimed) || (aimed == bestAimed && q > bestQ) {
+			best, bestQ, bestCapped, bestAimed = v, q, capped, aimed
 			bestPhrases = v.captured / maxf(phrase+sp.Calls[v.call].Gap, phrase)
 		}
 	}
@@ -345,7 +354,15 @@ func (r *Recording) Stop(c *Context, p proto.Pose) RecOutcome {
 		add("This recorder has given all it can - better gear would do the voice justice")
 	}
 	if len(out.Notes) == 0 {
-		add("A clean, clear recording")
+		// Nothing in particular went wrong; say how good it is honestly.
+		switch {
+		case out.Meta.Stars >= 4:
+			add("A clean, clear recording")
+		case out.Meta.Stars == 3:
+			add("A good, usable recording")
+		default:
+			add("Faint but usable - closer would be clearer")
+		}
 	}
 	return out
 }

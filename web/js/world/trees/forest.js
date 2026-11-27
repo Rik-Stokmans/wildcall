@@ -29,7 +29,7 @@ import { treeStyle, isModelKind, TREE_VARIANTS } from './treeStyle.js';
 import { prepareModel, buildWood, buildFoliage, writeInstanceMatrix, woodDistance, unplacePoint, DETAIL } from './treeGeometry.js';
 import { shrubModel, SHRUB_VARIANTS } from './shrubModels.js';
 import {
-  modelVariant, treeTint, modelReach, GIANT_SCALE, CULL_MOVE, CULL_TURN_COS, CULL_MARGIN_DEG,
+  modelVariant, treeTint, regionTint, modelReach, GIANT_SCALE, CULL_MOVE, CULL_TURN_COS, CULL_MARGIN_DEG,
   bandsFor, bandMask, fadeWindow, zoomStep,
 } from './instancing.js';
 import { createTreeMaterial } from './treeMaterials.js';
@@ -443,6 +443,11 @@ export function createForest(shared) {
         const k = veg.scale[i];
         writeInstanceMatrix(m, j * 16, veg.x[i], veg.y[i], veg.z[i], k, veg.rot[i]);
         treeTint(veg.kind[i], veg.variant[i], veg.x[i] - ox, veg.z[i] - oz, c, j * 3);
+        if (chunk.region) {
+          const gi = Math.min(chunk.n - 1, Math.max(0, Math.round((veg.z[i] - oz) / chunk.cell)));
+          const gj = Math.min(chunk.n - 1, Math.max(0, Math.round((veg.x[i] - ox) / chunk.cell)));
+          regionTint(veg.kind[i], chunk.region[gi * chunk.n + gj], c, j * 3);
+        }
         giant[j] = k >= GIANT_SCALE ? 1 : 0;
         sc[j] = k;
         bx[0] = Math.min(bx[0], veg.x[i] - reach * k); bx[3] = Math.max(bx[3], veg.x[i] + reach * k);

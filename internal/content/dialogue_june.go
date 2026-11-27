@@ -35,7 +35,7 @@ func juneSpeaker() *speaker {
 		},
 		taken: map[string][]string{
 			"old_watchtower": {
-				"Good. The path grew over long ago. Look for a roofline above the trees, somewhere on a wooded rise away from the main trail. If you find the tower, climb it. Paper lasts longest out of the rain.",
+				"Good. The path grew over long ago. Look for a roofline above the trees, somewhere on a wooded rise away from the main trail. If you find the tower, search it top to bottom. Paper lasts longest out of the rain.",
 			},
 		},
 		done: map[string][]string{

@@ -10,6 +10,7 @@
 //       color   rgba8  rgb, a     the terrain's sRGB vertex colour, region id
 //       cover   rgba8             grass density, grass height, flowers, ferns (0..255)
 //       aux     rgba8             normal x, normal z (128 ± 127), canopy, habitat id
+//       style   rgba8             soft region weights: marsh, highland, coast, frost (blurStyle)
 //     Blades read their root height, colour and density from it, so they always sit
 //     on and match the ground, wherever the chunk data says so.
 //
@@ -128,11 +129,39 @@ export function groundCover(habitat, region, r, g, b, ny, h, canopy, out, o = 0,
   }
 
   switch (region) {
-    case REGION.WINDPEAK: tall *= 0.6; fern *= 0.4; break;            // wind-cropped turf, heather
-    case REGION.WHISPERING_COAST: tall *= 0.85; fern *= 0.3; break;
-    case REGION.FROSTVEIL: grass *= 0.45; tall *= 0.5; flower *= 0.4; fern = 0; break;
-    case REGION.MURMUR_MARSH: fern = 0; break;
-    case REGION.AMBERWOOD: tall *= 0.8; break;
+    case REGION.WINDPEAK: {
+      // Wind-cropped turf; the fern layer draws heather cushions here (groundCover.js).
+      tall *= 0.6;
+      const open = smooth(0.72, 0.86, ny) * dry * (1 - 0.6 * canopy);
+      fern = (habitat === HABITAT.CLIFF ? 0.15 : 0.62) * open * smooth(0.15, 0.5, living + 0.25);
+      break;
+    }
+    case REGION.WHISPERING_COAST: {
+      tall *= 0.85; fern *= 0.3;
+      // Marram on the dunes and the upper beach: it grows from sand, which the colour
+      // test above reads as bare. The shader gathers it into tussocks.
+      if (habitat === HABITAT.BEACH || habitat === HABITAT.MEADOW) {
+        const dune = smooth(0.9, 1.8, h) * smooth(0.8, 0.92, ny);
+        grass = Math.max(grass, 0.75 * dune);
+        tall = Math.max(tall, 0.55 * dune);
+      }
+      break;
+    }
+    case REGION.FROSTVEIL: {
+      // Hoar-frosted tufts poking through the snow, in sparse clumps (shader).
+      grass = Math.max(grass * 0.45, 0.3 * dry * smooth(0.8, 0.92, ny) * (1 - 0.7 * canopy));
+      tall *= 0.5; tall = Math.max(tall, 0.22);
+      flower *= 0.4; fern = 0;
+      break;
+    }
+    case REGION.MURMUR_MARSH:
+      // Reedbeds and sedge: dense and tall on the wet flats (the shader makes stands
+      // of reed and lawns of sedge from it).
+      fern = 0;
+      if (habitat === HABITAT.MARSH || habitat === HABITAT.RIVER) { grass = Math.max(grass, 0.95 * k); tall = Math.max(tall, 0.95 * dry * living); }
+      flower *= 0.5;
+      break;
+    case REGION.AMBERWOOD: tall *= 0.8; flower *= 0.45; break;
     default: break;
   }
 
@@ -191,7 +220,43 @@ export function allocGroundPlanes(res = GROUND_RES) {
     color: new Uint8Array(res * res * 4),
     cover: new Uint8Array(res * res * 4),
     aux: new Uint8Array(res * res * 4),
+    style: new Uint8Array(res * res * 4),
   };
+}
+
+/** Style channel (0..3) of a region id: marsh, highland, coast, frost; -1 for the others. */
+export function styleChannel(region) {
+  switch (region) {
+    case REGION.MURMUR_MARSH: return 0;
+    case REGION.WINDPEAK: return 1;
+    case REGION.WHISPERING_COAST: return 2;
+    case REGION.FROSTVEIL: return 3;
+    default: return -1;
+  }
+}
+
+/**
+ * Softens the one-hot style plane written by fillGroundRows into region weights that
+ * fade over ~12 m (a separable box blur, radius `r` texels), so plant styles blend
+ * where region types meet. In place; `tmp` is scratch of the same size.
+ */
+export function blurStyle(style, res = GROUND_RES, r = 3, tmp = new Uint8Array(style.length)) {
+  const w = 2 * r + 1;
+  for (let pass = 0; pass < 2; pass++) {
+    const src = pass === 0 ? style : tmp, dst = pass === 0 ? tmp : style;
+    for (let a = 0; a < res; a++) {
+      for (let ch = 0; ch < 4; ch++) {
+        let sum = 0;
+        const at = (b) => (pass === 0 ? (a * res + b) : (b * res + a)) * 4 + ch;
+        for (let b = -r; b <= r; b++) sum += src[at(Math.min(res - 1, Math.max(0, b)))];
+        for (let b = 0; b < res; b++) {
+          dst[at(b)] = Math.round(sum / w);
+          sum += src[at(Math.min(res - 1, b + r + 1))] - src[at(Math.max(0, b - r))];
+        }
+      }
+    }
+  }
+  return style;
 }
 
 /**
@@ -204,7 +269,7 @@ export function allocGroundPlanes(res = GROUND_RES) {
  * @param {((x:number, z:number) => number)|null} [mowAt]  kept-short ground, 0..1 (see mowField)
  */
 export function fillGroundRows(store, canopy, ox, oz, planes, row0, row1, res = GROUND_RES, mowAt = null) {
-  const { height, color, cover, aux } = planes;
+  const { height, color, cover, aux, style } = planes;
   for (let r = row0; r < row1; r++) {
     const z = oz + r * GROUND_TEXEL;
     for (let c = 0; c < res; c++) {
@@ -216,6 +281,7 @@ export function fillGroundRows(store, canopy, ox, oz, planes, row0, row1, res = 
         color[o] = color[o + 1] = color[o + 2] = 0; color[o + 3] = REGION.NONE;
         cover[o] = cover[o + 1] = cover[o + 2] = cover[o + 3] = 0;
         aux[o] = 128; aux[o + 1] = 128; aux[o + 2] = 0; aux[o + 3] = 0;
+        if (style) style[o] = style[o + 1] = style[o + 2] = style[o + 3] = 0;
         continue;
       }
       // Texel centres are lod-0 vertices; coarser chunks give their nearest vertex for
@@ -233,6 +299,11 @@ export function fillGroundRows(store, canopy, ox, oz, planes, row0, row1, res = 
       const cv = canopy.at(chunk, ix, iz);
       groundCover(habitat, region, cr, cg, cb, ny, height[t], cv, cover, o, mowAt ? mowAt(x, z) : 0);
       aux[o] = toSigned(nx); aux[o + 1] = toSigned(nz); aux[o + 2] = toByte(cv); aux[o + 3] = habitat;
+      if (style) {
+        style[o] = style[o + 1] = style[o + 2] = style[o + 3] = 0;
+        const sc = styleChannel(region);
+        if (sc >= 0) style[o + sc] = 255;
+      }
     }
   }
 }

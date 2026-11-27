@@ -10,7 +10,7 @@ import { rewardLines, objectiveProgress } from './rewardlogic.js';
 
 const CHAR_MS = 16;
 const PENDING_TIMEOUT_MS = 4000;
-const SHOP_SUPPRESS_MS = 700;
+const SHOP_SUPPRESS_MS = 5000; // a slow server echo must not pull the conversation back over the shop
 
 export function createDialog(ctx) {
   const { state, net, bus, ui } = ctx;
@@ -108,16 +108,18 @@ export function createDialog(ctx) {
     questBox.hidden = !showCard;
     if (!showCard) return fill(questBox);
     const qs = state.profile?.quests?.[def?.id];
-    const lines = rewardLines(reward, state.items);
+    const lines = rewardLines(reward, state.items, { regions: state.regions, quests: state.quests, collectibles: state.collectibles });
     fill(questBox,
       def ? el('div', { class: 'enc-quest-head' }, ico('quest', 18), el('div', {},
         el('div', { class: 'enc-quest-name' }, def.name), el('div', { class: 'enc-quest-cat' }, label(def.category)))) : el('div', { class: 'enc-quest-head' }, ico('xp', 18), el('div', { class: 'enc-quest-name' }, 'Your reward')),
       def?.summary ? el('p', { class: 'enc-quest-summary' }, def.summary) : null,
+      def?.story && qs?.status !== 'active' && qs?.status !== 'complete' && qs?.status !== 'turned_in'
+        ? el('p', { class: 'enc-quest-story' }, def.story) : null,
       def?.objectives?.length ? el('ul', { class: 'enc-objectives' }, def.objectives.map((o) => {
         const p = objectiveProgress(o, qs);
         return el('li', { class: p.done ? 'done' : '' }, ico(p.done ? 'check' : 'note', 14), el('span', {}, o.text), p.need > 1 ? el('em', {}, `${p.have}/${p.need}`) : null);
       })) : null,
-      lines.length ? el('div', { class: 'enc-reward-lines' }, el('span', { class: 'enc-reward-title' }, n?.rewards ? 'Paid out' : 'Reward'),
+      lines.length ? el('div', { class: 'enc-reward-lines' }, el('span', { class: 'enc-reward-title' }, qs?.status === 'turned_in' ? 'Paid out' : 'Reward'),
         lines.map((l) => el('span', { class: 'enc-pill' }, ico(l.icon, 15), l.text))) : null);
   }
 
@@ -201,7 +203,7 @@ export function createDialog(ctx) {
       const v = dialogView(node);
       if (v.empty) { if (ui.isOpen('dialog')) ui.close('dialog'); return; }
       // A shop choice already moved on to the shop; ignore the conversation's echo.
-      if (Date.now() - S.shopAt < SHOP_SUPPRESS_MS && ui.top === 'shop') return;
+      if (Date.now() - S.shopAt < SHOP_SUPPRESS_MS && ui.isOpen('shop')) return;
       ui.open('dialog', node);
     },
   };

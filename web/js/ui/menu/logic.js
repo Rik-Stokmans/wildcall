@@ -333,6 +333,12 @@ export const MAX_LEVEL = 40;
  * "Next unlocks": what the next level and the next rank give. Lines are plain strings.
  * @returns {{level: string[], rank: string[], rankTitle: string}}
  */
+/** A rank's unlock lines without the skill-point line the UI already shows itself. */
+export function rankUnlockLines(rank) {
+  const lines = rank?.unlocks || [];
+  return rank?.skillPoints ? lines.filter((t) => !/skill points?$/i.test(String(t).trim())) : lines;
+}
+
 export function nextUnlocks(profile, ranks) {
   const level = [];
   const lv = profile?.level || 1;
@@ -342,7 +348,7 @@ export function nextUnlocks(profile, ranks) {
   const rank = [];
   if (nr) {
     if (nr.skillPoints) rank.push(`+${nr.skillPoints} skill points`);
-    rank.push(...(nr.unlocks || []));
+    rank.push(...rankUnlockLines(nr));
   }
   return { level, rank, rankTitle: nr?.title || '' };
 }

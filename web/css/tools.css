@@ -162,6 +162,7 @@
   transition: opacity .3s var(--ease), transform .3s var(--ease);
 }
 .tool-cam-msg:empty { display: none; }
+.tool-msg { top: 20%; color: var(--cream); text-shadow: 0 1px 2px rgba(0, 0, 0, .55); white-space: normal; max-width: min(640px, 80vw); text-align: center; z-index: 2; }
 .tool-cam-msg-on, .tool-cam-empty .tool-cam-msg { opacity: 1; transform: translate(-50%, 0); }
 .tool-cam-empty .tool-cam-brackets { opacity: .35; animation: none; }
 .tool-cam-empty .tool-cam-film { color: var(--amber-soft); }
@@ -184,7 +185,7 @@
 .tool-rec {
   position: absolute;
   right: 26px;
-  bottom: 26px;
+  bottom: 150px; /* above the HUD quick slots and the food chips (forage.css .frg-buffs) */
   width: 252px;
   padding: 12px 14px 12px;
   border-radius: var(--r-lg);

@@ -497,3 +497,76 @@ func TestInvalidInputLeavesProfileUnchanged(t *testing.T) {
 		{"board contract not unlocked", proto.CQuest, `{"id":"no_such","action":"accept"}`},
 	})
 }
+
+// On the title screen the client sends no pose: the birds sing behind the menu but
+// the player hears nothing yet (no mysteries, clues or quest progress) and the game
+// clock waits for them.
+func TestTitleScreenWaitsForThePlayer(t *testing.T) {
+	h := newHarness(t, false)
+	before := h.s.clock.Env()
+	h.tick(600) // a minute on the title screen
+	if n := len(h.s.p.Journal.Mysteries); n != 0 {
+		t.Fatalf("%d mysteries created before the player started playing", n)
+	}
+	if c := countType(h.take(), proto.SClue); c != 0 {
+		t.Fatalf("%d clues sent before the first pose", c)
+	}
+	if after := h.s.clock.Env(); after.Time != before.Time || after.Day != before.Day {
+		t.Fatalf("clock ran on the title screen: %v -> %v", before.Time, after.Time)
+	}
+	// The first pose starts the clock.
+	h.stand(h.s.feet, 0)
+	h.tick(50)
+	if after := h.s.clock.Env(); after.Time == before.Time {
+		t.Fatalf("clock did not start after the first pose")
+	}
+}
+
+func TestClockTextRoundsToTheMinute(t *testing.T) {
+	for h, want := range map[float32]string{4.99999: "05:00", 5: "05:00", 6.5: "06:30", 23.999: "00:00", 13.25: "13:15"} {
+		if got := clockText(h); got != want {
+			t.Errorf("clockText(%v) = %s, want %s", h, got, want)
+		}
+	}
+}
+
+// A gift that does not fit in a full pack goes to cabin storage, and the toast says so.
+func TestGiftToAFullPackSaysWhereItWent(t *testing.T) {
+	h := newHarness(t, true)
+	if _, err := h.s.Debug("pantry"); err != nil {
+		t.Fatal(err)
+	}
+	h.take()
+	h.s.giveItems([]string{"seed_mix"}, true)
+	found := false
+	for _, m := range h.take() {
+		if m.T == proto.SToast && strings.Contains(string(m.D), "cabin storage") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no toast telling the player the gift went to storage")
+	}
+}
+
+// A hidden trail that a quest awards is not revealed by standing at its trailhead.
+func TestQuestRewardTrailIsNotGivenAwayAtTheCabin(t *testing.T) {
+	h := newHarness(t, false)
+	var head core.Vec3
+	for _, tr := range h.s.world.TrailsNear(0, 0, 900, nil) {
+		if tr.ID == "secret_lookout" && len(tr.Points) > 0 {
+			head = tr.Points[0]
+		}
+	}
+	if head == (core.Vec3{}) {
+		t.Skip("no lookout trail in this world")
+	}
+	h.stand(h.ground(head.X, head.Z), 0)
+	h.tick(20)
+	if containsStr(h.s.p.Trails, "secret_lookout") {
+		t.Fatal("the Old Watchtower's reward trail was revealed at the start")
+	}
+	if !h.s.trailIsAReward("secret_lookout") {
+		t.Fatal("secret_lookout should be a quest reward trail")
+	}
+}

@@ -31,8 +31,12 @@ test('reward lines for quest cards', () => {
   assert.ok(text.includes('300 XP')); assert.ok(text.includes('50 Field Credits')); assert.ok(text.includes('2 skill points'));
   assert.ok(text.some((t) => t.includes('+10 reputation')));
   assert.ok(text.includes('Explorer Binoculars'));
-  assert.ok(text.includes('Unlocks region murmur marsh'));
-  assert.ok(text.some((t) => t.startsWith('Badge: singer')));
+  assert.ok(text.includes('Opens Murmur marsh'));
+  assert.ok(text.some((t) => t.startsWith('Badge: Singer')));
+  // Readable names, never raw ids.
+  const named = rewardLines({ unlock: ['quest:harrows_survey', 'feature:trail_secret_lookout', 'region:murmur_marsh'], badge: 'badge_first_song' }, items,
+    { regions: [{ key: 'murmur_marsh', name: 'Murmur Marsh' }], quests: { harrows_survey: { name: "Harrow's Survey", hidden: true } }, collectibles: { badge_first_song: { name: 'First Song' } } }).map((l) => l.text);
+  assert.deepEqual(named, ['Opens a new line of enquiry', 'Reveals a hidden trail on your map', 'Opens Murmur Marsh', 'Badge: First Song']);
   assert.deepEqual(rewardLines(null), []);
 });
 

@@ -106,3 +106,13 @@ test('tile cache never loads anything it is not asked for', () => {
   assert.equal(c.size, 0);
   assert.equal(FakeImage.all.length, 0);
 });
+
+test('map labels never overlap: the home label wins, people give way', async () => {
+  const { quietLabels } = await import('./map-data.js');
+  const q = quietLabels([
+    { key: 'npc:mara', type: 'npc', x: 100, y: 100, label: 'Mara' },
+    { key: 'home', type: 'home', x: 104, y: 102, label: 'Naturalist Cabin' },
+    { key: 'loc:far', type: 'place', x: 400, y: 300, label: 'Old Oak' },
+  ]);
+  assert.deepEqual([...q], ['npc:mara']);
+});
