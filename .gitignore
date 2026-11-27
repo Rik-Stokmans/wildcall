@@ -12,10 +12,6 @@ node_modules/
 .env
 .env.*
 
-# Real bird recordings are fetched locally (tools/birdsong) and kept out of the public
-# repo until the owner decides to publish them (most are CC BY-SA).
-web/birdsong/*
-!web/birdsong/README.md
 # Pregenerated narrator voice pack (tools/voice); large, generated.
 web/voice/*
 !web/voice/README.md

@@ -1,0 +1,2592 @@
+{
+  "version": 1,
+  "species": {
+    "european_robin": {
+      "0": [
+        {
+          "file": "european_robin/0-song-1.ogg",
+          "dur": 4.007,
+          "gain": 1
+        },
+        {
+          "file": "european_robin/0-song-2.ogg",
+          "dur": 8.107,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "european_robin/1-call-1.ogg",
+          "dur": 4.107,
+          "gain": 1
+        },
+        {
+          "file": "european_robin/1-call-2.ogg",
+          "dur": 4.407,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "european_robin/2-alarm-1.ogg",
+          "dur": 6.007,
+          "gain": 1
+        },
+        {
+          "file": "european_robin/2-alarm-2.ogg",
+          "dur": 6.007,
+          "gain": 1
+        }
+      ]
+    },
+    "blue_tit": {
+      "0": [
+        {
+          "file": "blue_tit/0-song-1.ogg",
+          "dur": 6.057,
+          "gain": 1
+        },
+        {
+          "file": "blue_tit/0-song-2.ogg",
+          "dur": 8.807,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "blue_tit/1-call-1.ogg",
+          "dur": 3.907,
+          "gain": 1
+        },
+        {
+          "file": "blue_tit/1-call-2.ogg",
+          "dur": 4.107,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "blue_tit/2-alarm-1.ogg",
+          "dur": 4.807,
+          "gain": 1
+        },
+        {
+          "file": "blue_tit/2-alarm-2.ogg",
+          "dur": 5.407,
+          "gain": 1
+        }
+      ]
+    },
+    "great_tit": {
+      "0": [
+        {
+          "file": "great_tit/0-song-1.ogg",
+          "dur": 5.157,
+          "gain": 1
+        },
+        {
+          "file": "great_tit/0-song-2.ogg",
+          "dur": 8.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "great_tit/1-call-1.ogg",
+          "dur": 4.257,
+          "gain": 1
+        },
+        {
+          "file": "great_tit/1-call-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "great_tit/2-alarm-1.ogg",
+          "dur": 3.207,
+          "gain": 1
+        },
+        {
+          "file": "great_tit/2-alarm-2.ogg",
+          "dur": 6.007,
+          "gain": 1
+        }
+      ]
+    },
+    "common_blackbird": {
+      "0": [
+        {
+          "file": "common_blackbird/0-song-1.ogg",
+          "dur": 8.857,
+          "gain": 1
+        },
+        {
+          "file": "common_blackbird/0-song-2.ogg",
+          "dur": 10.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "common_blackbird/1-call-1.ogg",
+          "dur": 3.407,
+          "gain": 1
+        },
+        {
+          "file": "common_blackbird/1-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "common_blackbird/2-alarm-1.ogg",
+          "dur": 3.907,
+          "gain": 1
+        },
+        {
+          "file": "common_blackbird/2-alarm-2.ogg",
+          "dur": 5.407,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_wren": {
+      "0": [
+        {
+          "file": "eurasian_wren/0-song-1.ogg",
+          "dur": 8.207,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_wren/0-song-2.ogg",
+          "dur": 6.357,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_wren/1-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_wren/1-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "eurasian_wren/2-alarm-1.ogg",
+          "dur": 6.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_wren/2-alarm-2.ogg",
+          "dur": 6.007,
+          "gain": 1
+        }
+      ]
+    },
+    "common_chaffinch": {
+      "0": [
+        {
+          "file": "common_chaffinch/0-song-1.ogg",
+          "dur": 5.507,
+          "gain": 1
+        },
+        {
+          "file": "common_chaffinch/0-song-2.ogg",
+          "dur": 4.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "common_chaffinch/1-call-1.ogg",
+          "dur": 4.707,
+          "gain": 1
+        },
+        {
+          "file": "common_chaffinch/1-call-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "common_chaffinch/2-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "common_chaffinch/2-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "great_spotted_woodpecker": {
+      "0": [
+        {
+          "file": "great_spotted_woodpecker/0-drum-1.ogg",
+          "dur": 4.707,
+          "gain": 1
+        },
+        {
+          "file": "great_spotted_woodpecker/0-drum-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "great_spotted_woodpecker/1-call-1.ogg",
+          "dur": 3.207,
+          "gain": 1
+        },
+        {
+          "file": "great_spotted_woodpecker/1-call-2.ogg",
+          "dur": 4.107,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_jay": {
+      "0": [
+        {
+          "file": "eurasian_jay/0-call-1.ogg",
+          "dur": 4.907,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_jay/0-call-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_jay/1-call-1.ogg",
+          "dur": 4.907,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_jay/1-call-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_nuthatch": {
+      "0": [
+        {
+          "file": "eurasian_nuthatch/0-song-1.ogg",
+          "dur": 8.107,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_nuthatch/0-song-2.ogg",
+          "dur": 6.057,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_nuthatch/1-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_nuthatch/1-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ],
+      "2": [
+        {
+          "file": "eurasian_nuthatch/2-song-1.ogg",
+          "dur": 6.057,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_nuthatch/2-song-2.ogg",
+          "dur": 8.657,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_treecreeper": {
+      "0": [
+        {
+          "file": "eurasian_treecreeper/0-song-1.ogg",
+          "dur": 4.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_treecreeper/0-song-2.ogg",
+          "dur": 4.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_treecreeper/1-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "tawny_owl": {
+      "0": [
+        {
+          "file": "tawny_owl/0-song-1.ogg",
+          "dur": 7.407,
+          "gain": 1
+        },
+        {
+          "file": "tawny_owl/0-song-2.ogg",
+          "dur": 7.307,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "tawny_owl/1-call-1.ogg",
+          "dur": 4.157,
+          "gain": 1
+        },
+        {
+          "file": "tawny_owl/1-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "common_buzzard": {
+      "0": [
+        {
+          "file": "common_buzzard/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "common_buzzard/0-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "song_thrush": {
+      "0": [
+        {
+          "file": "song_thrush/0-song-1.ogg",
+          "dur": 2.507,
+          "gain": 1
+        },
+        {
+          "file": "song_thrush/0-song-2.ogg",
+          "dur": 8.207,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "song_thrush/1-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "song_thrush/1-call-2.ogg",
+          "dur": 4.757,
+          "gain": 1
+        }
+      ]
+    },
+    "goldcrest": {
+      "0": [
+        {
+          "file": "goldcrest/0-song-1.ogg",
+          "dur": 9.207,
+          "gain": 1
+        },
+        {
+          "file": "goldcrest/0-song-2.ogg",
+          "dur": 9.607,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "goldcrest/1-call-1.ogg",
+          "dur": 4.707,
+          "gain": 1
+        },
+        {
+          "file": "goldcrest/1-call-2.ogg",
+          "dur": 3.557,
+          "gain": 1
+        }
+      ]
+    },
+    "long_tailed_tit": {
+      "0": [
+        {
+          "file": "long_tailed_tit/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "long_tailed_tit/0-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "long_tailed_tit/1-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "long_tailed_tit/1-call-2.ogg",
+          "dur": 4.057,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_blackcap": {
+      "0": [
+        {
+          "file": "eurasian_blackcap/0-song-1.ogg",
+          "dur": 3.107,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_blackcap/0-song-2.ogg",
+          "dur": 4.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_blackcap/1-alarm-1.ogg",
+          "dur": 6.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_blackcap/1-alarm-2.ogg",
+          "dur": 6.007,
+          "gain": 1
+        }
+      ]
+    },
+    "common_chiffchaff": {
+      "0": [
+        {
+          "file": "common_chiffchaff/0-song-1.ogg",
+          "dur": 7.407,
+          "gain": 1
+        },
+        {
+          "file": "common_chiffchaff/0-song-2.ogg",
+          "dur": 10.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "common_chiffchaff/1-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "common_chiffchaff/1-call-2.ogg",
+          "dur": 4.907,
+          "gain": 1
+        }
+      ]
+    },
+    "grey_wagtail": {
+      "0": [
+        {
+          "file": "grey_wagtail/0-call-1.ogg",
+          "dur": 3.006,
+          "gain": 1
+        },
+        {
+          "file": "grey_wagtail/0-call-2.ogg",
+          "dur": 4.607,
+          "gain": 1
+        }
+      ]
+    },
+    "common_kingfisher": {
+      "0": [
+        {
+          "file": "common_kingfisher/0-call-1.ogg",
+          "dur": 4.207,
+          "gain": 1
+        }
+      ]
+    },
+    "golden_oriole": {
+      "0": [
+        {
+          "file": "golden_oriole/0-song-1.ogg",
+          "dur": 4.657,
+          "gain": 1
+        },
+        {
+          "file": "golden_oriole/0-song-2.ogg",
+          "dur": 7.057,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "golden_oriole/1-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "golden_oriole/1-call-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ]
+    },
+    "mallard": {
+      "0": [
+        {
+          "file": "mallard/0-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "mallard/0-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "mallard/1-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "common_moorhen": {
+      "0": [
+        {
+          "file": "common_moorhen/0-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "common_moorhen/0-call-2.ogg",
+          "dur": 3.707,
+          "gain": 1
+        }
+      ]
+    },
+    "grey_heron": {
+      "0": [
+        {
+          "file": "grey_heron/0-call-1.ogg",
+          "dur": 4.907,
+          "gain": 1
+        },
+        {
+          "file": "grey_heron/0-call-2.ogg",
+          "dur": 3.957,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_reed_warbler": {
+      "0": [
+        {
+          "file": "eurasian_reed_warbler/0-song-1.ogg",
+          "dur": 5.507,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_reed_warbler/0-song-2.ogg",
+          "dur": 7.907,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_reed_warbler/1-alarm-1.ogg",
+          "dur": 3.907,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_bittern": {
+      "0": [
+        {
+          "file": "eurasian_bittern/0-boom-1.ogg",
+          "dur": 8.457,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_bittern/1-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_bittern/1-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "western_marsh_harrier": {
+      "0": [
+        {
+          "file": "western_marsh_harrier/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "northern_wheatear": {
+      "0": [
+        {
+          "file": "northern_wheatear/0-song-1.ogg",
+          "dur": 8.507,
+          "gain": 1
+        }
+      ]
+    },
+    "common_raven": {
+      "0": [
+        {
+          "file": "common_raven/0-call-1.ogg",
+          "dur": 4.207,
+          "gain": 1
+        },
+        {
+          "file": "common_raven/0-call-2.ogg",
+          "dur": 3.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "common_raven/1-call-1.ogg",
+          "dur": 3.007,
+          "gain": 1
+        },
+        {
+          "file": "common_raven/1-call-2.ogg",
+          "dur": 3.557,
+          "gain": 1
+        }
+      ]
+    },
+    "ring_ouzel": {
+      "0": [
+        {
+          "file": "ring_ouzel/0-song-1.ogg",
+          "dur": 4.707,
+          "gain": 1
+        },
+        {
+          "file": "ring_ouzel/0-song-2.ogg",
+          "dur": 9.557,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "ring_ouzel/1-alarm-1.ogg",
+          "dur": 6.007,
+          "gain": 1
+        }
+      ]
+    },
+    "golden_eagle": {
+      "0": [
+        {
+          "file": "golden_eagle/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "herring_gull": {
+      "0": [
+        {
+          "file": "herring_gull/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "herring_gull/0-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "eurasian_oystercatcher": {
+      "0": [
+        {
+          "file": "eurasian_oystercatcher/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_oystercatcher/0-call-2.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "eurasian_oystercatcher/1-song-1.ogg",
+          "dur": 9.607,
+          "gain": 1
+        },
+        {
+          "file": "eurasian_oystercatcher/1-song-2.ogg",
+          "dur": 7.707,
+          "gain": 1
+        }
+      ]
+    },
+    "atlantic_puffin": {
+      "0": [
+        {
+          "file": "atlantic_puffin/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "redwing": {
+      "0": [
+        {
+          "file": "redwing/0-call-1.ogg",
+          "dur": 4.707,
+          "gain": 1
+        }
+      ],
+      "1": [
+        {
+          "file": "redwing/1-alarm-1.ogg",
+          "dur": 6.007,
+          "gain": 1
+        }
+      ]
+    },
+    "brambling": {
+      "0": [
+        {
+          "file": "brambling/0-call-1.ogg",
+          "dur": 5.007,
+          "gain": 1
+        }
+      ]
+    },
+    "hawfinch": {
+      "0": [
+        {
+          "file": "hawfinch/0-call-1.ogg",
+          "dur": 3.507,
+          "gain": 1
+        }
+      ]
+    }
+  },
+  "credits": [
+    {
+      "file": "european_robin/0-song-1.ogg",
+      "species": "european_robin",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Jan Cibulka",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/441752",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Erithacus_rubecula_-_European_Robin_XC441752.mp3",
+      "id": "77545556"
+    },
+    {
+      "file": "european_robin/0-song-2.ogg",
+      "species": "european_robin",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alejandro G.",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/500055",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Erithacus_rubecula_-_European_Robin_XC500055.mp3",
+      "id": "83210289"
+    },
+    {
+      "file": "european_robin/1-call-1.ogg",
+      "species": "european_robin",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Sander Pieterse",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/25603",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Erithacus_rubecula_-_European_Robin_XC25603.mp3",
+      "id": "68264365"
+    },
+    {
+      "file": "european_robin/1-call-2.ogg",
+      "species": "european_robin",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/542566",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Erithacus_rubecula_-_European_Robin_XC542566.mp3",
+      "id": "89591183"
+    },
+    {
+      "file": "european_robin/2-alarm-1.ogg",
+      "species": "european_robin",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Hannu Varkki",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/489906",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Erithacus_rubecula_-_European_Robin_XC489906.mp3",
+      "id": "83210432"
+    },
+    {
+      "file": "european_robin/2-alarm-2.ogg",
+      "species": "european_robin",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Dan Stowell",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/178578",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Erithacus_rubecula_-_European_Robin_XC178578.mp3",
+      "id": "68264419"
+    },
+    {
+      "file": "blue_tit/0-song-1.ogg",
+      "species": "blue_tit",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/539309",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Cyanistes_caeruleus_-_Eurasian_Blue_Tit_XC539309.mp3",
+      "id": "89564168"
+    },
+    {
+      "file": "blue_tit/0-song-2.ogg",
+      "species": "blue_tit",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alexander Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/401553",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Cyanistes_caeruleus_-_Eurasian_Blue_Tit_XC401553.mp3",
+      "id": "68260531"
+    },
+    {
+      "file": "blue_tit/1-call-1.ogg",
+      "species": "blue_tit",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/542960",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Cyanistes_caeruleus_-_Eurasian_Blue_Tit_XC542960.mp3",
+      "id": "89563998"
+    },
+    {
+      "file": "blue_tit/1-call-2.ogg",
+      "species": "blue_tit",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/541678",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Cyanistes_caeruleus_-_Eurasian_Blue_Tit_XC541678.mp3",
+      "id": "89564068"
+    },
+    {
+      "file": "blue_tit/2-alarm-1.ogg",
+      "species": "blue_tit",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/538220",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Cyanistes_caeruleus_-_Eurasian_Blue_Tit_XC538220.mp3",
+      "id": "89564184"
+    },
+    {
+      "file": "blue_tit/2-alarm-2.ogg",
+      "species": "blue_tit",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/538743",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Cyanistes_caeruleus_-_Eurasian_Blue_Tit_XC538743.mp3",
+      "id": "89564178"
+    },
+    {
+      "file": "great_tit/0-song-1.ogg",
+      "species": "great_tit",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Dengis Chantal",
+      "licence": "CC BY 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "nc": false,
+      "sa": false,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Parus_major_15mars2011.ogg",
+      "id": "19676206"
+    },
+    {
+      "file": "great_tit/0-song-2.ogg",
+      "species": "great_tit",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Sander Pieterse",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/47356",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Parus_major_-_Great_Tit_XC47356.mp3",
+      "id": "68260967"
+    },
+    {
+      "file": "great_tit/1-call-1.ogg",
+      "species": "great_tit",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/553890",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Parus_major_-_Great_Tit_XC553890.mp3",
+      "id": "90521368"
+    },
+    {
+      "file": "great_tit/1-call-2.ogg",
+      "species": "great_tit",
+      "call": 1,
+      "kind": "call",
+      "recordist": "José Carlos Sires",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/165660",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Parus_major_-_Great_Tit_XC165660.mp3",
+      "id": "68261010"
+    },
+    {
+      "file": "great_tit/2-alarm-1.ogg",
+      "species": "great_tit",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/541197",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Parus_major_-_Great_Tit_XC541197.mp3",
+      "id": "89564452"
+    },
+    {
+      "file": "great_tit/2-alarm-2.ogg",
+      "species": "great_tit",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/478081",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Parus_major_-_Great_Tit_XC478081.mp3",
+      "id": "83208329"
+    },
+    {
+      "file": "common_blackbird/0-song-1.ogg",
+      "species": "common_blackbird",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/466535",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_merula_-_Common_Blackbird_XC466535.mp3",
+      "id": "83210063"
+    },
+    {
+      "file": "common_blackbird/0-song-2.ogg",
+      "species": "common_blackbird",
+      "call": 0,
+      "kind": "song",
+      "recordist": "No machine-readable author provided. Taka assumed (based on copyright claims).",
+      "licence": "CC BY 2.5",
+      "licenceUrl": "https://creativecommons.org/licenses/by/2.5/",
+      "nc": false,
+      "sa": false,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Turdus_merula_(06_02_16).ogg",
+      "id": "582616"
+    },
+    {
+      "file": "common_blackbird/1-call-1.ogg",
+      "species": "common_blackbird",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/541788",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_merula_-_Common_Blackbird_XC541788.mp3",
+      "id": "89570411"
+    },
+    {
+      "file": "common_blackbird/1-call-2.ogg",
+      "species": "common_blackbird",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Alexander Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/310893",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_merula_-_Common_Blackbird_XC310893.mp3",
+      "id": "68263631"
+    },
+    {
+      "file": "common_blackbird/2-alarm-1.ogg",
+      "species": "common_blackbird",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/550669",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_merula_-_Common_Blackbird_XC550669.mp3",
+      "id": "89570394"
+    },
+    {
+      "file": "common_blackbird/2-alarm-2.ogg",
+      "species": "common_blackbird",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Lorenzo",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/573899",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_merula_-_Common_Blackbird_XC573899.mp3",
+      "id": "93165479"
+    },
+    {
+      "file": "eurasian_wren/0-song-1.ogg",
+      "species": "eurasian_wren",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/527338",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Troglodytes_troglodytes_-_Eurasian_Wren_XC527338.mp3",
+      "id": "89565156"
+    },
+    {
+      "file": "eurasian_wren/0-song-2.ogg",
+      "species": "eurasian_wren",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alexander Kurthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/269087",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Troglodytes_troglodytes_-_Eurasian_Wren_XC269087.mp3",
+      "id": "68262340"
+    },
+    {
+      "file": "eurasian_wren/1-call-1.ogg",
+      "species": "eurasian_wren",
+      "call": 1,
+      "kind": "call",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Eurasian_Wren_(Troglodytes_troglodytes)_(W1CDR0001470_BD11).ogg",
+      "id": "44610830"
+    },
+    {
+      "file": "eurasian_wren/1-call-2.ogg",
+      "species": "eurasian_wren",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/465726",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Troglodytes_troglodytes_-_Eurasian_Wren_XC465726.mp3",
+      "id": "83209482"
+    },
+    {
+      "file": "eurasian_wren/2-alarm-1.ogg",
+      "species": "eurasian_wren",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/543715",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Troglodytes_troglodytes_-_Eurasian_Wren_XC543715.mp3",
+      "id": "89565135"
+    },
+    {
+      "file": "eurasian_wren/2-alarm-2.ogg",
+      "species": "eurasian_wren",
+      "call": 2,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/554784",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Troglodytes_troglodytes_-_Eurasian_Wren_XC554784.mp3",
+      "id": "90521623"
+    },
+    {
+      "file": "common_chaffinch/0-song-1.ogg",
+      "species": "common_chaffinch",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Sander Pieterse",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/176182",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_coelebs_-_Common_Chaffinch_XC176182.mp3",
+      "id": "68264690"
+    },
+    {
+      "file": "common_chaffinch/0-song-2.ogg",
+      "species": "common_chaffinch",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Hannu Varkki",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/489896",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_coelebs_-_Common_Chaffinch_XC489896.mp3",
+      "id": "83210892"
+    },
+    {
+      "file": "common_chaffinch/1-call-1.ogg",
+      "species": "common_chaffinch",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/465725",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_coelebs_-_Common_Chaffinch_XC465725.mp3",
+      "id": "83211048"
+    },
+    {
+      "file": "common_chaffinch/1-call-2.ogg",
+      "species": "common_chaffinch",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/528744",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_coelebs_-_Common_Chaffinch_XC528744.mp3",
+      "id": "89592498"
+    },
+    {
+      "file": "common_chaffinch/2-call-1.ogg",
+      "species": "common_chaffinch",
+      "call": 2,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/539300",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_coelebs_-_Common_Chaffinch_XC539300.mp3",
+      "id": "89592473"
+    },
+    {
+      "file": "common_chaffinch/2-call-2.ogg",
+      "species": "common_chaffinch",
+      "call": 2,
+      "kind": "call",
+      "recordist": "godweetwat@gmail.com",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/568882",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_coelebs_-_Common_Chaffinch_XC568882.mp3",
+      "id": "94447125"
+    },
+    {
+      "file": "great_spotted_woodpecker/0-drum-1.ogg",
+      "species": "great_spotted_woodpecker",
+      "call": 0,
+      "kind": "drum",
+      "recordist": "Vladimir Yu. Arkhipov, Arkhivov",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Dendrocopos_major.ogg",
+      "id": "18905934"
+    },
+    {
+      "file": "great_spotted_woodpecker/0-drum-2.ogg",
+      "species": "great_spotted_woodpecker",
+      "call": 0,
+      "kind": "drum",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Great_Spotted_Woodpecker_(Picoides_major)_(W1CDR0001405_BD15).ogg",
+      "id": "44604123"
+    },
+    {
+      "file": "great_spotted_woodpecker/1-call-1.ogg",
+      "species": "great_spotted_woodpecker",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/542957",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Dendrocopos_major_-_Great_Spotted_Woodpecker_XC542957.mp3",
+      "id": "89559129"
+    },
+    {
+      "file": "great_spotted_woodpecker/1-call-2.ogg",
+      "species": "great_spotted_woodpecker",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Sander Pieterse",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/47350",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Dendrocopos_major_-_Great_Spotted_Woodpecker_XC47350.mp3",
+      "id": "68244186"
+    },
+    {
+      "file": "eurasian_jay/0-call-1.ogg",
+      "species": "eurasian_jay",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/541675",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Garrulus_glandarius_-_Eurasian_Jay_XC541675.mp3",
+      "id": "89563354"
+    },
+    {
+      "file": "eurasian_jay/0-call-2.ogg",
+      "species": "eurasian_jay",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Alexander Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/401554",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Garrulus_glandarius_-_Eurasian_Jay_XC401554.mp3",
+      "id": "68260345"
+    },
+    {
+      "file": "eurasian_jay/1-call-1.ogg",
+      "species": "eurasian_jay",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/541675",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Garrulus_glandarius_-_Eurasian_Jay_XC541675.mp3",
+      "id": "89563354"
+    },
+    {
+      "file": "eurasian_jay/1-call-2.ogg",
+      "species": "eurasian_jay",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Alexander Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/401554",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Garrulus_glandarius_-_Eurasian_Jay_XC401554.mp3",
+      "id": "68260345"
+    },
+    {
+      "file": "eurasian_nuthatch/0-song-1.ogg",
+      "species": "eurasian_nuthatch",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/433160",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sitta_europaea_-_Eurasian_Nuthatch_XC433160.mp3",
+      "id": "77544438"
+    },
+    {
+      "file": "eurasian_nuthatch/0-song-2.ogg",
+      "species": "eurasian_nuthatch",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Vladimir Yu. Arkhipov, Arkhivov",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Sitta_europaea.ogg",
+      "id": "16294783"
+    },
+    {
+      "file": "eurasian_nuthatch/1-call-1.ogg",
+      "species": "eurasian_nuthatch",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Alejandro G.",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/500056",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sitta_europaea_-_Eurasian_Nuthatch_XC500056.mp3",
+      "id": "83209634"
+    },
+    {
+      "file": "eurasian_nuthatch/1-call-2.ogg",
+      "species": "eurasian_nuthatch",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/528002",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sitta_europaea_-_Eurasian_Nuthatch_XC528002.mp3",
+      "id": "89565462"
+    },
+    {
+      "file": "eurasian_nuthatch/2-song-1.ogg",
+      "species": "eurasian_nuthatch",
+      "call": 2,
+      "kind": "song",
+      "recordist": "Vladimir Yu. Arkhipov, Arkhivov",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Sitta_europaea.ogg",
+      "id": "16294783"
+    },
+    {
+      "file": "eurasian_nuthatch/2-song-2.ogg",
+      "species": "eurasian_nuthatch",
+      "call": 2,
+      "kind": "song",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Eurasian_Nuthatch_(Sitta_europaea)_(W1CDR0001520_BD24).ogg",
+      "id": "44606482"
+    },
+    {
+      "file": "eurasian_treecreeper/0-song-1.ogg",
+      "species": "eurasian_treecreeper",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Benjamin Mayer",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/528366",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Certhia_familiaris_-_Eurasian_Treecreeper_XC528366.mp3",
+      "id": "89565479"
+    },
+    {
+      "file": "eurasian_treecreeper/0-song-2.ogg",
+      "species": "eurasian_treecreeper",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alexander Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Certhia_familiaris_song.ogg",
+      "id": "47812458"
+    },
+    {
+      "file": "eurasian_treecreeper/1-call-1.ogg",
+      "species": "eurasian_treecreeper",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Hannu Varkki",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/457378",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Certhia_familiaris_-_Eurasian_Treecreeper_XC457378.mp3",
+      "id": "77544443"
+    },
+    {
+      "file": "tawny_owl/0-song-1.ogg",
+      "species": "tawny_owl",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alvaro Ortiz Troncoso",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/565862",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Strix_aluco_-_Tawny_Owl_XC565862.mp3",
+      "id": "91877678"
+    },
+    {
+      "file": "tawny_owl/0-song-2.ogg",
+      "species": "tawny_owl",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alvaro Ortiz Troncoso",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/565861",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Strix_aluco_-_Tawny_Owl_XC565861.mp3",
+      "id": "91877693"
+    },
+    {
+      "file": "tawny_owl/1-call-1.ogg",
+      "species": "tawny_owl",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Alvaro Ortiz Troncoso",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/583835",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Strix_aluco_-_Tawny_Owl_XC583835.mp3",
+      "id": "94438650"
+    },
+    {
+      "file": "tawny_owl/1-call-2.ogg",
+      "species": "tawny_owl",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Alvaro Ortiz Troncoso",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/500920",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Strix_aluco_-_Tawny_Owl_XC500920.mp3",
+      "id": "83205081"
+    },
+    {
+      "file": "common_buzzard/0-call-1.ogg",
+      "species": "common_buzzard",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/538678",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Buteo_buteo_-_Common_Buzzard_XC538678.mp3",
+      "id": "89557731"
+    },
+    {
+      "file": "common_buzzard/0-call-2.ogg",
+      "species": "common_buzzard",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/538277",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Buteo_buteo_-_Common_Buzzard_XC538277.mp3",
+      "id": "89557747"
+    },
+    {
+      "file": "song_thrush/0-song-1.ogg",
+      "species": "song_thrush",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Jochem verweij",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/503633",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_philomelos_-_Song_Thrush_XC503633.mp3",
+      "id": "89570533"
+    },
+    {
+      "file": "song_thrush/0-song-2.ogg",
+      "species": "song_thrush",
+      "call": 0,
+      "kind": "song",
+      "recordist": "T",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/321571",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_philomelos_-_Song_Thrush_XC321571.mp3",
+      "id": "68263656"
+    },
+    {
+      "file": "song_thrush/1-call-1.ogg",
+      "species": "song_thrush",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/436363",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_philomelos_-_Song_Thrush_XC436363.mp3",
+      "id": "77545521"
+    },
+    {
+      "file": "song_thrush/1-call-2.ogg",
+      "species": "song_thrush",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/464869",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_philomelos_-_Song_Thrush_XC464869.mp3",
+      "id": "83210192"
+    },
+    {
+      "file": "goldcrest/0-song-1.ogg",
+      "species": "goldcrest",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/475114",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Regulus_regulus_-_Goldcrest_XC475114.mp3",
+      "id": "83209273"
+    },
+    {
+      "file": "goldcrest/0-song-2.ogg",
+      "species": "goldcrest",
+      "call": 0,
+      "kind": "song",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Goldcrest_(Regulus_regulus)_(W1CDR0001500_BD19).ogg",
+      "id": "44603705"
+    },
+    {
+      "file": "goldcrest/1-call-1.ogg",
+      "species": "goldcrest",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Hannu Varkki",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/501794",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Regulus_regulus_-_Goldcrest_XC501794.mp3",
+      "id": "83209249"
+    },
+    {
+      "file": "goldcrest/1-call-2.ogg",
+      "species": "goldcrest",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Sander Pieterse",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/164989",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:XC164989-Eurasian_Nuthatch_call_Oostermaet_NL_2014.ogg",
+      "id": "31923273"
+    },
+    {
+      "file": "long_tailed_tit/0-call-1.ogg",
+      "species": "long_tailed_tit",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Jonathon Jongsma",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/114614",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Aegithalos_caudatus_-_Long-tailed_Tit_XC114614.mp3",
+      "id": "68261312"
+    },
+    {
+      "file": "long_tailed_tit/0-call-2.ogg",
+      "species": "long_tailed_tit",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Olivier Grimm",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/561015",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Aegithalos_caudatus_-_Long-tailed_Tit_XC561015.mp3",
+      "id": "91883141"
+    },
+    {
+      "file": "long_tailed_tit/1-call-1.ogg",
+      "species": "long_tailed_tit",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Olivier Grimm",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/561015",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Aegithalos_caudatus_-_Long-tailed_Tit_XC561015.mp3",
+      "id": "91883141"
+    },
+    {
+      "file": "long_tailed_tit/1-call-2.ogg",
+      "species": "long_tailed_tit",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Borja",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/424195",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Aegithalos_caudatus_-_Long-tailed_Tit_XC424195.mp3",
+      "id": "83208522"
+    },
+    {
+      "file": "eurasian_blackcap/0-song-1.ogg",
+      "species": "eurasian_blackcap",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Jan Cibulka",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/425206",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sylvia_atricapilla_-_Eurasian_Blackcap_XC425206.mp3",
+      "id": "77543768"
+    },
+    {
+      "file": "eurasian_blackcap/0-song-2.ogg",
+      "species": "eurasian_blackcap",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alexander Kurthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/269084",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sylvia_atricapilla_-_Eurasian_Blackcap_XC269084.mp3",
+      "id": "68261577"
+    },
+    {
+      "file": "eurasian_blackcap/1-alarm-1.ogg",
+      "species": "eurasian_blackcap",
+      "call": 1,
+      "kind": "alarm",
+      "recordist": "Hannu Varkki",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/457403",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sylvia_atricapilla_-_Eurasian_Blackcap_XC457403.mp3",
+      "id": "77543762"
+    },
+    {
+      "file": "eurasian_blackcap/1-alarm-2.ogg",
+      "species": "eurasian_blackcap",
+      "call": 1,
+      "kind": "alarm",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/546697",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Sylvia_atricapilla_-_Eurasian_Blackcap_XC546697.mp3",
+      "id": "89564855"
+    },
+    {
+      "file": "common_chiffchaff/0-song-1.ogg",
+      "species": "common_chiffchaff",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Dan Stowell",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/125867",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Phylloscopus_collybita_-_Common_Chiffchaff_XC125867.ogg",
+      "id": "27406613"
+    },
+    {
+      "file": "common_chiffchaff/0-song-2.ogg",
+      "species": "common_chiffchaff",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Nikita Panfilov",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/571974",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Phylloscopus_collybita_-_Common_Chiffchaff_XC571974.mp3",
+      "id": "91883237"
+    },
+    {
+      "file": "common_chiffchaff/1-call-1.ogg",
+      "species": "common_chiffchaff",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/492107",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Phylloscopus_collybita_-_Common_Chiffchaff_XC492107.mp3",
+      "id": "83208718"
+    },
+    {
+      "file": "common_chiffchaff/1-call-2.ogg",
+      "species": "common_chiffchaff",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/534143",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Phylloscopus_collybita_-_Common_Chiffchaff_XC534143.mp3",
+      "id": "89564751"
+    },
+    {
+      "file": "grey_wagtail/0-call-1.ogg",
+      "species": "grey_wagtail",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Pascal Christe",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/596811",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Motacilla_cinerea_-_Grey_Wagtail_XC596811.mp3",
+      "id": "100147086"
+    },
+    {
+      "file": "grey_wagtail/0-call-2.ogg",
+      "species": "grey_wagtail",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Sudipto Roy",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/128136",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Motacilla_cinerea_-_Grey_Wagtail_XC128136.ogg",
+      "id": "27407741"
+    },
+    {
+      "file": "common_kingfisher/0-call-1.ogg",
+      "species": "common_kingfisher",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/476785",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Alcedo_atthis_-_Common_Kingfisher_XC476785.mp3",
+      "id": "83205424"
+    },
+    {
+      "file": "golden_oriole/0-song-1.ogg",
+      "species": "golden_oriole",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Alexander Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/481644",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Oriolus_oriolus_-_Eurasian_Golden_Oriole_XC481644.mp3",
+      "id": "83207542"
+    },
+    {
+      "file": "golden_oriole/0-song-2.ogg",
+      "species": "golden_oriole",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Vladimir Yu. Arkhipov, Arkhivov",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Oriolus_oriolus_voice.ogg",
+      "id": "32802944"
+    },
+    {
+      "file": "golden_oriole/1-call-1.ogg",
+      "species": "golden_oriole",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Andreas Plank",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Pirol_N%C3%A4he_Dahme-Mark_(Andreas_Plank,_21.05.2011).ogg",
+      "id": "20278923"
+    },
+    {
+      "file": "golden_oriole/1-call-2.ogg",
+      "species": "golden_oriole",
+      "call": 1,
+      "kind": "call",
+      "recordist": "SanoAK: Alexanderr Kürthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:OriolusOriolus_Call_Slovakia_OlympusDM550_file0176.ogg",
+      "id": "52996947"
+    },
+    {
+      "file": "mallard/0-call-1.ogg",
+      "species": "mallard",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Jonathon Jongsma",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/62258",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_XC62258.mp3",
+      "id": "68239930"
+    },
+    {
+      "file": "mallard/0-call-2.ogg",
+      "species": "mallard",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/518422",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_XC518422.mp3",
+      "id": "89557415"
+    },
+    {
+      "file": "mallard/1-call-1.ogg",
+      "species": "mallard",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Jonathon Jongsma",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/112828",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Anas_platyrhynchos_-_Mallard_XC112828.mp3",
+      "id": "68239928"
+    },
+    {
+      "file": "common_moorhen/0-call-1.ogg",
+      "species": "common_moorhen",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/436938",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Gallinula_chloropus_-_Common_Moorhen_XC436938.mp3",
+      "id": "77528439"
+    },
+    {
+      "file": "common_moorhen/0-call-2.ogg",
+      "species": "common_moorhen",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/432931",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Gallinula_chloropus_-_Common_Moorhen_XC432931.mp3",
+      "id": "77528440"
+    },
+    {
+      "file": "grey_heron/0-call-1.ogg",
+      "species": "grey_heron",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/531166",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Ardea_cinerea_-_Grey_Heron_XC531166.mp3",
+      "id": "89557510"
+    },
+    {
+      "file": "grey_heron/0-call-2.ogg",
+      "species": "grey_heron",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/436360",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Ardea_cinerea_-_Grey_Heron_XC436360.mp3",
+      "id": "77528208"
+    },
+    {
+      "file": "eurasian_reed_warbler/0-song-1.ogg",
+      "species": "eurasian_reed_warbler",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Marco Dragonetti",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Acrocephalus_scirpaceus_2.ogg",
+      "id": "5825398"
+    },
+    {
+      "file": "eurasian_reed_warbler/0-song-2.ogg",
+      "species": "eurasian_reed_warbler",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Marco Dragonetti",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Acrocephalus_scirpaceus_1.ogg",
+      "id": "5825362"
+    },
+    {
+      "file": "eurasian_reed_warbler/1-alarm-1.ogg",
+      "species": "eurasian_reed_warbler",
+      "call": 1,
+      "kind": "alarm",
+      "recordist": "Jochem verweij",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/503640",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Acrocephalus_scirpaceus_-_Eurasian_Reed_Warbler_XC503640.mp3",
+      "id": "89564762"
+    },
+    {
+      "file": "eurasian_bittern/0-boom-1.ogg",
+      "species": "eurasian_bittern",
+      "call": 0,
+      "kind": "boom",
+      "recordist": "Miro Demko",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/362697",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Botaurus_stellaris_-_Eurasian_Bittern_XC362697.mp3",
+      "id": "68240374"
+    },
+    {
+      "file": "eurasian_bittern/1-call-1.ogg",
+      "species": "eurasian_bittern",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/431823",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Botaurus_stellaris_-_Eurasian_Bittern_XC431823.mp3",
+      "id": "77528162"
+    },
+    {
+      "file": "eurasian_bittern/1-call-2.ogg",
+      "species": "eurasian_bittern",
+      "call": 1,
+      "kind": "call",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Eurasian_Bittern_(Botaurus_stellaris)_(W_BOTAURUS_STELLARIS_R1_C1).ogg",
+      "id": "44572066"
+    },
+    {
+      "file": "western_marsh_harrier/0-call-1.ogg",
+      "species": "western_marsh_harrier",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Sternanita2",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Call_circus_aeruginosus.ogg",
+      "id": "114178262"
+    },
+    {
+      "file": "northern_wheatear/0-song-1.ogg",
+      "species": "northern_wheatear",
+      "call": 0,
+      "kind": "song",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Northern_Wheatear_(Oenanthe_oenanthe)_(W1CDR0001421_BD16).ogg",
+      "id": "44610054"
+    },
+    {
+      "file": "common_raven/0-call-1.ogg",
+      "species": "common_raven",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Benjamin Mayer",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/488951",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Corvus_corax_-_Northern_Raven_XC488951.mp3",
+      "id": "83208287"
+    },
+    {
+      "file": "common_raven/0-call-2.ogg",
+      "species": "common_raven",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/496700",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Corvus_corax_-_Northern_Raven_XC496700.mp3",
+      "id": "83208295"
+    },
+    {
+      "file": "common_raven/1-call-1.ogg",
+      "species": "common_raven",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/496700",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Corvus_corax_-_Northern_Raven_XC496700.mp3",
+      "id": "83208295"
+    },
+    {
+      "file": "common_raven/1-call-2.ogg",
+      "species": "common_raven",
+      "call": 1,
+      "kind": "call",
+      "recordist": "Jonathon Jongsma",
+      "licence": "CC BY-SA 3.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/139573",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Corvus_corax_-_Northern_Raven_XC139573.ogg",
+      "id": "27405993"
+    },
+    {
+      "file": "ring_ouzel/0-song-1.ogg",
+      "species": "ring_ouzel",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Pascal Christe",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/477951",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_torquatus_-_Ring_Ouzel_XC477951.mp3",
+      "id": "83210018"
+    },
+    {
+      "file": "ring_ouzel/0-song-2.ogg",
+      "species": "ring_ouzel",
+      "call": 0,
+      "kind": "song",
+      "recordist": "Anthony Wetherhill",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/467639",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_torquatus_-_Ring_Ouzel_XC467639.mp3",
+      "id": "83210000"
+    },
+    {
+      "file": "ring_ouzel/1-alarm-1.ogg",
+      "species": "ring_ouzel",
+      "call": 1,
+      "kind": "alarm",
+      "recordist": "Anthony Wetherhill",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/468594",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_torquatus_-_Ring_Ouzel_XC468594.mp3",
+      "id": "83210014"
+    },
+    {
+      "file": "golden_eagle/0-call-1.ogg",
+      "species": "golden_eagle",
+      "call": 0,
+      "kind": "call",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Golden_Eagle_(Aquila_chrysaetos)_(W1CDR0001387_BD6).ogg",
+      "id": "44603709"
+    },
+    {
+      "file": "herring_gull/0-call-1.ogg",
+      "species": "herring_gull",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Sonothèque ADVL",
+      "licence": "CC0 1.0",
+      "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "nc": false,
+      "sa": false,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/707075",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:XC707075_-_European_Herring_Gull_-_Larus_argentatus.mp3",
+      "id": "118630544"
+    },
+    {
+      "file": "herring_gull/0-call-2.ogg",
+      "species": "herring_gull",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Marie-Lan Taÿ Pamart",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/488995",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Larus_argentatus_-_European_Herring_Gull_XC488995.mp3",
+      "id": "83204617"
+    },
+    {
+      "file": "eurasian_oystercatcher/0-call-1.ogg",
+      "species": "eurasian_oystercatcher",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Jochem verweij",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/503632",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Haematopus_ostralegus_-_Eurasian_Oystercatcher_XC503632.mp3",
+      "id": "89557805"
+    },
+    {
+      "file": "eurasian_oystercatcher/0-call-2.ogg",
+      "species": "eurasian_oystercatcher",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Pascal Christe",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/466474",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Haematopus_ostralegus_-_Eurasian_Oystercatcher_XC466474.mp3",
+      "id": "83204403"
+    },
+    {
+      "file": "eurasian_oystercatcher/1-song-1.ogg",
+      "species": "eurasian_oystercatcher",
+      "call": 1,
+      "kind": "song",
+      "recordist": "Pascal Christe",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/466472",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Haematopus_ostralegus_-_Eurasian_Oystercatcher_XC466472.mp3",
+      "id": "83204427"
+    },
+    {
+      "file": "eurasian_oystercatcher/1-song-2.ogg",
+      "species": "eurasian_oystercatcher",
+      "call": 1,
+      "kind": "song",
+      "recordist": "Xabier Cid",
+      "licence": "Public domain",
+      "licenceUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+      "nc": false,
+      "sa": false,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Oystercatcher.ogg",
+      "id": "4051653"
+    },
+    {
+      "file": "atlantic_puffin/0-call-1.ogg",
+      "species": "atlantic_puffin",
+      "call": 0,
+      "kind": "call",
+      "recordist": "unknown",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://commons.wikimedia.org/wiki/File:Atlantic_Puffin_(Fratercula_arctica)_(W1CDR0001416_BD3).ogg",
+      "id": "44606857"
+    },
+    {
+      "file": "redwing/0-call-1.ogg",
+      "species": "redwing",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Joost van Bruggen",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/432934",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_iliacus_-_Redwing_XC432934.mp3",
+      "id": "77545494"
+    },
+    {
+      "file": "redwing/1-alarm-1.ogg",
+      "species": "redwing",
+      "call": 1,
+      "kind": "alarm",
+      "recordist": "Olivier Grimm",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/561040",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Turdus_iliacus_-_Redwing_XC561040.mp3",
+      "id": "91884968"
+    },
+    {
+      "file": "brambling/0-call-1.ogg",
+      "species": "brambling",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Alexander Kurthy",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/108349",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Fringilla_montifringilla_-_Brambling_XC108349.mp3",
+      "id": "68264693"
+    },
+    {
+      "file": "hawfinch/0-call-1.ogg",
+      "species": "hawfinch",
+      "call": 0,
+      "kind": "call",
+      "recordist": "Benoît Van Hecke",
+      "licence": "CC BY-SA 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "nc": false,
+      "sa": true,
+      "source": "Wikimedia Commons",
+      "url": "https://xeno-canto.org/541308",
+      "archiveUrl": "https://commons.wikimedia.org/wiki/File:Coccothraustes_coccothraustes_-_Hawfinch_XC541308.mp3",
+      "id": "89592514"
+    }
+  ]
+}
